@@ -17,6 +17,15 @@ class FakeClock implements Clock {
     }
   }
 
+  /// 推進時間並讓等待中的非同步工作有機會執行。
+  ///
+  /// 需要它是因為 delay 的完成走 microtask：只呼叫 advance 的話，被喚醒的
+  /// 迴圈還沒機會跑到下一輪就又被推進了。
+  Future<void> advanceAsync(Duration d) async {
+    advance(d);
+    await Future<void>.delayed(Duration.zero);
+  }
+
   /// 只動牆鐘，不動單調時間——模擬使用者調整系統時間或 NTP 回跳。
   void setWallClock(DateTime t) => _wall = t.toUtc();
 
