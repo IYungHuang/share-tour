@@ -2,6 +2,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'domain/location/camera/camera_follow.dart';
 import 'domain/location/models/geo_fix.dart';
 import 'domain/location/models/location_status.dart';
 import 'game/map_module/manifests/taiwan_map_manifest.dart';
@@ -40,6 +41,10 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold> {
       manifest: ref.read(mapManifestProvider),
       onTick: notifier.controller.tick,
       renderedPixelOf: () => notifier.controller.state.renderedPixel,
+      cameraFollow: CameraFollow(
+        clock: ref.read(clockProvider),
+        returnDelay: const Duration(seconds: 3),
+      ),
     );
   }
 

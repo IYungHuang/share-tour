@@ -2,6 +2,7 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import '../domain/location/camera/camera_follow.dart';
 import 'components/player_component.dart';
 import 'map_module/overworld_map_manifest.dart';
 
@@ -10,6 +11,7 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector {
     required this.manifest,
     required this.onTick,
     required this.renderedPixelOf,
+    required this.cameraFollow,
   });
 
   final OverworldMapManifest manifest;
@@ -19,6 +21,9 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector {
 
   /// 讀取 domain 當前的顯示點。
   final Vector2 Function() renderedPixelOf;
+
+  /// 相機跟隨的純邏輯狀態機。引擎只負責把算出來的中心點套上去。
+  final CameraFollow cameraFollow;
 
   late final World mapWorld;
   late final CameraComponent cameraComponent;
@@ -65,41 +70,42 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector {
     super.update(dt);
     onTick(dt);
     playerComponent.syncTo(renderedPixelOf());
-    if (_followPlayer) {
-      cameraComponent.viewfinder.position = playerComponent.position.clone();
-      _clampCameraBounds();
-    }
+    cameraComponent.viewfinder.position = cameraFollow.targetCenter(
+      player: playerComponent.position,
+      zoom: cameraComponent.viewfinder.zoom,
+      viewportSize: cameraComponent.viewport.size,
+      mapSize: manifest.mapDimensions,
+    );
   }
-
-  /// 手勢平移時暫時解除跟隨。完整的回歸狀態機屬 REQ-C-08（P1）。
-  bool _followPlayer = true;
 
   // --- 手勢事件處理 ---
 
   @override
   void onScaleStart(ScaleStartInfo info) {
     _baseZoom = cameraComponent.viewfinder.zoom;
-    _followPlayer = false;
   }
 
   /// 回到我的位置。
-  void recenterOnPlayer() => _followPlayer = true;
+  void recenterOnPlayer() => cameraFollow.recenter();
 
   @override
   void onScaleUpdate(ScaleUpdateInfo info) {
     final currentZoom = cameraComponent.viewfinder.zoom;
 
-    // 平移：位移量按比例折算
-    final delta = info.delta.global / currentZoom;
-    cameraComponent.viewfinder.position -= delta;
-
-    // 縮放
+    // 縮放刻意不算「操作」：捏合只是想看看四周，不該被當成接管相機。
     if (info.scale.global.x != 1.0) {
-      final newZoom = (_baseZoom * info.scale.global.x).clamp(minZoom, maxZoom);
-      cameraComponent.viewfinder.zoom = newZoom;
+      cameraFollow.onZoom();
+      cameraComponent.viewfinder.zoom =
+          (_baseZoom * info.scale.global.x).clamp(minZoom, maxZoom);
+      return;
     }
 
-    _clampCameraBounds();
+    if (info.delta.global.length2 > 0) {
+      cameraFollow.onPan();
+      final delta = info.delta.global / currentZoom;
+      cameraComponent.viewfinder.position -= delta;
+      _clampCameraBounds();
+    }
   }
 
   void _clampCameraBounds() {
