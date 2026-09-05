@@ -44,7 +44,7 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector {
       radius: 8,
       paint: Paint()..color = const Color(0xFFFF4757),
       anchor: Anchor.center,
-      position: Vector2(1050, 180), // 預設降落台北
+      position: Vector2(1162, 148), // 預設降落台北
     );
     await mapWorld.add(playerComponent);
 
