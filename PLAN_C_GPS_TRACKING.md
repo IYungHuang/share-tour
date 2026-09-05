@@ -9,7 +9,7 @@
 
 **技術棧：** Flutter 3.41 / Dart 3.11、Flame 1.38、flutter_riverpod 2.6、geolocator 14.0.3、freezed 3.2 + json_serializable 6.14、vector_math 2.2。
 
-**規格：** `SPEC_C_GPS_TRACKING.md`（v5）。本計劃的每個任務都標註其實作的需求與 AC 編號；執行者應同時閱讀規格。
+**規格：** `SPEC_C_GPS_TRACKING.md`（v5.1）。本計劃的每個任務都標註其實作的需求與 AC 編號；執行者應同時閱讀規格。
 **上位約束：** `CROSS_CUTTING_CONSTRAINTS.md`（v2）。**牴觸時以上位文件為準並回報。**
 **工作規範：** `CLAUDE.md`。
 
@@ -26,7 +26,18 @@
 - **隱私**：原始經緯度**永不**寫入存檔、事件或日誌。
 - **向量**：只用 `package:vector_math/vector_math.dart`（**不是** `vector_math_64.dart`）。經緯度用 `double`，禁止裝入 `Vector2`。
 - **抽象紀律**：核准的抽象只有 `LocationSource`、`OverworldMapManifest`、`Clock`。新增抽象前須能說出它擋住哪一條已知會變的軸。
-- **靜態分析**：`flutter analyze` 必須維持 0 errors / 0 warnings。
+
+### 本計劃新增的抽象與其正當性
+
+| 抽象 | 擋住的變動軸 | 任務 |
+|---|---|---|
+| `Clock` | 牆鐘與單調時間的取得方式，且 `DateTime.now()`／`Stopwatch` 不可注入，逾時與時鐘異常規則無法在無真實等待下測試 | T2 |
+| `LocationPermissionGateway` | geolocator 的權限與精度 API 全是靜態方法，不注入就無法在無真機的條件下驗證 AC-1.1~1.8（NFR-1 明文要求） | T15 |
+
+**排程**併入 `Clock`，不另立抽象：`FixThrottle` 的 trailing 需要延後觸發，`Clock` 因此加一個 `Future<void> delay(Duration)`。多一個方法比多一條抽象便宜，且它與時間屬同一個變動軸。
+- **靜態分析**：**先執行 codegen，再** `flutter analyze`，必須 0 errors / 0 warnings。
+  （生成檔不進版控，乾淨 clone 上未跑 codegen 時分析必然失敗，這不是缺陷。）
+- **直接相依宣告**：任何自 `lib/` import 的套件都必須在 `pubspec.yaml` 宣告，否則觸發 `depend_on_referenced_packages`。本計劃需新增兩個：`vector_math`（T1）與 `uuid`（T3）——兩者目前都只是傳遞相依。
 
 ### 生成檔的 git 慣例（本計劃裁定）
 
@@ -99,20 +110,28 @@ test/
 ```
 Phase 0  T1 地基 ──> T2 時鐘與旗標
                         │
-Phase 1                 ├──> T3 GeoFix ──┬──> T6 品質閘門 ──> T7 顯著位移 ──> T8 motion
-              T4 圖資契約 + FakeManifest ─┤                                      │
-                        └──> T5 狀態五維度                                       │
-                                          │                                      │
-Phase 2                                   ├──> T9  投影階段 ──┐                  │
-                                          ├──> T10 大跨距 ────┤                  │
-                                          ├──> T11 分桶與事件 ┼──> T12 管線編排 <─┘
-                                          └──> T13 平滑（可全程並行）
-Phase 3  T14 虛擬來源 ──> T15 權限 ──> T16 串流與省電
-Phase 4  T17 控制器聚合 ──> T18 Flame 橋接與既有債清償
-Phase 5  T19 相機（P1）   T20 換層（P1）
+Phase 1                 ├──> T3  GeoFix ────────┐
+                        ├──> T4a 契約 + Fake ───┤
+                        └──> T5  五維度狀態 ────┤
+                                                 │
+Phase 2   T3+T5 ──> T6 品質閘門 ──> T7 顯著位移  │
+          T2+T5 ──> T8 motion                    │
+          T4a ──┬─> T9  投影階段 ─────┐          │
+                ├─> T13 平滑          │          │
+          T2 ──┬──> T10 大跨距 ───────┤          │
+          T3+T5 ─> T11 分桶與事件 ────┼──> T12 管線編排
+                                                 │
+Phase 2b  T4b 台灣 manifest 遷移（不阻擋 T6~T13，但阻擋 T18）
+Phase 3   T4a+T2 ──> T14 虛擬來源
+                     T15 權限（獨立）
+          T14+T15 ─> T16 串流與省電
+Phase 4   T12+T16 ──> T17 控制器聚合 ──> T18 Flame 橋接（需 T4b）
+Phase 5   T19 相機（P1，僅需 T2）      T20 換層（P1，需 T17）
 ```
 
-**可並行**：T6~T13 之間除了標註的相依外互不相干，全部是純函式。T13 從 T4 完成後即可開始。
+**可並行**：T6/T8/T9/T10/T11/T13 六者互不相干，全部是純函式。
+**關鍵路徑**：T1 → T2 → T4a → T9/T13 → T12 → T17 → T18。
+**T4a 與 T4b 分開的理由**：T4a 純新增，不動既有碼，完成後六個純函式任務即可開工；T4b 要改台灣 manifest 並修既有測試，是關鍵路徑外的獨立工作。
 
 ---
 
@@ -213,6 +232,8 @@ void main() {
   });
 }
 ```
+
+> **關於本任務的 TDD**：架構守衛測試不走典型的 RED→GREEN。第一條在 `lib/domain/` 尚不存在時掃到空集合而恆綠，第二條會紅並隨即被 skip。這是守衛測試的本質——它們的價值在於**未來**某次改動讓它們變紅。計劃誠實標註此事，不宣稱它是 TDD 迴圈。
 
 - [ ] **步驟 2：執行，確認第二條測試失敗**
 
@@ -604,27 +625,37 @@ about 0.77 metres."
 
 ---
 
-### Task 4：圖資契約與 FakeMapManifest
+### Task 4a：圖資契約與 FakeMapManifest（純新增，不動既有碼）
 
-**實作：** PRE-2、PRE-4、PRE-7、PRE-11、§2.2、AC-4.2
+**實作：** §2.2 契約、AC-4.2、DoD-3
 
 **檔案：**
 - 建立：`lib/domain/location/projection/map_manifest.dart`
 - 建立：`test/fakes/fake_map_manifest.dart`
-- 修改：`lib/game/map_module/overworld_map_manifest.dart`（改為轉出 domain 契約）
-- 修改：`lib/game/map_module/manifests/taiwan_map_manifest.dart`（實作新成員）
-- 修改：`lib/game/map_module/models/geo_anchor.dart`、`overworld_poi_node.dart`（改 import vector_math）
 - 測試：`test/domain/location/projection/map_manifest_contract_test.dart`
 
-**介面：**
-- 產出：
+**介面（產出）：**
 
 ```dart
+class GeoPoint {
+  const GeoPoint(this.latitude, this.longitude);
+  final double latitude;
+  final double longitude;
+}
+
+class PoiMarker {
+  const PoiMarker({required this.id, required this.pixel,
+                   required this.triggerRadiusMeters});
+  final String id;
+  final Vector2 pixel;
+  final double triggerRadiusMeters;
+}
+
 abstract class OverworldMapManifest {
   String get mapId;
+  String get assetPath;
   Vector2 get mapDimensions;
   int get oceanColorArgb;
-  String get assetPath;
   Vector2 get defaultSpawnPixel;
   double get dpadSpeedPixelsPerSecond;
   double get snapLimitMeters;
@@ -637,9 +668,6 @@ abstract class OverworldMapManifest {
   Vector2 snapToRoad(Vector2 pixel);
   double metersPerPixelAt(Vector2 pixel);
 }
-
-class GeoPoint { final double latitude, longitude; }
-class PoiMarker { final String id; final Vector2 pixel; final double triggerRadiusMeters; }
 ```
 
 - [ ] **步驟 1：先寫失敗的契約測試**
@@ -652,36 +680,41 @@ import 'package:vector_math/vector_math.dart';
 import '../../../fakes/fake_map_manifest.dart';
 
 void main() {
-  group('圖資契約', () {
-    test('反投影是投影的逆運算，誤差小於 2 像素', () {
-      final m = FakeMapManifest.linear();
-      final pixel = Vector2(120, 240);
-      final geo = m.unprojectToGeo(pixel);
-      final back = m.projectToPixel(geo.latitude, geo.longitude);
-      expect((back - pixel).length, lessThan(2.0));
-    });
+  test('反投影是投影的逆運算，誤差小於 2 像素', () {
+    final m = FakeMapManifest.linear();
+    final pixel = Vector2(120, 240);
+    final geo = m.unprojectToGeo(pixel);
+    final back = m.projectToPixel(geo.latitude, geo.longitude);
+    expect((back - pixel).length, lessThan(2.0));
+  });
 
-    test('範圍邊界含入', () {
-      final m = FakeMapManifest.linear();
-      expect(m.containsGeo(m.minLat, m.minLng), isTrue);
-      expect(m.containsGeo(m.maxLat, m.maxLng), isTrue);
-      expect(m.containsGeo(m.maxLat + 1, m.maxLng), isFalse);
-    });
+  test('範圍邊界含入', () {
+    final m = FakeMapManifest.linear();
+    expect(m.containsGeo(FakeMapManifest.minLat, FakeMapManifest.minLng), isTrue);
+    expect(m.containsGeo(FakeMapManifest.maxLat, FakeMapManifest.maxLng), isTrue);
+    expect(m.containsGeo(FakeMapManifest.maxLat + 1, FakeMapManifest.maxLng), isFalse);
+  });
 
-    test('換一個圖資模組，相同經緯度得到不同像素（AC-4.2）', () {
-      final a = FakeMapManifest.linear();
-      final b = FakeMapManifest.linear(originPixel: Vector2(500, 500));
-      final pa = a.projectToPixel(24.0, 121.0);
-      final pb = b.projectToPixel(24.0, 121.0);
-      expect(pa, isNot(equals(pb)),
-          reason: '若相同，代表投影被硬編碼在通用引擎裡而非委派模組');
-    });
+  test('換一個圖資模組，相同經緯度得到不同像素（AC-4.2）', () {
+    final a = FakeMapManifest.linear();
+    final b = FakeMapManifest.linear(originPixel: Vector2(500, 500));
+    expect(a.projectToPixel(24.0, 121.0),
+        isNot(equals(b.projectToPixel(24.0, 121.0))),
+        reason: '若相同，代表投影被硬編碼在通用引擎裡而非委派模組');
+  });
 
-    test('公尺/像素比例可隨位置變化', () {
-      final m = FakeMapManifest.nonLinear();
-      expect(m.metersPerPixelAt(Vector2(0, 0)),
-          isNot(equals(m.metersPerPixelAt(Vector2(1000, 1000)))));
-    });
+  test('公尺/像素比例可隨位置變化', () {
+    final m = FakeMapManifest.nonLinear();
+    expect(m.metersPerPixelAt(Vector2(0, 0)),
+        isNot(equals(m.metersPerPixelAt(Vector2(1000, 1000)))));
+  });
+
+  test('投影呼叫計數可被觀察與重置', () {
+    final m = FakeMapManifest.linear();
+    m.projectToPixel(24.0, 121.0);
+    expect(m.projectCallCount, 1);
+    m.resetCallCounts();
+    expect(m.projectCallCount, 0);
   });
 }
 ```
@@ -694,70 +727,315 @@ flutter test test/domain/location/projection/map_manifest_contract_test.dart
 
 預期：FAIL，`fake_map_manifest.dart` 不存在。
 
-- [ ] **步驟 3：寫契約與 fake**
+- [ ] **步驟 3：建立契約檔**
 
-`lib/domain/location/projection/map_manifest.dart` 依上方「介面」段落的簽章建立，並附上這段說明：
+`lib/domain/location/projection/map_manifest.dart` 依上方「介面」段落逐字建立，檔頭加上：
 
 ```dart
 /// 圖資模組契約。「城市即實體 DLC」——底圖、投影、路網與範圍全部由外部注入，
 /// 通用引擎不得含任何特定城市的演算法。
 ///
-/// 刻意不做介面拆分：唯一需要隔離的框架型別是海洋顏色，改用 ARGB int 即可，
-/// 為此新增一整層繼承擋不住任何已知會變的軸。
+/// 刻意不做介面拆分：唯一需要隔離的框架型別是海洋顏色，改用 ARGB int 即可。
+/// 為一個顏色欄位新增一整層繼承，擋不住任何已知會變的軸。
 ```
 
-`test/fakes/fake_map_manifest.dart` 實作兩個具名建構子：
-- `FakeMapManifest.linear({Vector2? originPixel})`：等距線性投影，`metersPerPixelAt` 恆為 1.0，路網為單一水平線段，POI 間距刻意大於觸發半徑加吸附上限。
-- `FakeMapManifest.nonLinear()`：`metersPerPixelAt` 隨 x 線性變化（例如 `1.0 + pixel.x / 1000`），供 Task 13 的換算契約測試使用。
+- [ ] **步驟 4：建立 FakeMapManifest**
 
-**不得**載入任何圖檔，`assetPath` 回傳固定字串即可。
+`test/fakes/fake_map_manifest.dart`：
 
-- [ ] **步驟 4：把台灣 manifest 接到新契約**
+```dart
+import 'package:vector_math/vector_math.dart';
+import 'package:share_tour/domain/location/projection/map_manifest.dart';
 
-- `geo_anchor.dart`、`overworld_poi_node.dart` 的 import 由 `package:flame/extensions.dart` 改為 `package:vector_math/vector_math.dart`。
-- `overworld_map_manifest.dart` 改為 `export` domain 契約，不再自行宣告。
-- `taiwan_map_manifest.dart` 實作新成員：
-  - `oceanColorArgb => 0xFF1E6F9F`（原 `oceanColor` 移除）
-  - `defaultSpawnPixel => Vector2(1162, 148)`（自 `universal_overworld_game.dart` 搬來）
-  - `snapLimitMeters => 50`
-  - `metersPerPixelAt(_) => 370.4`（過渡底圖為等距，故為常數；最終手繪圖需改為逐點計算）
-  - `dpadSpeedPixelsPerSecond => 40`（暫定值，Q15 由任務 D 裁決；以像素/秒表達，因真實步行速度在此尺度下每 4.4 分鐘才移動 1 像素）
-  - `containsGeo` 以錨點的經緯度外接矩形加 0.5 度緩衝實作
-  - `unprojectToGeo` 以錨點的反距離加權插值實作（與 `projectToPixel` 對稱）
-  - `snapToRoad` 呼叫既有 `TaiwanGeoCalibrator.snapToRoad`，門檻由 `snapLimitMeters / metersPerPixelAt` 換算
-  - `poiNodes` 改回傳 `PoiMarker`，`triggerRadiusMeters` 暫定 `50`（PRE-10，最終由任務 A 裁決）
+/// 純數學圖資模組：不載入圖檔、不含真實地理資料。
+///
+/// 這是解耦驗收的核心（規格 §2.2、DoD-3）：若整條管線能只靠它測完，
+/// 就代表沒有城市專屬邏輯洩漏進通用引擎。
+class FakeMapManifest implements OverworldMapManifest {
+  FakeMapManifest._({
+    required Vector2 originPixel,
+    required this.pixelsPerDegree,
+    required this.varyScale,
+  }) : _origin = originPixel;
 
-- [ ] **步驟 5：執行全部測試**
+  /// 等距線性投影，公尺/像素恆為 1.0。
+  factory FakeMapManifest.linear({Vector2? originPixel}) => FakeMapManifest._(
+        originPixel: originPixel ?? Vector2.zero(),
+        pixelsPerDegree: 100.0,
+        varyScale: false,
+      );
+
+  /// 公尺/像素隨 x 線性變化，用於驗證換算的求值契約（AC-6.8、AC-15.5）。
+  factory FakeMapManifest.nonLinear() => FakeMapManifest._(
+        originPixel: Vector2.zero(),
+        pixelsPerDegree: 100.0,
+        varyScale: true,
+      );
+
+  /// 固定但非 1.0 的比例，用於驗證公尺門檻的換算（AC-6.7）。
+  factory FakeMapManifest.fixedScale(double metersPerPixel) => FakeMapManifest._(
+        originPixel: Vector2.zero(),
+        pixelsPerDegree: 100.0,
+        varyScale: false,
+        fixedMpp: metersPerPixel,
+      );
+
+  // 座標系：經緯度原點 (minLat, minLng) 對應 originPixel，
+  // 每度 100 像素，緯度往北 → y 減少。
+  static const double minLat = 23.0;
+  static const double maxLat = 25.0;   // → 高 200 px
+  static const double minLng = 120.0;
+  static const double maxLng = 122.0;  // → 寬 200 px
+
+  final Vector2 _origin;
+  final double pixelsPerDegree;
+  final bool varyScale;
+
+  int projectCallCount = 0;
+  int snapCallCount = 0;
+  void resetCallCounts() {
+    projectCallCount = 0;
+    snapCallCount = 0;
+  }
+
+  @override
+  String get mapId => 'fake';
+  @override
+  String get assetPath => 'fake.png';
+  @override
+  Vector2 get mapDimensions => Vector2(400, 400);
+  @override
+  int get oceanColorArgb => 0xFF000080;
+  @override
+  Vector2 get defaultSpawnPixel => Vector2(10, 10);
+  @override
+  double get dpadSpeedPixelsPerSecond => 40;
+  @override
+  double get snapLimitMeters => 50;
+
+  /// 單一水平線段 y=100，x 由 0 到 200。
+  @override
+  List<Vector2> get roadNodes => [_origin + Vector2(0, 100), _origin + Vector2(200, 100)];
+
+  /// 兩個 POI，間距 150 px，遠大於 triggerRadius(50m=50px) + snapLimit(50m=50px)。
+  @override
+  List<PoiMarker> get poiNodes => [
+        PoiMarker(id: 'poi_a', pixel: _origin + Vector2(20, 20), triggerRadiusMeters: 50),
+        PoiMarker(id: 'poi_b', pixel: _origin + Vector2(170, 20), triggerRadiusMeters: 50),
+      ];
+
+  @override
+  bool containsGeo(double lat, double lng) =>
+      lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+
+  @override
+  Vector2 projectToPixel(double lat, double lng) {
+    projectCallCount++;
+    return _origin +
+        Vector2((lng - minLng) * pixelsPerDegree, (maxLat - lat) * pixelsPerDegree);
+  }
+
+  @override
+  GeoPoint unprojectToGeo(Vector2 pixel) {
+    final local = pixel - _origin;
+    return GeoPoint(maxLat - local.y / pixelsPerDegree,
+        minLng + local.x / pixelsPerDegree);
+  }
+
+  /// 垂直投影到 y=100 的水平線段；超過上限則不吸附。
+  @override
+  Vector2 snapToRoad(Vector2 pixel) {
+    snapCallCount++;
+    final limitPixels = snapLimitMeters / metersPerPixelAt(pixel);
+    final roadY = _origin.y + 100;
+    final dy = (pixel.y - roadY).abs();
+    final withinX = pixel.x >= _origin.x && pixel.x <= _origin.x + 200;
+    if (!withinX || dy > limitPixels) return pixel;
+    return Vector2(pixel.x, roadY);
+  }
+
+  @override
+  double metersPerPixelAt(Vector2 pixel) =>
+      varyScale ? 1.0 + pixel.x / 1000.0 : 1.0;
+}
+```
+
+**已驗算的座標**（供後續任務的測試資料使用，勿再自行推算）：
+
+| 經緯度 | `linear()` 投影像素 | 說明 |
+|---|---|---|
+| (24.0, 121.0) | (100, 100) | 在範圍內，**恰在路網上** |
+| (24.9, 121.0) | (100, 10) | 在範圍內，距路網 90 px > 50 px 上限 → **不吸附** |
+| (80.0, 0.0) | — | **範圍外**，不得投影 |
+| (25.0, 120.0) | (0, 0) | 左上角 |
+| 像素 (120, 240) | → (22.6, 121.2) | **超出 minLat**，反投影往返仍成立（往返不檢查範圍） |
+
+- [ ] **步驟 5：執行，確認通過（5 tests passed）**
 
 ```bash
-dart run build_runner build --delete-conflicting-outputs
-flutter analyze && flutter test
+flutter test test/domain/location/projection/map_manifest_contract_test.dart
 ```
-
-預期：契約測試 4 條通過；既有的 `taiwan_map_manifest_test.dart` 與 `taiwan_geo_calibrator_test.dart` 仍通過（它們斷言的是資料性質，不是硬編碼像素）。
 
 - [ ] **步驟 6：提交**
 
 ```bash
 git add -A
-git commit -m "feat: extend map manifest contract and add a maths-only fake
+git commit -m "feat: add map manifest contract and a maths-only fake
 
-The manifest gains the members the tracking pipeline needs: unprojection
-for click-to-navigate, a geographic bounds test, a default spawn point,
-a metres-per-pixel query, and the d-pad speed. Spawn point and snapping
-threshold move out of the generic engine, which had them hardcoded.
+The contract gains what the tracking pipeline needs beyond projection:
+unprojection for click-to-navigate, a bounds test, a spawn point, a
+metres-per-pixel query and the d-pad speed. Colour is an ARGB int so the
+contract stays free of Flutter types without splitting the interface to
+isolate one field.
 
-The fake is the decoupling test made executable: it draws nothing and
-loads no image, so if the whole pipeline can be tested against it, no
-city-specific logic has leaked into the engine.
+The fake is the decoupling requirement made executable. It draws nothing
+and loads no image, so if the whole pipeline can be tested against it,
+no city-specific logic has leaked into the engine. It counts projection
+calls, which lets later tests assert that an out-of-range position was
+never projected rather than trusting the ordering to a comment.
 
-D-pad speed is expressed in pixels per second rather than a real-world
-speed, because at the overworld's scale walking at 5 km/h takes four
-minutes to cross a single pixel. The value itself is provisional and
-belongs to the local-map task.
+This task adds files only. Migrating the Taiwan manifest onto the
+contract touches existing code and tests, and is separated so the pure
+pipeline work can start without waiting for it."
+```
 
-Colour is an ARGB int so the contract stays free of Flutter types
-without splitting the interface to isolate one field."
+---
+
+### Task 4b：台灣 manifest 遷移與既有測試修正
+
+**實作：** PRE-2、PRE-4、PRE-7、PRE-11
+
+> **關鍵路徑外**：T6~T13 只需要 T4a。本任務阻擋的是 T18。
+
+**檔案：**
+- 修改：`lib/game/map_module/models/geo_anchor.dart`（import 改 vector_math）
+- 修改：`lib/game/map_module/models/overworld_poi_node.dart`（同上）
+- 修改：`lib/game/map_module/overworld_map_manifest.dart`（改為 `export` domain 契約）
+- 修改：`lib/game/map_module/manifests/taiwan_map_manifest.dart`（實作新成員）
+- 修改：`lib/game/universal_overworld_game.dart:23,100`
+- 修改：`test/taiwan_map_manifest_test.dart`（14 處）
+- 修改：`test/taiwan_geo_calibrator_test.dart:14`
+
+**已知會編譯失敗的位置**（改名的必然後果，不是意外）：
+
+| 檔案:行 | 現況 | 改為 |
+|---|---|---|
+| `universal_overworld_game.dart:23` | `manifest.oceanColor` | `Color(manifest.oceanColorArgb)` |
+| `universal_overworld_game.dart:100` | `manifest.projectGpsToPixel(...)` | `manifest.projectToPixel(...)` |
+| `taiwan_geo_calibrator_test.dart:14` | `projectGpsToPixel` | `projectToPixel` |
+| `taiwan_map_manifest_test.dart:52,53,62,63,68,69,70` | `projectGpsToPixel` | `projectToPixel` |
+| `taiwan_map_manifest_test.dart:79,80,88` | `poi.pixelPosition` | `poi.pixel` |
+| `taiwan_map_manifest_test.dart:91` | `pois[i].triggerRadius`（像素） | 見下方步驟 3 |
+| `taiwan_map_manifest_test.dart:92` | `pois[i].title` | `pois[i].id` |
+
+- [ ] **步驟 1：先改測試，確認紅燈**
+
+把上表的測試檔改成新名稱。此時 `lib/` 尚未改，測試**無法編譯** —— 這就是本任務的 RED。
+
+- [ ] **步驟 2：實作台灣 manifest 的新成員**
+
+```dart
+@override
+int get oceanColorArgb => 0xFF1E6F9F;
+
+@override
+Vector2 get defaultSpawnPixel => Vector2(1162, 148);   // 自通用引擎搬來（PRE-7）
+
+@override
+double get snapLimitMeters => 50;
+
+@override
+double get dpadSpeedPixelsPerSecond => 40;             // 暫定，Q15 由任務 D 裁決
+
+/// 過渡底圖為等距投影，故為常數。最終手繪圖需改為逐點計算。
+@override
+double metersPerPixelAt(Vector2 pixel) => 370.4;
+
+@override
+bool containsGeo(double lat, double lng) =>
+    lat >= 21.4 && lat <= 25.7 && lng >= 119.7 && lng <= 122.3;
+```
+
+- [ ] **步驟 3：修正 POI 觸發半徑測試的單位混用**
+
+既有測試比較的是「像素距離 > 觸發半徑總和」，而 `triggerRadiusMeters` 現在是公尺。改為換算後比較：
+
+```dart
+test('POI 之間的距離大於觸發半徑總和，避免同時觸發兩個遭遇', () {
+  final pois = manifest.poiNodes;
+  final mpp = manifest.metersPerPixelAt(Vector2.zero());
+  for (var i = 0; i < pois.length; i++) {
+    for (var j = i + 1; j < pois.length; j++) {
+      final metersApart = pois[i].pixel.distanceTo(pois[j].pixel) * mpp;
+      expect(metersApart,
+          greaterThan(pois[i].triggerRadiusMeters + pois[j].triggerRadiusMeters),
+          reason: '${pois[i].id} 與 ${pois[j].id} 的觸發範圍重疊');
+    }
+  }
+});
+```
+
+- [ ] **步驟 4：實作 `unprojectToGeo`**
+
+**IDW 的像素→經緯度不是經緯度→像素的數學逆函數**（兩個方向都往錨點均值收縮），直接對稱套用達不到 AC-10.1 要求的 2 像素往返誤差。改用**迭代修正**：
+
+```dart
+/// 以牛頓式迭代求反投影：從錨點加權初猜出發，
+/// 每輪用正向投影的誤差回推經緯度修正量。
+@override
+GeoPoint unprojectToGeo(Vector2 target) {
+  // 初猜：取最近的三個錨點做像素距離加權平均
+  var lat = ..., lng = ...;
+  for (var i = 0; i < 12; i++) {
+    final projected = projectToPixel(lat, lng);
+    final error = target - projected;
+    if (error.length < 0.5) break;
+    // 用局部雅可比（以 0.001 度的差分估計）把像素誤差換回度數
+    final dLat = (projectToPixel(lat + 0.001, lng) - projected) / 0.001;
+    final dLng = (projectToPixel(lat, lng + 0.001) - projected) / 0.001;
+    // 解 2x2 線性系統
+    ...
+  }
+  return GeoPoint(lat, lng);
+}
+```
+
+- [ ] **步驟 5：為往返一致性補測試**
+
+```dart
+test('台灣 manifest 的反投影往返誤差小於 2 像素（AC-10.1）', () {
+  final m = TaiwanMapManifest();
+  for (final p in [Vector2(1162, 148), Vector2(909, 408), Vector2(816, 871)]) {
+    final geo = m.unprojectToGeo(p);
+    final back = m.projectToPixel(geo.latitude, geo.longitude);
+    expect((back - p).length, lessThan(2.0), reason: '$p 往返失敗');
+  }
+});
+```
+
+> 若迭代法在某些點無法收斂到 2 像素內，**回報而非放寬門檻**：AC-10.1 是除錯點擊尋路的正確性下限，放寬它等於讓除錯路徑與正式路徑產生偏差。
+
+- [ ] **步驟 6：執行全部測試並提交**
+
+```bash
+dart run build_runner build --delete-conflicting-outputs
+flutter analyze && flutter test
+git add -A
+git commit -m "refactor: migrate Taiwan manifest onto the domain contract
+
+Projection, snapping, spawn point and geographic bounds now come from
+the manifest rather than from the generic engine, which had the spawn
+coordinate hardcoded and called the Taiwan calibrator directly.
+
+Unprojection is solved iteratively rather than by mirroring the forward
+pass. Inverse-distance weighting is not its own inverse — both
+directions contract toward the anchor mean — so a mirrored
+implementation would miss the two-pixel round-trip the click-to-navigate
+debug path depends on.
+
+The existing POI spacing test compared a pixel distance against what is
+now a radius in metres. Converting one side keeps the assertion meaning
+what it did before the units changed."
 ```
 
 ---
@@ -790,7 +1068,7 @@ import 'package:share_tour/domain/location/models/location_status.dart';
 
 void main() {
   test('初始狀態符合規格（AC-14.10）', () {
-    const s = LocationStatus.initial();
+    const s = LocationStatus.initial;   // static const，非具名建構子
     expect(s.permission, PermissionState.unavailable);
     expect(s.mode, SourceMode.gps);
     expect(s.coverage, CoverageState.inside);
@@ -866,7 +1144,41 @@ HudPriority hudPriorityOf(LocationStatus s) {
 }
 ```
 
-`location_diagnostics.dart` 依 REQ-C-14 規則 5 的欄位清單建立 freezed 值物件，**不含任何經緯度欄位**。
+`LocationStatus` 必須是**單一形狀**的 freezed 類別（非 union），因為 AC-14.1／14.3 都用到 `copyWith`：
+
+```dart
+@freezed
+abstract class LocationStatus with _$LocationStatus {
+  const factory LocationStatus({
+    required PermissionState permission,
+    required SourceMode mode,
+    required CoverageState coverage,
+    required AcquisitionState acquisition,
+    required MotionState motion,
+  }) = _LocationStatus;
+
+  /// 用 static const 而非 `const factory LocationStatus.initial()`。
+  /// 後者會讓 LocationStatus 變成 union，union 上沒有共用的 copyWith。
+  static const LocationStatus initial = LocationStatus(
+    permission: PermissionState.unavailable,
+    mode: SourceMode.gps,
+    coverage: CoverageState.inside,
+    acquisition: AcquisitionState.acquiring,
+    motion: MotionState.still,
+  );
+}
+```
+
+`location_diagnostics.dart` 依 REQ-C-14 規則 5 的欄位清單建立 freezed 值物件並加 `toJson`，**不含任何經緯度欄位**。補一條測試：
+
+```dart
+test('AC-14.7 診斷快照序列化不含座標鍵', () {
+  final json = someDiagnostics.toJson();
+  for (final k in ['lat', 'lng', 'latitude', 'longitude']) {
+    expect(json.keys, isNot(contains(k)));
+  }
+});
+```
 
 - [ ] **步驟 4：執行，確認通過**
 
@@ -1055,7 +1367,18 @@ flutter test test/domain/location/pipeline/quality_gate_test.dart
 
 - [ ] **步驟 3：寫實作**
 
-依規則順序實作 `evaluate`：已量測旗標 → 精度 → 時戳單調 → 時鐘異常（重置並接受）→ 速度。
+依下列順序實作 `evaluate`：
+
+```
+1. 已量測旗標（精度未量測 → 丟棄）
+2. 精度門檻
+3. 時間差判定（關鍵，順序不可顛倒）：
+   3a. |Δt| > 1 天  → 時鐘異常：重置基準並【接受】，直接返回
+   3b. Δt <= 0      → 時戳回捲：丟棄
+4. 速度合理性（強制接受時跳過此步）
+```
+
+> **為什麼 3a 必須在 3b 之前**：一筆「早兩天」的 Fix 同時滿足兩條規則——它既早於前一筆（規則 3 → 丟棄），差距又超過一天（規則 4 → 接受）。若照字面把單調性排在前面，AC-3.7 必紅。時鐘異常是「基準本身不可信」，必須先於任何以基準為準的判定。
 維護 `_baseline`（上一筆被接受的 fix）與 `_consecutiveRejects`。
 強制接受的分支只跳過速度判定。
 
@@ -1520,7 +1843,22 @@ would teleport a player onto one from kilometres away."
 
 ```dart
 enum RelocationCause { continuousTracking, discontinuity }
+
+/// 保證非空、列舉固定。供任務 A 日後區分用，本 SPEC 不依賴它做行為分歧。
 enum RelocationNote { backgroundResume, serviceRecovered, modeSwitch, coverageRecovered, debugTeleport, realMovement }
+
+class RelocationDecision {
+  const RelocationDecision({
+    required this.distanceMeters,
+    required this.speedMetersPerSecond,
+    required this.cause,
+    required this.note,
+  });
+  final double distanceMeters;
+  final double speedMetersPerSecond;
+  final RelocationCause cause;
+  final RelocationNote note;
+}
 
 class RelocationDetector {
   RelocationDetector({required this.jumpLimitMeters,           // 2000
@@ -1657,6 +1995,7 @@ something the app did rather than the player."
 ### Task 11：分桶距離與事件酬載
 
 **實作：** REQ-C-13 規則 6~10、13~15；AC-13.4、13.6~13.8、13.11~13.13
+（規則 13~15 與 AC-13.12／13.13 於規格 v5.1 補回，落實上位文件 CC-3 規則 2、5 與 CC-5）
 
 **檔案：**
 - 建立：`lib/domain/location/models/movement_event.dart`
@@ -1689,7 +2028,24 @@ sealed class MovementEvent with _$MovementEvent {
     required String reason,
   }) = ModeChangedEvent;
 
-  const factory MovementEvent.relocation({ ... }) = RelocationEvent;
+  const factory MovementEvent.relocation({
+    required String eventId,
+    required DateTime timestampUtc,
+    required int sequence,
+    required SourceMode sourceMode,
+    required double fromPixelX,          // 像素，不是經緯度（CC-5）
+    required double fromPixelY,
+    required double toPixelX,
+    required double toPixelY,
+    required double distanceMeters,
+    required double distancePixels,
+    required double speedMetersPerSecond,
+    required RelocationCause cause,
+    required RelocationNote note,
+  }) = RelocationEvent;
+
+  factory MovementEvent.fromJson(Map<String, dynamic> json) =>
+      _$MovementEventFromJson(json);
 }
 
 class DistanceBuckets {
@@ -1744,15 +2100,50 @@ void main() {
     expect(a.real, closeTo(400, 1));
   });
 
-  test('AC-13.11 位移事件帶齊 CC-3 要求的五個欄位且不含座標', () {
+  test('AC-13.11 位移事件帶齊 CC-3 要求的五個欄位', () {
     final e = disp(100, SourceMode.gps, seq: 7) as DisplacementEvent;
     expect(e.eventId, isNotEmpty);
     expect(e.timestampUtc.isUtc, isTrue);
     expect(e.sequence, 7);
     expect(e.sourceMode, SourceMode.gps);
-    final json = e.toString();
-    expect(json.contains('latitude'), isFalse);
-    expect(json.contains('longitude'), isFalse);
+  });
+
+  test('AC-13.12 三類事件的序列化結果皆不含經緯度鍵', () {
+    // 位移事件型別上就沒有座標欄位，所以真正的鑑別力在傳送事件——
+    // 它是唯一帶起訖點的事件，也是唯一可能夾帶經緯度的地方。
+    final events = <MovementEvent>[
+      disp(100, SourceMode.gps),
+      MovementEvent.modeChanged(
+        eventId: 'm1', timestampUtc: DateTime.utc(2026), sequence: 1,
+        sourceMode: SourceMode.virtual, previousMode: SourceMode.gps,
+        automatic: true, reason: 'permissionDenied',
+      ),
+      MovementEvent.relocation(
+        eventId: 'r1', timestampUtc: DateTime.utc(2026), sequence: 2,
+        sourceMode: SourceMode.gps,
+        fromPixelX: 10, fromPixelY: 20, toPixelX: 300, toPixelY: 400,
+        distanceMeters: 5000, distancePixels: 13.5,
+        speedMetersPerSecond: 83.3,
+        cause: RelocationCause.continuousTracking,
+        note: RelocationNote.realMovement,
+      ),
+    ];
+    for (final e in events) {
+      final keys = e.toJson().keys.map((k) => k.toLowerCase());
+      for (final banned in ['lat', 'lng', 'latitude', 'longitude']) {
+        expect(keys, isNot(contains(banned)), reason: '$e 夾帶了座標鍵 $banned');
+      }
+    }
+  });
+
+  test('AC-CC-1.1 事件 UUID 互不相同', () {
+    final a = MovementEventFactory(uuid: const Uuid()).displacement(
+        distanceMeters: 1, sourceMode: SourceMode.gps,
+        coverage: CoverageState.inside, timestampUtc: DateTime.utc(2026), sequence: 0);
+    final b = MovementEventFactory(uuid: const Uuid()).displacement(
+        distanceMeters: 1, sourceMode: SourceMode.gps,
+        coverage: CoverageState.inside, timestampUtc: DateTime.utc(2026), sequence: 1);
+    expect(a.eventId, isNot(equals(b.eventId)));
   });
 }
 ```
@@ -1762,6 +2153,22 @@ void main() {
 - [ ] **步驟 3：寫實作**
 
 `replay` 為 `static`、無狀態、只讀事件序列 —— 這是重播決定性的結構保證：它不可能依賴當下時間或外部狀態。
+
+`MovementEvent` 需要 `part 'movement_event.g.dart'` 與 `fromJson`／`toJson`（AC-13.12 斷言的是序列化結果，不是 `toString`）。
+
+事件建立集中在 `MovementEventFactory`，由它注入 `Uuid` 與單調序號來源，避免每個呼叫端各自產生識別碼：
+
+```dart
+class MovementEventFactory {
+  MovementEventFactory({required Uuid uuid}) : _uuid = uuid;
+  final Uuid _uuid;
+  int _sequence = 0;
+  DisplacementEvent displacement({...}) => MovementEvent.displacement(
+      eventId: _uuid.v4(), sequence: _sequence++, ...) as DisplacementEvent;
+}
+```
+
+**新增直接相依**：`flutter pub add uuid`。它目前只是傳遞相依（`pubspec.lock` 顯示 `transitive`），自 `lib/` 直接 import 會觸發 `depend_on_referenced_packages` —— 與 T1 處理 `vector_math` 是同一個問題。
 
 在 `movement_event.dart` 檔頭寫上：
 
@@ -1810,39 +2217,123 @@ deterministic."
 
 ```dart
 class PipelineOutput {
+  const PipelineOutput({this.targetPixel, this.events = const [], this.rejection});
   final Vector2? targetPixel;          // null = 未更新
   final List<MovementEvent> events;
   final RejectionReason? rejection;
 }
 
 class LocationPipeline {
+  LocationPipeline({
+    required OverworldMapManifest manifest,
+    required Clock clock,
+    QualityGate? qualityGate,               // 省略時以規格參數建立
+    SignificanceGate? significanceGate,
+    MotionTracker? motionTracker,
+    RelocationDetector? relocationDetector,
+    MovementEventFactory? eventFactory,
+  });
+
   PipelineOutput ingest(GeoFix fix);
+
+  MotionState get motion;                   // 轉發自 MotionTracker
+  AcquisitionState get acquisition;
+  Map<RejectionReason, int> get rejectionsByReason;
 }
 ```
+
+> 子模組以**具預設值的具名參數**注入：正式路徑不必逐一組裝，測試又能替換任一段。
+> 這不是新抽象——它們都是本計劃自己的具體類別，只是可替換。
 
 - [ ] **步驟 1：先寫失敗的測試**
 
 ```dart
+import 'package:flutter_test/flutter_test.dart';
+import 'package:vector_math/vector_math.dart';
+import 'package:share_tour/domain/location/models/geo_fix.dart';
+import 'package:share_tour/domain/location/pipeline/location_pipeline.dart';
+import '../../../fakes/fake_clock.dart';
+import '../../../fakes/fake_map_manifest.dart';
+
+/// FakeMapManifest.linear() 的座標系：(24.0, 121.0) → (100, 100)，恰在路網上。
+/// 以緯度位移構造精確公尺距離：1 度緯度 ≈ 110574 公尺。
+GeoFix at({
+  required double metersNorth,
+  double accuracy = 20,
+  int second = 0,
+  SourceMode mode = SourceMode.gps,
+  double baseLat = 24.0,
+  double lng = 121.0,
+}) =>
+    GeoFix(
+      latitude: baseLat + metersNorth / 110574.0,
+      longitude: lng,
+      accuracyMeters: accuracy,
+      hasAccuracy: true,
+      speedMetersPerSecond: 1.4,
+      hasSpeed: true,
+      speedAccuracy: 0.5,
+      hasSpeedAccuracy: true,
+      timestampUtc: DateTime.utc(2026, 1, 1).add(Duration(seconds: second)),
+      isMocked: false,
+      sourceMode: mode,
+    );
+
 void main() {
-  test('AC-0.1 範圍外不進入投影', () { /* 斷言 fake 的 projectCallCount 為 0 */ });
+  late FakeMapManifest manifest;
+  late LocationPipeline pipeline;
 
-  test('AC-0.3 判定為未顯著移動者不進入後續步驟', () {
-    // 餵入兩筆相距 15m、精度 20m 的 Fix
-    // 斷言：targetPixel 為 null、events 為空、projectCallCount 未增加
+  setUp(() {
+    manifest = FakeMapManifest.linear();
+    pipeline = LocationPipeline(manifest: manifest, clock: FakeClock());
   });
 
-  test('順序為：品質 → 顯著 → 範圍 → 投影 → 吸附 → 大跨距 → 分桶', () {
-    // 用被丟棄的低精度 Fix 斷言後續全部未被呼叫
+  test('AC-0.1 範圍外不進入投影', () {
+    manifest.resetCallCounts();
+    final out = pipeline.ingest(at(metersNorth: 0, baseLat: 80.0, lng: 0.0));
+    expect(out.targetPixel, isNull);
+    expect(manifest.projectCallCount, 0,
+        reason: 'IDW 對範圍外輸入不報錯，只回傳凸包內看似合理的錯點');
   });
 
-  test('顯著位移產生一筆 displacement 事件，距離為投影前的地理距離', () {
-    // 斷言 event.distanceMeters 等於兩點的 haversine 距離，
-    // 與吸附後的像素差無關
+  test('AC-0.3 未顯著移動者不進入後續步驟', () {
+    pipeline.ingest(at(metersNorth: 0));
+    manifest.resetCallCounts();
+    final out = pipeline.ingest(at(metersNorth: 15, second: 1)); // < 30m 門檻
+    expect(out.targetPixel, isNull);
+    expect(out.events, isEmpty);
+    expect(manifest.projectCallCount, 0);
+  });
+
+  test('AC-0.4 virtual 的 Fix 跳過品質閘門', () {
+    pipeline.ingest(at(metersNorth: 0, mode: SourceMode.virtual));
+    manifest.resetCallCounts();
+    // 位移 5000 公尺、間隔 1 秒 → 18000 km/h，遠超速度門檻
+    final out = pipeline.ingest(
+        at(metersNorth: 5000, second: 1, mode: SourceMode.virtual));
+    expect(out.rejection, isNull, reason: '合成資料沒有量測誤差，品質閘門不適用');
+    expect(out.targetPixel, isNotNull);
+    expect(manifest.projectCallCount, 1);
+  });
+
+  test('品質閘門丟棄者不進入其後任何步驟', () {
+    manifest.resetCallCounts();
+    final out = pipeline.ingest(at(metersNorth: 0, accuracy: 150)); // > 100m
+    expect(out.rejection, isNotNull);
+    expect(out.targetPixel, isNull);
+    expect(out.events, isEmpty);
+    expect(manifest.projectCallCount, 0);
+  });
+
+  test('顯著位移產生的事件，距離為投影前的地理距離', () {
+    pipeline.ingest(at(metersNorth: 0));
+    final out = pipeline.ingest(at(metersNorth: 60, second: 1));
+    final e = out.events.whereType<DisplacementEvent>().single;
+    expect(e.distanceMeters, closeTo(60, 1),
+        reason: '不得改用吸附後的像素差反算——兩者差距可達吸附上限，且逐筆累積');
   });
 }
 ```
-
-> 這四條測試的具體資料構造沿用 Task 7 的 `atMeters` 輔助函式，複製到本測試檔。
 
 - [ ] **步驟 2：執行，確認失敗**
 - [ ] **步驟 3：寫實作**
@@ -1869,7 +2360,7 @@ every step and would compound."
 
 ### Task 13：平滑位移與公尺換算
 
-**實作：** REQ-C-06 全部；AC-6.1~6.9
+**實作：** REQ-C-06 全部；AC-6.1~6.9；NFR-4
 
 **檔案：**
 - 建立：`lib/domain/location/smoothing/position_smoother.dart`
@@ -1881,15 +2372,29 @@ every step and would compound."
 
 ```dart
 class PositionSmoother {
-  PositionSmoother({required this.halfLife,              // 1.0s
-                    required this.arrivalMeters,          // 2
-                    required this.headingMeters});        // 5
-  void setTarget(Vector2 target, {required double metersPerPixel});
+  PositionSmoother({
+    required OverworldMapManifest manifest,   // 只用 metersPerPixelAt
+    required Duration halfLife,               // 1.0s
+    required double arrivalMeters,            // 2
+    required double headingMeters,            // 5
+  });
+
+  /// 設定目標點。此時以【當前顯示點】查詢公尺/像素比例並重算門檻，
+  /// 沿用至下次呼叫（規格 REQ-C-06 規則 7 的求值契約）。
+  void setTarget(Vector2 target);
+
+  /// 換層或首次定位：不平滑，直接指定顯示點並重算門檻。
+  void jumpTo(Vector2 position);
+
   void update(double dt);
   Vector2 get rendered;
   double get headingRadians;
+  double get arrivalThresholdPixels;   // AC-6.7 斷言此值
+  double get headingThresholdPixels;   // AC-6.9 斷言此值
 }
 ```
+
+> **為什麼收 manifest 而非 `double metersPerPixel`**：規格 REQ-C-06 規則 7 要求「以**當前顯示點**查詢比例」。若簽章只收一個 `double`，smoother 永遠不知道自己在哪，求值契約與 AC-6.8 就無處實作。
 
 - [ ] **步驟 1：先寫失敗的測試**
 
@@ -1899,7 +2404,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vector_math/vector_math.dart';
 import 'package:share_tour/domain/location/smoothing/position_smoother.dart';
 
-PositionSmoother smoother() => PositionSmoother(
+PositionSmoother smoother({OverworldMapManifest? manifest}) => PositionSmoother(
+      manifest: manifest ?? FakeMapManifest.linear(),   // 公尺/像素 = 1.0
       halfLife: const Duration(seconds: 1),
       arrivalMeters: 2,
       headingMeters: 5,
@@ -1907,23 +2413,26 @@ PositionSmoother smoother() => PositionSmoother(
 
 void main() {
   test('AC-6.2 幀率無關：30fps 與 120fps 推進 1 秒，差距 < 初始距離的 1%', () {
-    final a = smoother()..setTarget(Vector2(100, 0), metersPerPixel: 1.0);
-    final b = smoother()..setTarget(Vector2(100, 0), metersPerPixel: 1.0);
+    final a = smoother()..setTarget(Vector2(100, 0));
+    final b = smoother()..setTarget(Vector2(100, 0));
     for (var i = 0; i < 30; i++) { a.update(1 / 30); }
     for (var i = 0; i < 120; i++) { b.update(1 / 120); }
     expect((a.rendered - b.rendered).length, lessThan(1.0));
   });
 
   test('AC-6.3 經過一個半衰期，剩餘距離為初始的 50% ± 5%', () {
-    final s = smoother()..setTarget(Vector2(100, 0), metersPerPixel: 1.0);
+    final s = smoother()..setTarget(Vector2(100, 0));
     for (var i = 0; i < 60; i++) { s.update(1 / 60); }
     final remaining = (Vector2(100, 0) - s.rendered).length;
     expect(remaining, inInclusiveRange(45, 55));
+    // 加嚴：把指數形式釘死。k = 1/halfLife 的誤寫會得 36.8；
+    // Euler 近似會得約 50.3，仍在 ±5 內，但這條 0.05 的容差擋得住。
+    expect(remaining, closeTo(50.0, 0.05));
   });
 
   test('AC-6.6 顯示點與目標點無別名', () {
     final target = Vector2(100, 0);
-    final s = smoother()..setTarget(target, metersPerPixel: 1.0);
+    final s = smoother()..setTarget(target);
     s.update(1.0);
     final before = s.rendered.clone();
     target.setValues(999, 999); // 直接改呼叫端持有的向量
@@ -1932,14 +2441,46 @@ void main() {
   });
 
   test('AC-6.7 抵達門檻依公尺/像素比例換算', () {
-    final a = smoother()..setTarget(Vector2(0, 0), metersPerPixel: 1.0);
-    final b = smoother()..setTarget(Vector2(0, 0), metersPerPixel: 370.4);
+    final a = smoother()..setTarget(Vector2(0, 0));                       // mpp = 1.0
+    final b = smoother(manifest: FakeMapManifest.fixedScale(370.4))
+      ..setTarget(Vector2(0, 0));
     expect(a.arrivalThresholdPixels, closeTo(2.0, 0.01));
     expect(b.arrivalThresholdPixels, closeTo(0.0054, 0.0005));
   });
 
+  test('AC-6.1 距離單調遞減', () {
+    final s = smoother()..setTarget(Vector2(100, 0));
+    var prev = 100.0;
+    for (var i = 0; i < 30; i++) {
+      s.update(1 / 30);
+      final d = (Vector2(100, 0) - s.rendered).length;
+      expect(d, lessThan(prev));
+      prev = d;
+    }
+  });
+
+  test('AC-6.8 換算值以【當時顯示點】重算，同一次更新期間不再變動', () {
+    // nonLinear: mpp = 1.0 + x/1000
+    final s = smoother(manifest: FakeMapManifest.nonLinear())
+      ..setTarget(Vector2(1000, 0));
+    final atStart = s.arrivalThresholdPixels;   // 顯示點在 x=0 → mpp=1.0 → 2 px
+    expect(atStart, closeTo(2.0, 0.01));
+    for (var i = 0; i < 60; i++) { s.update(1 / 60); }
+    expect(s.arrivalThresholdPixels, atStart,
+        reason: '同一次目標點更新期間不得重算');
+    s.setTarget(Vector2(1000, 0));              // 顯示點已移到 x≈500 → mpp≈1.5
+    expect(s.arrivalThresholdPixels, lessThan(atStart));
+  });
+
+  test('AC-6.9 位移超過朝向門檻則朝向更新', () {
+    final s = smoother()..setTarget(Vector2(100, 0));
+    final h0 = s.headingRadians;
+    s.update(0.5);   // 單幀位移約 29 px > 5 px 門檻
+    expect(s.headingRadians, isNot(h0));
+  });
+
   test('AC-6.4 已抵達後不再變動', () {
-    final s = smoother()..setTarget(Vector2(0.0001, 0), metersPerPixel: 1.0);
+    final s = smoother()..setTarget(Vector2(0.0001, 0));
     s.update(1.0);
     final r = s.rendered.clone();
     s.update(1.0);
@@ -1947,7 +2488,7 @@ void main() {
   });
 
   test('AC-6.9 位移小於朝向門檻則朝向不變', () {
-    final s = smoother()..setTarget(Vector2(1, 0), metersPerPixel: 1.0);
+    final s = smoother()..setTarget(Vector2(1, 0));
     final h0 = s.headingRadians;
     s.update(1 / 60);
     expect(s.headingRadians, h0);
@@ -1970,10 +2511,14 @@ void main() {
 /// 換算的求值契約：以當前顯示點查詢比例，每次目標點更新時重算一次並沿用。
 /// 非線性地圖上這個比例逐點變化，不釘死求值點與時機，兩個人會寫出行為不同
 /// 而各自「正確」的實作。
-class PositionSmoother { ... }
+class PositionSmoother {
+  // 成員見本任務「介面」段落，該處已列出完整簽章
+}
 ```
 
 `setTarget` 必須 `_target.setFrom(target)` 而非 `_target = target`，並在檔內註明理由。
+
+**NFR-4（每幀常數時間）**：`update()` 內不得呼叫 `metersPerPixelAt` —— 門檻只在 `setTarget`／`jumpTo` 時重算一次。非線性圖資的比例查詢可能牽涉插值運算，放進每幀會讓幀成本取決於投影演算法。
 
 - [ ] **步驟 4：執行，確認通過（6 tests passed）**
 - [ ] **步驟 5：提交**
@@ -2028,32 +2573,106 @@ class VirtualLocationSource implements LocationSource {
 }
 
 /// release 時回傳 null，故除錯入口在正式建置不存在。
-VirtualLocationSource? debugSourceFactory(BuildFlags flags, ...);
+VirtualLocationSource? debugSourceFactory({
+  required BuildFlags flags,
+  required OverworldMapManifest manifest,
+  required Clock clock,
+});
 ```
+
+**虛擬 Fix 的欄位約定**（規格 REQ-C-10 規則 5）：`sourceMode = virtual`、`accuracyMeters = 1.0`、`hasAccuracy = true`、`hasSpeed = false`、`isMocked = false`。
+管線見到 `sourceMode == virtual` 即跳過品質閘門（§3.0 第 3~5 步），故其地理速度雖遠超門檻也不會被丟棄。
 
 - [ ] **步驟 1：先寫失敗的測試**
 
 ```dart
 void main() {
-  test('AC-10.2 方向鍵 10 秒產生約 150 筆（15 Hz），位移符合圖層宣告速度', () {
-    // 用 FakeClock 推進 10 秒，斷言 fix 數量在 [145, 155]
-    // 並斷言累計像素位移 ≈ dpadSpeedPixelsPerSecond * 10
+  late FakeClock clock;
+  late FakeMapManifest manifest;
+  late VirtualLocationSource source;
+
+  setUp(() {
+    clock = FakeClock();
+    manifest = FakeMapManifest.linear();   // dpadSpeedPixelsPerSecond = 40
+    source = VirtualLocationSource(manifest: manifest, clock: clock, hertz: 15);
   });
 
-  test('AC-10.1 點擊尋路：反投影往返誤差 < 2 像素', () {
-    // tapNavigateTo(Vector2(120, 240)) → 取得 fix → 投影回像素
+  test('AC-10.2 方向鍵 10 秒產生約 150 筆，位移符合圖層宣告速度', () async {
+    final received = <GeoFix>[];
+    final sub = source.fixes.listen(received.add);
+    await source.start();
+    source.setDirection(Vector2(1, 0));
+    for (var i = 0; i < 150; i++) { clock.advance(const Duration(milliseconds: 67)); }
+    await sub.cancel();
+
+    expect(received.length, inInclusiveRange(145, 155));
+    final first = manifest.projectToPixel(received.first.latitude, received.first.longitude);
+    final last = manifest.projectToPixel(received.last.latitude, received.last.longitude);
+    expect((last - first).length, closeTo(40 * 10, 20),
+        reason: '40 px/s × 10 s = 400 px');
   });
 
-  test('AC-10.5 每筆 Fix 的 sourceMode 為 virtual', () { });
+  test('AC-10.1 點擊尋路：反投影往返誤差 < 2 像素', () async {
+    final received = <GeoFix>[];
+    final sub = source.fixes.listen(received.add);
+    await source.start();
+    source.tapNavigateTo(Vector2(120, 140));   // 在 linear() 的範圍內
+    clock.advance(const Duration(milliseconds: 67));
+    await sub.cancel();
+
+    final back = manifest.projectToPixel(received.last.latitude, received.last.longitude);
+    expect((back - Vector2(120, 140)).length, lessThan(2.0));
+  });
+
+  test('AC-10.5 每筆 Fix 的 sourceMode 為 virtual', () async {
+    final received = <GeoFix>[];
+    final sub = source.fixes.listen(received.add);
+    await source.start();
+    source.setDirection(Vector2(0, 1));
+    clock.advance(const Duration(milliseconds: 335));   // 約 5 筆
+    await sub.cancel();
+    expect(received, isNotEmpty);
+    expect(received.every((f) => f.sourceMode == SourceMode.virtual), isTrue);
+  });
 
   test('AC-10.4 release 旗標下除錯工廠回傳 null', () {
-    expect(debugSourceFactory(const BuildFlags.release(), ...), isNull);
-    expect(debugSourceFactory(const BuildFlags.debug(), ...), isNotNull);
+    expect(
+      debugSourceFactory(
+          flags: const BuildFlags.release(), manifest: manifest, clock: clock),
+      isNull,
+    );
+    expect(
+      debugSourceFactory(
+          flags: const BuildFlags.debug(), manifest: manifest, clock: clock),
+      isNotNull,
+    );
   });
 
-  test('虛擬 Fix 的精度已量測且為小值，必然通過顯著性閘門', () { });
+  test('AC-10.3 同一組管線測試對虛擬與真實來源皆通過', () {
+    // 同一組斷言跑兩次，只換 sourceMode。
+    for (final mode in SourceMode.values) {
+      final pipeline = LocationPipeline(manifest: FakeMapManifest.linear(), clock: FakeClock());
+      pipeline.ingest(at(metersNorth: 0, mode: mode));
+      final out = pipeline.ingest(at(metersNorth: 60, second: 1, mode: mode));
+      expect(out.targetPixel, isNotNull, reason: '$mode 下管線行為不一致');
+      expect(out.events.whereType<DisplacementEvent>().single.sourceMode, mode);
+    }
+  });
+
+  test('虛擬 Fix 的精度已量測且為小值', () async {
+    final received = <GeoFix>[];
+    final sub = source.fixes.listen(received.add);
+    await source.start();
+    source.setDirection(Vector2(1, 0));
+    clock.advance(const Duration(milliseconds: 67));
+    await sub.cancel();
+    expect(received.first.hasAccuracy, isTrue);
+    expect(received.first.accuracyMeters, lessThan(5));
+  });
 }
 ```
+
+> `at(...)` 輔助函式沿用 Task 12 測試檔的定義，複製到本檔。
 
 - [ ] **步驟 2：執行，確認失敗**
 - [ ] **步驟 3：寫實作**
@@ -2110,33 +2729,112 @@ abstract class LocationPermissionGateway {
 
 class PermissionResolver {
   Future<PermissionState> resolve();            // 去重的並發請求
+  Stream<PermissionState> get states;           // 服務狀態變化驅動
+  /// 輔助啟發式：在品質過濾【之前】對原始 Fix 評估（§3.0 第 2 步、AC-0.2）。
+  void observeRawFix({required double accuracyMeters});
 }
 ```
 
 - [ ] **步驟 1：先寫失敗的測試**
 
+建立 `test/fakes/fake_permission_gateway.dart`：
+
+```dart
+class FakePermissionGateway implements LocationPermissionGateway {
+  bool serviceEnabled = true;
+  PlatformPermission permission = PlatformPermission.granted;
+  PlatformAccuracy accuracy = PlatformAccuracy.precise;
+  int requestCallCount = 0;
+  final _serviceChanges = StreamController<bool>.broadcast();
+
+  void pushServiceEnabled(bool v) { serviceEnabled = v; _serviceChanges.add(v); }
+
+  @override Future<bool> isServiceEnabled() async => serviceEnabled;
+  @override Future<PlatformPermission> checkPermission() async => permission;
+  @override Future<PlatformPermission> requestPermission() async {
+    requestCallCount++;
+    return permission;
+  }
+  @override Future<PlatformAccuracy> getAccuracy() async => accuracy;
+  @override Stream<bool> get serviceEnabledChanges => _serviceChanges.stream;
+  @override Future<void> openAppSettings() async {}
+  @override Future<void> openLocationSettings() async {}
+}
+```
+
+`test/domain/location/pipeline/permission_resolver_test.dart`：
+
 ```dart
 void main() {
-  test('AC-1.1 服務關閉時不請求權限', () {
-    // fake gateway 記錄 requestPermission 呼叫次數，斷言為 0
+  late FakePermissionGateway gateway;
+  late PermissionResolver resolver;
+
+  setUp(() {
+    gateway = FakePermissionGateway();
+    resolver = PermissionResolver(gateway: gateway);
   });
 
-  test('AC-1.4 並發呼叫 3 次，權限請求器只被呼叫 1 次', () {
-    // 同時發起三個 resolve()，斷言 requestCallCount == 1
+  test('AC-1.1 服務關閉時不請求權限', () async {
+    gateway.serviceEnabled = false;
+    expect(await resolver.resolve(), PermissionState.serviceDisabled);
+    expect(gateway.requestCallCount, 0,
+        reason: '服務總開關關閉時請求權限會靜默失敗');
   });
 
-  test('AC-1.5 平台回報 reduced → approximate（不需等待任何 Fix）', () { });
-
-  test('AC-1.6 approximate 的恢復不依賴訂閱', () {
-    // 不餵任何 Fix，只把 fake 的 getAccuracy 改為 precise，
-    // 再呼叫 resolve() → 斷言回到 ready
+  test('AC-1.2 權限未決 → 恰請求一次；允許後為 ready', () async {
+    gateway.permission = PlatformPermission.notDetermined;
+    final first = await resolver.resolve();
+    expect(gateway.requestCallCount, 1);
+    gateway.permission = PlatformPermission.granted;
+    expect(await resolver.resolve(), PermissionState.ready);
+    expect(first, isNot(PermissionState.ready));
   });
 
-  test('AC-1.7 前景中服務被關閉 → serviceDisabled', () {
-    // 透過 serviceEnabledChanges 推送 false
+  test('AC-1.4 並發呼叫 3 次，權限請求器只被呼叫 1 次', () async {
+    gateway.permission = PlatformPermission.notDetermined;
+    await Future.wait([resolver.resolve(), resolver.resolve(), resolver.resolve()]);
+    expect(gateway.requestCallCount, 1);
   });
 
-  test('AC-1.8 服務恢復 → 重新檢查並更新', () { });
+  test('AC-1.5 平台回報 reduced → approximate，不需等待任何 Fix', () async {
+    gateway.accuracy = PlatformAccuracy.reduced;
+    expect(await resolver.resolve(), PermissionState.approximate);
+  });
+
+  test('AC-1.6 approximate 的恢復不依賴訂閱', () async {
+    gateway.accuracy = PlatformAccuracy.reduced;
+    expect(await resolver.resolve(), PermissionState.approximate);
+    // 不餵任何 Fix、不建立任何訂閱
+    gateway.accuracy = PlatformAccuracy.precise;
+    expect(await resolver.resolve(), PermissionState.ready,
+        reason: 'approximate 期間訂閱已取消，恢復路徑不得依賴它');
+  });
+
+  test('AC-1.7 前景中服務被關閉 → serviceDisabled', () async {
+    final states = <PermissionState>[];
+    final sub = resolver.states.listen(states.add);
+    gateway.pushServiceEnabled(false);
+    await Future<void>.delayed(Duration.zero);
+    await sub.cancel();
+    expect(states.last, PermissionState.serviceDisabled);
+  });
+
+  test('AC-1.8 服務恢復 → 重新檢查並更新', () async {
+    gateway.pushServiceEnabled(false);
+    await Future<void>.delayed(Duration.zero);
+    gateway.pushServiceEnabled(true);
+    await Future<void>.delayed(Duration.zero);
+    expect(await resolver.resolve(), PermissionState.ready);
+  });
+
+  test('AC-0.2 精度啟發式在品質過濾之前評估', () async {
+    // 注入恆為 2000 m 的原始 Fix；它們會被品質閘門丟棄，
+    // 但精度等級仍必須判定得出來。
+    for (var i = 0; i < 3; i++) {
+      resolver.observeRawFix(accuracyMeters: 2000);
+    }
+    expect(await resolver.resolve(), PermissionState.approximate);
+  });
 }
 ```
 
@@ -2172,6 +2870,7 @@ already been cancelled for being in it."
 
 **檔案：**
 - 建立：`lib/data/location/geolocator_location_source.dart`
+- 建立：`lib/data/location/location_subscription_manager.dart`
 - 建立：`lib/domain/location/pipeline/fix_throttle.dart`
 - 測試：`test/domain/location/pipeline/fix_throttle_test.dart`
 - 測試：`test/data/location/lifecycle_test.dart`
@@ -2185,34 +2884,127 @@ already been cancelled for being in it."
 ```dart
 void main() {
   group('節流', () {
-    test('AC-2.1 以 2 秒間隔推送 5 筆 → 收到 5 筆，順序內容一致', () { });
+    late FakeClock clock;
+    late FixThrottle throttle;
+    late List<GeoFix> out;
+
+    setUp(() {
+      clock = FakeClock();
+      throttle = FixThrottle(clock: clock, window: const Duration(seconds: 1));
+      out = [];
+      throttle.output.listen(out.add);
+    });
+
+    test('AC-2.1 以 2 秒間隔推送 5 筆 → 收到 5 筆，順序內容一致', () {
+      for (var i = 0; i < 5; i++) {
+        throttle.add(at(metersNorth: i * 100.0, second: i * 2));
+        clock.advance(const Duration(seconds: 2));
+      }
+      expect(out.length, 5);
+      expect(out.map((f) => f.timestampUtc.second), [0, 2, 4, 6, 8]);
+    });
 
     test('AC-2.2 1 秒內推送 10 筆 → 收到 2 筆：第 1 筆與窗尾最新筆', () {
-      // 斷言收到的第二筆是第 10 筆的內容，不是第 2 筆
+      for (var i = 0; i < 10; i++) {
+        throttle.add(at(metersNorth: i.toDouble(), second: i));
+        clock.advance(const Duration(milliseconds: 90));
+      }
+      clock.advance(const Duration(seconds: 1));   // 觸發窗尾補發
+      expect(out.length, 2);
+      expect(out.last.timestampUtc.second, 9,
+          reason: '窗尾補發的必須是最新那筆，不是第 2 筆');
     });
 
     test('AC-10.6 虛擬來源的 Fix 不被合併', () {
-      // sourceMode == virtual 的 fix 直接放行
+      for (var i = 0; i < 10; i++) {
+        throttle.add(at(metersNorth: i.toDouble(), second: i, mode: SourceMode.virtual));
+        clock.advance(const Duration(milliseconds: 10));
+      }
+      expect(out.length, 10);
     });
   });
 
-  group('生命週期', () {
-    test('AC-2.3 背景 5 秒後返回 → 訂閱未曾取消', () { });
-    test('AC-2.4 背景 30 秒後返回 → 曾取消，恢復在 debounce 之後，訂閱數為 1', () { });
-    test('AC-2.5 dispose 後 activeSubscriptionCount == 0', () { });
-    test('AC-11.1 進入 Mini-game → 訂閱取消', () { });
-    test('AC-11.2 切換為 virtual → GPS 訂閱取消', () { });
-    test('AC-11.3 suspended 期間不產生任何位置更新', () { });
+  group('生命週期與省電', () {
+    late FakeClock clock;
+    late FakeLocationSource source;
+    late LocationSubscriptionManager manager;
+
+    setUp(() {
+      clock = FakeClock();
+      source = FakeLocationSource();
+      manager = LocationSubscriptionManager(
+        source: source, clock: clock,
+        backgroundGrace: const Duration(seconds: 20),
+        resumeDebounce: const Duration(seconds: 2),
+      );
+      manager.start();
+    });
+
+    test('AC-2.3 背景 5 秒後返回 → 訂閱未曾取消', () {
+      manager.onBackground();
+      clock.advance(const Duration(seconds: 5));
+      manager.onForeground();
+      expect(source.cancelCount, 0);
+      expect(manager.activeSubscriptionCount, 1);
+    });
+
+    test('AC-2.4 背景 30 秒後返回 → 曾取消，恢復在 debounce 之後，訂閱數為 1', () {
+      manager.onBackground();
+      clock.advance(const Duration(seconds: 30));
+      expect(source.cancelCount, 1);
+      manager.onForeground();
+      expect(manager.activeSubscriptionCount, 0, reason: 'debounce 尚未過');
+      clock.advance(const Duration(seconds: 2));
+      expect(manager.activeSubscriptionCount, 1);
+    });
+
+    test('AC-2.5 dispose 後 activeSubscriptionCount == 0', () {
+      manager.dispose();
+      expect(manager.activeSubscriptionCount, 0);
+    });
+
+    test('AC-11.1 進入 Mini-game → 訂閱取消', () {
+      manager.setPowerMode(PowerMode.suspended);
+      expect(manager.activeSubscriptionCount, 0);
+    });
+
+    test('AC-11.2 切換為 virtual → GPS 訂閱取消', () {
+      manager.onModeChanged(SourceMode.virtual);
+      expect(manager.activeSubscriptionCount, 0);
+    });
+
+    test('AC-11.3 suspended 期間不產生任何位置更新', () {
+      final received = <GeoFix>[];
+      manager.fixes.listen(received.add);
+      manager.setPowerMode(PowerMode.suspended);
+      source.emit(at(metersNorth: 100));
+      expect(received, isEmpty);
+    });
   });
 
   group('冷啟動', () {
     test('AC-2.6 顯示點等於預設降落點，且未查詢平台的最後已知位置', () {
-      // fake gateway 記錄 getLastKnownPosition 呼叫次數，斷言為 0
+      final manifest = FakeMapManifest.linear();
+      final source = FakeLocationSource();
+      final manager = LocationSubscriptionManager(
+          source: source, clock: FakeClock(), manifest: manifest);
+      expect(manager.initialRenderedPixel, manifest.defaultSpawnPixel);
+      expect(source.lastKnownQueryCount, 0,
+          reason: '不查詢最後已知位置——它省下一秒空白，代價是整條管線的特例規則');
     });
-    test('AC-2.7 冷啟動首筆即使距降落點數百公里 → 不發傳送事件，兩桶不變', () { });
+
+    test('AC-2.7 冷啟動首筆即使距降落點數百公里 → 不發傳送事件，兩桶不變', () {
+      final pipeline = LocationPipeline(
+          manifest: FakeMapManifest.linear(), clock: FakeClock());
+      final out = pipeline.ingest(at(metersNorth: 0));   // 首筆
+      expect(out.events.whereType<RelocationEvent>(), isEmpty);
+      expect(out.events.whereType<DisplacementEvent>(), isEmpty);
+    });
   });
 }
 ```
+
+> `at(...)` 沿用 Task 12 測試檔的定義。`FakeLocationSource` 建立於 `test/fakes/fake_location_source.dart`，需暴露 `cancelCount`、`lastKnownQueryCount` 與 `emit(GeoFix)`。
 
 - [ ] **步驟 2：執行，確認失敗**
 - [ ] **步驟 3：寫實作**
@@ -2257,37 +3049,105 @@ no answer to what the first real fix's jump was measured from."
 - 測試：`test/state/location/location_controller_test.dart`
 
 **介面：**
-- 產出：`LocationController extends Notifier<LocationStatus>`，暴露語意化方法 `switchMode(SourceMode, {required bool automatic})`、`ingest(GeoFix)`，**不暴露 setter**。
-- 產出：`LocationSnapshotDto`（可持久化，**不含經緯度**）
+- 產出：`LocationControllerState`（freezed）：`status`（五維度）、`diagnostics`、`renderedPixel`、`realDistanceMeters`、`virtualDistanceMeters`。
+  > `Notifier<LocationStatus>` 放不下診斷與分桶距離（AC-14.6、AC-11.4、AC-13.4 都要斷言它們），故 state 為一個聚合物件。
+- 產出：`LocationController extends Notifier<LocationControllerState>`，暴露語意化方法 `switchMode(SourceMode, {required bool automatic})`、`ingest(GeoFix)`、`onPermissionChanged(PermissionState)`，**不暴露 setter**。
+- 產出：`LocationSnapshotDto`（可持久化，**不含經緯度**）：`renderedPixelX/Y`、`realDistanceMeters`、`virtualDistanceMeters`、`mode`、`savedAtUtc`。
 
 - [ ] **步驟 1：先寫失敗的測試**
 
 ```dart
 void main() {
-  test('AC-13.1 手動切換即時生效', () { });
+  late ProviderContainer container;
+  late FakeClock clock;
+  late FakeMapManifest manifest;
 
-  test('AC-13.2 權限被拒 → 自動切 virtual 並標記為自動', () { });
+  LocationController controller() => container.read(locationControllerProvider.notifier);
+  LocationControllerState state() => container.read(locationControllerProvider);
 
-  test('AC-13.3 定位恢復可用 → mode 維持 virtual', () { });
+  setUp(() {
+    clock = FakeClock();
+    manifest = FakeMapManifest.linear();
+    container = ProviderContainer(overrides: [
+      clockProvider.overrideWithValue(clock),
+      mapManifestProvider.overrideWithValue(manifest),
+      buildFlagsProvider.overrideWithValue(const BuildFlags.debug()),
+    ]);
+    addTearDown(container.dispose);
+  });
+
+  test('AC-13.1 手動切換即時生效', () {
+    controller().switchMode(SourceMode.virtual, automatic: false);
+    expect(state().status.mode, SourceMode.virtual);
+  });
+
+  test('AC-13.2 權限被拒 → 自動切 virtual 並標記為自動', () {
+    controller().onPermissionChanged(PermissionState.denied);
+    expect(state().status.mode, SourceMode.virtual);
+    expect(controller().lastSwitchWasAutomatic, isTrue);
+  });
+
+  test('AC-13.3 定位恢復可用 → mode 維持 virtual', () {
+    controller().onPermissionChanged(PermissionState.denied);
+    controller().onPermissionChanged(PermissionState.ready);
+    expect(state().status.mode, SourceMode.virtual,
+        reason: '恢復後不自動切回，由玩家決定');
+  });
 
   test('AC-13.8 isMocked 的 Fix 在 gps 模式下，位移計入 virtual 桶', () {
-    // 這不是完備防護：Android 需 API 18+、iOS 需 15+ 且只涵蓋軟體模擬，
-    // 平台不可用時預設 false。目的只是讓標記誠實。
+    controller().ingest(at(metersNorth: 0).copyWith(isMocked: true));
+    controller().ingest(at(metersNorth: 60, second: 1).copyWith(isMocked: true));
+    expect(state().virtualDistanceMeters, closeTo(60, 2));
+    expect(state().realDistanceMeters, 0);
   });
 
   test('AC-13.9 除錯旗標開啟時，isMocked 仍依 mode 歸屬', () {
-    // 否則模擬器與 GPX 除錯期間無法驗證 gps 模式
+    container = ProviderContainer(overrides: [
+      clockProvider.overrideWithValue(clock),
+      mapManifestProvider.overrideWithValue(manifest),
+      buildFlagsProvider.overrideWithValue(const BuildFlags.debug()),
+      ignoreMockedFlagProvider.overrideWithValue(true),
+    ]);
+    controller().ingest(at(metersNorth: 0).copyWith(isMocked: true));
+    controller().ingest(at(metersNorth: 60, second: 1).copyWith(isMocked: true));
+    expect(state().realDistanceMeters, closeTo(60, 2),
+        reason: '模擬器與 GPX 除錯期間 isMocked 恆為真，不覆寫就無法驗證 gps 模式');
   });
 
-  test('AC-12.1 持久化 DTO 的序列化結果不含 lat/lng 鍵', () {
-    final json = LocationSnapshotDto(...).toJson();
-    expect(json.keys, isNot(contains('lat')));
-    expect(json.keys, isNot(contains('lng')));
-    expect(json.keys, isNot(contains('latitude')));
-    expect(json.keys, isNot(contains('longitude')));
+  test('AC-12.1 持久化 DTO 的序列化結果不含座標鍵', () {
+    final json = LocationSnapshotDto(
+      renderedPixelX: 100, renderedPixelY: 200,
+      realDistanceMeters: 500, virtualDistanceMeters: 0,
+      mode: SourceMode.gps, savedAtUtc: DateTime.utc(2026),
+    ).toJson();
+    for (final k in ['lat', 'lng', 'latitude', 'longitude']) {
+      expect(json.keys.map((e) => e.toLowerCase()), isNot(contains(k)));
+    }
   });
 
-  test('AC-12.2 release 旗標下，注入的假 logger 不含任何座標字串', () { });
+  test('AC-12.2 release 旗標下，注入的假 logger 不含任何座標字串', () {
+    final logger = FakeLogger();
+    final c = LocationController.forTest(
+        logger: logger, flags: const BuildFlags.release(), manifest: manifest, clock: clock);
+    c.ingest(at(metersNorth: 0));
+    expect(logger.lines.join('\n'), isNot(contains('24.0')));
+    expect(logger.lines.join('\n'), isNot(contains('121.0')));
+  });
+
+  test('AC-13.10 第一版不持久化模式，重啟後依當時權限重新判定', () {
+    // 規格 Q18 把跨進程持久化列為 P1，相依任務 B 的持久化層。
+    controller().switchMode(SourceMode.virtual, automatic: false);
+    final restored = LocationController.forTest(
+        flags: const BuildFlags.debug(), manifest: manifest, clock: clock);
+    expect(restored.state.status.mode, SourceMode.gps,
+        reason: 'P0 行為：不持久化。持久化為 P1，相依任務 B');
+  });
+
+  test('AC-14.6 診斷計數隨丟棄遞增', () {
+    controller().ingest(at(metersNorth: 0, accuracy: 150));
+    expect(state().diagnostics.rejectedFixCount, 1);
+    expect(state().diagnostics.rejectionsByReason[RejectionReason.accuracy], 1);
+  });
 }
 ```
 
@@ -2296,6 +3156,9 @@ void main() {
 
 `LocationController` 是**唯一寫入點**。Flame 元件與 HUD 只讀，不得持有可變狀態。
 `Notifier` 內組裝 T6~T13 的純函式模組，自身不含判定邏輯。
+
+`location_providers.dart` 需提供可覆寫的注入點：`clockProvider`、`mapManifestProvider`、`buildFlagsProvider`、`ignoreMockedFlagProvider`、`locationControllerProvider`。
+另提供 `LocationController.forTest({...})` 具名建構子，供不經 `ProviderContainer` 的斷言使用。
 
 - [ ] **步驟 4：執行，確認通過**
 - [ ] **步驟 5：提交**
@@ -2352,7 +3215,10 @@ flutter test test/architecture/layer_boundaries_test.dart
 ///
 /// 讀取 Flame 元件座標時要注意各元件的 getter 語意不一致：一者回傳活參考、
 /// 一者回傳副本，兩種失效模式都不會報錯。故一律以 setFrom / clone 明確表達意圖。
-class PlayerComponent extends PositionComponent { ... }
+class PlayerComponent extends PositionComponent {
+  /// 由 LocationController 的 renderedPixel 驅動；本身不持有任何遊戲數值。
+  void syncTo(Vector2 renderedPixel) => position.setFrom(renderedPixel);
+}
 ```
 
 - [ ] **步驟 4：驗證訂閱釋放（NFR-5）**
@@ -2423,17 +3289,82 @@ class CameraFollow {
 
 ```dart
 void main() {
-  test('AC-8.1 手勢平移 → free', () { });
-  test('AC-8.2 停止操作滿 3 秒 → returning → following', () { });
-  test('AC-8.3 free 下玩家移動，相機中心不變', () { });
-  test('AC-8.4 任意 zoom 下相機中心滿足邊界（含地圖小於視口的退化情形）', () {
-    // 地圖 100x100、視口 800x600 → 中心必為 (50, 50)
+  late FakeClock clock;
+  late CameraFollow camera;
+
+  setUp(() {
+    clock = FakeClock();
+    camera = CameraFollow(clock: clock, returnDelay: const Duration(seconds: 3));
   });
-  test('AC-8.5 free 期間僅縮放 → 回歸計時器不重置', () { });
+
+  Vector2 center({Vector2? player, double zoom = 1.0,
+      Vector2? viewport, Vector2? map}) =>
+      camera.targetCenter(
+        player: player ?? Vector2(400, 300),
+        zoom: zoom,
+        viewportSize: viewport ?? Vector2(800, 600),
+        mapSize: map ?? Vector2(2048, 1152),
+      );
+
+  test('AC-8.1 手勢平移 → free', () {
+    expect(camera.mode, CameraMode.following);
+    camera.onPan();
+    expect(camera.mode, CameraMode.free);
+  });
+
+  test('AC-8.2 停止操作滿 3 秒 → returning → following', () {
+    camera.onPan();
+    clock.advance(const Duration(seconds: 3));
+    expect(camera.mode, CameraMode.returning);
+    // returning 完成後回到 following（以連續呼叫 targetCenter 推進收斂）
+    for (var i = 0; i < 120; i++) { center(); }
+    expect(camera.mode, CameraMode.following);
+  });
+
+  test('AC-8.3 free 下玩家移動，相機中心不變', () {
+    camera.onPan();
+    final before = center(player: Vector2(400, 300));
+    final after = center(player: Vector2(900, 700));
+    expect(after, before);
+  });
+
+  test('AC-8.4 地圖小於視口時，中心為地圖中點', () {
+    final c = center(map: Vector2(100, 100), viewport: Vector2(800, 600));
+    expect(c, Vector2(50, 50));
+  });
+
+  test('AC-8.4b 任意 zoom 下中心不越界', () {
+    for (final z in [0.5, 1.0, 2.5]) {
+      final c = center(player: Vector2(0, 0), zoom: z);
+      final halfW = 800 / (2 * z);
+      final halfH = 600 / (2 * z);
+      expect(c.x, greaterThanOrEqualTo(halfW.clamp(0, 1024)));
+      expect(c.y, greaterThanOrEqualTo(halfH.clamp(0, 576)));
+    }
+  });
+
+  test('AC-8.5 free 期間僅縮放 → 回歸計時器不重置', () {
+    camera.onPan();
+    clock.advance(const Duration(seconds: 2));
+    camera.onZoom();                     // 縮放不算操作
+    clock.advance(const Duration(seconds: 1));
+    expect(camera.mode, CameraMode.returning,
+        reason: '若縮放重置了計時器，此時仍會是 free');
+  });
 }
 ```
 
-- [ ] **步驟 2~5：同前述節奏（失敗 → 實作 → 通過 → 提交）**
+- [ ] **步驟 2：執行，確認失敗**
+
+```bash
+flutter test test/domain/location/camera/camera_follow_test.dart
+```
+
+- [ ] **步驟 3：寫實作**
+
+- [ ] **步驟 4：執行，確認通過（6 tests passed）**
+
+- [ ] **步驟 5：提交**
 
 實作必須是純函式狀態機，**不得**碰 `CameraComponent`，否則只能寫成 widget test，違反 NFR-1。
 邊界限制沿用 `universal_overworld_game.dart:_clampCameraBounds` 的既有邏輯，搬到此處成為純函式。
@@ -2465,23 +3396,77 @@ the return timer."
 
 ```dart
 void main() {
-  test('AC-15.1 換層後目標點來自新模組', () { });
+  late LocationController c;
+  late FakeMapManifest layerA;
+  late FakeMapManifest layerB;
+
+  setUp(() {
+    layerA = FakeMapManifest.linear();
+    layerB = FakeMapManifest.linear(originPixel: Vector2(500, 500));
+    c = LocationController.forTest(
+        flags: const BuildFlags.debug(), manifest: layerA, clock: FakeClock());
+  });
+
+  test('AC-15.1 換層後目標點來自新模組', () {
+    c.ingest(at(metersNorth: 0));
+    final before = c.state.renderedPixel;
+    c.switchLayer(layerB);
+    expect(c.state.renderedPixel, isNot(before));
+    expect(c.state.renderedPixel, layerB.projectToPixel(24.0, 121.0));
+  });
+
   test('AC-15.2 換層不發出任何傳送事件', () {
-    // 大跨距判準是地理位移，而換層時地理位置不變 → 位移為 0。
-    // 舊版要求換層走傳送流程，那條規則在公尺判準下永遠不可能成立。
+    c.ingest(at(metersNorth: 0));
+    c.clearEvents();
+    c.switchLayer(layerB);
+    expect(c.emittedEvents.whereType<RelocationEvent>(), isEmpty,
+        reason: '大跨距判準是地理位移，換層時地理位置不變 → 位移為 0，'
+            '該路徑在建構上不可達');
   });
-  test('AC-15.3 換層前後 realDistanceMeters 連續，無清零、無跳增', () { });
-  test('AC-15.4 換層後首筆 Fix 不因速度規則被丟棄（基準已重置）', () { });
-  test('AC-15.5 公尺門檻換算出的像素值依新圖層更新', () {
-    // 用 FakeMapManifest.nonLinear 驗證
+
+  test('AC-15.3 換層前後分桶距離連續', () {
+    c.ingest(at(metersNorth: 0));
+    c.ingest(at(metersNorth: 60, second: 1));
+    final before = c.state.realDistanceMeters;
+    c.switchLayer(layerB);
+    expect(c.state.realDistanceMeters, before);
+    c.ingest(at(metersNorth: 120, second: 2));
+    expect(c.state.realDistanceMeters, greaterThan(before));
   });
-  test('AC-15.6 換層後位置落在新模組範圍外 → 換層仍成功，coverage = outside', () {
-    // 不得拒絕換層，否則玩家會卡在舊圖層
+
+  test('AC-15.4 換層後首筆 Fix 不因速度規則被丟棄', () {
+    c.ingest(at(metersNorth: 0));
+    c.switchLayer(layerB);
+    // 相對前一筆是巨大位移，但基準已重置，應被接受
+    final out = c.ingest(at(metersNorth: 100000, second: 1));
+    expect(out.rejection, isNull);
+  });
+
+  test('AC-15.5 公尺門檻依新圖層重算', () {
+    final scaled = FakeMapManifest.fixedScale(370.4);
+    c.ingest(at(metersNorth: 0));
+    final before = c.arrivalThresholdPixels;   // mpp 1.0 → 2 px
+    c.switchLayer(scaled);
+    expect(c.arrivalThresholdPixels, lessThan(before));
+    expect(c.arrivalThresholdPixels, closeTo(0.0054, 0.0005));
+  });
+
+  test('AC-15.6 換層後位置在新模組範圍外 → 換層仍成功，coverage = outside', () {
+    final farLayer = FakeMapManifest.linearAt(minLat: 40, minLng: 100);
+    c.ingest(at(metersNorth: 0));
+    c.switchLayer(farLayer);
+    expect(c.state.status.coverage, CoverageState.outside);
+    expect(c.activeManifest, farLayer, reason: '不得拒絕換層，否則玩家卡在舊圖層');
   });
 }
 ```
 
-- [ ] **步驟 2~5：同前述節奏**
+> `FakeMapManifest.linearAt({required double minLat, required double minLng})` 為 T4a 的 `linear()` 加上可移動的地理原點，於本任務一併補上。
+
+- [ ] **步驟 2：執行，確認失敗**
+- [ ] **步驟 3：寫實作**
+- [ ] **步驟 4：執行，確認通過（6 tests passed）**
+- [ ] **步驟 5：提交**
 
 ```bash
 git commit -m "feat: support switching projection layer at runtime
@@ -2502,50 +3487,76 @@ layer they were trying to leave."
 
 ## 自我檢查
 
-**規格覆蓋**
+**規格覆蓋（v5.1）**
 
 | 需求 | 任務 |
 |---|---|
-| REQ-C-14 可觀測狀態與診斷 | T5、T8、T17 |
-| REQ-C-01 權限、服務、精度 | T15 |
-| REQ-C-02 串流與節流 | T3、T16 |
+| §3.0 處理管線（含 AC-0.1~0.4） | T12 |
+| REQ-C-14 可觀測狀態與診斷 | T5（狀態、AC-14.7）、T8（motion／acquisition）、T17（AC-14.6 整合） |
+| REQ-C-01 權限、服務、精度 | T15（含 AC-0.2 的啟發式） |
+| REQ-C-02 串流與節流 | T3（Fix 欄位）、T16 |
 | REQ-C-03 品質過濾與靜止判定 | T6、T7 |
 | REQ-C-04 範圍檢查、投影、吸附 | T9 |
 | REQ-C-05 範圍外處理 | T9（規則 1，P0）、T17（規則 2、3，P1） |
-| REQ-C-06 平滑位移 | T13 |
+| REQ-C-06 平滑位移（含 NFR-4） | T13 |
 | REQ-C-07 大跨距 | T10 |
 | REQ-C-08 相機 | T19 |
-| REQ-C-10 虛擬來源 | T14 |
+| REQ-C-10 虛擬來源（含旁路品質閘門） | T14、T12（AC-0.4） |
 | REQ-C-11 省電 | T16 |
 | REQ-C-12 隱私 | T17 |
-| REQ-C-13 模式與位移歸屬 | T11、T17 |
+| REQ-C-13 模式與位移歸屬（含規則 13~15） | T11（事件酬載、AC-13.11~13.13）、T17（模式切換、AC-13.8~13.10） |
 | REQ-C-15 執行期換層 | T20 |
-| §3.0 處理管線 | T12 |
 | PRE-1、9 | T1 |
-| PRE-2、4、7、11 | T4 |
+| PRE-2、4、7、11 | T4a（契約）、T4b（台灣實作） |
 | PRE-3、5 | T18 |
 | PRE-6 | 已完成（`d02b6e5`） |
-| PRE-8、10 | **不在本計劃**：路網拓撲與觸發半徑屬任務 A／D。T9 的幾何測試以 skip 標記並附說明 |
-| NFR-1~6 | T1（1、2）、T2（3）、T13（4）、T18（5）、T15（6） |
+| PRE-8、10 | **不在本計劃**：路網拓撲與觸發半徑屬任務 A／D。T9 的幾何測試以 skip 標記並附實測數據 |
+| NFR-1 | T1（架構測試）、全篇（一律注入 fake） |
+| NFR-2 | T2 |
+| NFR-3 | T2、T8、T16 |
+| NFR-4 | T13 |
+| NFR-5 | T18 |
+| NFR-6 | T15 |
+| CC-1（UUID） | T11（`MovementEventFactory` + AC-CC-1.1） |
+| CC-2（UTC／單調） | T2、T3 |
+| CC-3（事件欄位、重播決定性） | T11 |
+| CC-5（隱私封閉清單） | T11（AC-13.12）、T17（AC-12.1） |
 
 **已知的紅燈與跳過**
 
 | 位置 | 原因 | 何時解除 |
 |---|---|---|
 | `layer_boundaries_test` 的城市引用檢查 | PRE-3 未清償 | T18 |
-| `manifest_geometry_check_test` 的台灣資料組 | PRE-8：4 個道路節點與 POI 同座標 | 路網升級為路段拓撲後（任務 A／D） |
+| `manifest_geometry_check_test` 的台灣資料組 | PRE-8：4 個道路節點與 POI 同座標（實測間距 0.000 px） | 路網升級為路段拓撲後（任務 A／D） |
 
-**型別一致性檢查**：`GeoFix`、`SourceMode`、`LocationStatus`、`MovementEvent`、`RejectionReason`、`OverworldMapManifest`、`Clock` 的名稱與簽章在 T3、T4、T5 定義，T6~T20 引用時一致。
+**型別一致性**：`GeoFix`／`SourceMode`（T3）、`OverworldMapManifest`／`GeoPoint`／`PoiMarker`（T4a）、`LocationStatus` 及五個維度列舉／`RejectionReason`（T5）、`GateResult`（T6）、`RelocationDecision`／`RelocationCause`／`RelocationNote`（T10）、`MovementEvent` 三個變體／`MovementEventFactory`（T11）、`PipelineOutput`／`LocationPipeline`（T12）、`PositionSmoother`（T13）、`LocationSource`（T14）、`LocationPermissionGateway`（T15）、`LocationSubscriptionManager`／`FixThrottle`（T16）、`LocationControllerState`／`LocationController`／`LocationSnapshotDto`（T17）、`CameraFollow`（T19）——後續任務的引用皆對應上述定義。
+
+**測試替身清單**（全部位於 `test/fakes/`）
+
+| 替身 | 建立於 | 需暴露 |
+|---|---|---|
+| `FakeClock` | T2 | `advance`、`setWallClock` |
+| `FakeMapManifest` | T4a | `linear`／`nonLinear`／`fixedScale`／`linearAt`、`projectCallCount`、`snapCallCount`、`resetCallCounts` |
+| `FakePermissionGateway` | T15 | `requestCallCount`、`pushServiceEnabled` |
+| `FakeLocationSource` | T16 | `cancelCount`、`lastKnownQueryCount`、`emit` |
+| `FakeLogger` | T17 | `lines` |
 
 **風險**
 
-1. **T4 的既有測試相容性**。改 `geo_anchor.dart` 的 import 會影響現有兩個測試檔。它們斷言的是資料性質（單調性、方位、間距）而非硬編碼像素，預期不需修改，但需在 T4 步驟 5 實際確認。
-2. **`dpadSpeedPixelsPerSecond` 是暫定值**。Q15 由任務 D 裁決。第一版取 40 px/s（大地圖上約每秒 15 公里，刻意誇張以維持可玩）。
-3. **`triggerRadiusMeters` 是暫定值**。PRE-10／Q16 由任務 A 裁決。第一版取 50 公尺，僅供 T9 的幾何檢查參數化使用。
+1. **T4b 的 `unprojectToGeo` 迭代法可能不收斂**。IDW 不是自身的逆函數，計劃給的是牛頓式迭代加局部雅可比。若某些控制點附近達不到 AC-10.1 的 2 像素往返誤差，**回報而非放寬門檻**——那是除錯點擊尋路與正式路徑一致性的下限。
+2. **`dpadSpeedPixelsPerSecond = 40` 是暫定值**（Q15 屬任務 D）。它換算成地理速度是每秒十餘公里，正因如此虛擬 Fix 必須旁路品質閘門（規格 v5.1 REQ-C-10 規則 5）。若日後改為地方層的真實速度，旁路仍應保留——合成資料本來就沒有量測誤差。
+3. **`triggerRadiusMeters = 50` 是暫定值**（PRE-10／Q16 屬任務 A），僅供 T9 的幾何檢查參數化使用。
+4. **T16 的節流測試依賴 `FixThrottle` 由 `Clock` 驅動而非真實 `Timer`**。若實作改用 `Timer`，測試會變成需要真實等待，違反 NFR-1 的精神。`Clock` 因此需要 `delay(Duration)`。
 
 ---
 
 ## 執行方式
 
-本計劃可逐任務執行，每個任務結束時 `flutter analyze` 無 issue、該任務測試全綠、提交一次。
-Phase 2 的 T6~T13 除標註相依外可並行分工。
+逐任務執行。每個任務結束時：**先跑 codegen**，再 `flutter analyze` 無 issue、該任務測試全綠、提交一次。
+
+```bash
+dart run build_runner build --delete-conflicting-outputs && flutter analyze && flutter test
+```
+
+**關鍵路徑**：T1 → T2 → T4a → T9／T13 → T12 → T17 → T18。
+**可並行**：T6／T8／T9／T10／T11／T13 六者互不相干；T4b 與 T15 亦可與純函式任務並行。
