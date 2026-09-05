@@ -2,6 +2,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'domain/location/models/geo_fix.dart';
 import 'domain/location/models/location_status.dart';
 import 'game/map_module/manifests/taiwan_map_manifest.dart';
 import 'game/universal_overworld_game.dart';
@@ -50,8 +51,9 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold> {
         overlayBuilderMap: {
           'RetroHUD': (context, game) => const _RetroHudOverlay(),
           'DPad': (context, game) => _DPadOverlay(game: game),
+          'ModeToggle': (context, game) => const _ModeToggle(),
         },
-        initialActiveOverlays: const ['RetroHUD', 'DPad'],
+        initialActiveOverlays: const ['RetroHUD', 'DPad', 'ModeToggle'],
       ),
     );
   }
@@ -190,4 +192,75 @@ class _DPadOverlay extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// 模式切換。權限對話框在玩家按下 GPS 時才出現——開場就跳，玩家還不知道
+/// 這是什麼遊戲就被要求定位。
+class _ModeToggle extends ConsumerWidget {
+  const _ModeToggle();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(locationControllerProvider).status.mode;
+    final permission = ref.watch(locationControllerProvider).status.permission;
+    final notifier = ref.read(locationControllerProvider.notifier);
+    final isGps = mode == SourceMode.gps;
+
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.bottomRight,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!isGps && permission != PermissionState.ready)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  color: Colors.black87,
+                  child: Text(
+                    _hintFor(permission),
+                    style: const TextStyle(fontSize: 10, color: Colors.white),
+                  ),
+                ),
+              GestureDetector(
+                onTap: () =>
+                    isGps ? notifier.switchToVirtual() : notifier.requestGpsMode(),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isGps ? const Color(0xFF48BB78) : Colors.white,
+                    border: Border.all(color: Colors.black, width: 3),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black, offset: Offset(3, 3))
+                    ],
+                  ),
+                  child: Text(
+                    isGps ? 'GPS ON' : 'USE GPS',
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                        color: Colors.black),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _hintFor(PermissionState p) => switch (p) {
+        PermissionState.serviceDisabled => '系統定位已關閉',
+        PermissionState.denied => '定位權限被拒',
+        PermissionState.deniedForever => '請至系統設定開啟定位',
+        PermissionState.approximate => '請開啟「精確位置」',
+        PermissionState.unavailable => '此裝置無定位功能',
+        PermissionState.ready => '',
+      };
 }
