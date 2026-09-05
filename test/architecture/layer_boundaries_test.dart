@@ -55,7 +55,7 @@ void main() {
     }
     expect(violations, isEmpty,
         reason: '通用引擎硬編碼了特定城市：\n${violations.join('\n')}');
-  }, skip: 'PRE-3：universal_overworld_game 仍直呼台灣校準器，Task 18 清償');
+  });
 
   test('domain 與 state 層不得引用遊戲數值模組', () {
     final violations = <String>[];

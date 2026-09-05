@@ -2,17 +2,28 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'components/player_component.dart';
 import 'map_module/overworld_map_manifest.dart';
 
 class UniversalOverworldGame extends FlameGame with ScaleDetector {
+  UniversalOverworldGame({
+    required this.manifest,
+    required this.onTick,
+    required this.renderedPixelOf,
+  });
+
   final OverworldMapManifest manifest;
 
-  UniversalOverworldGame({required this.manifest});
+  /// 每幀交還給 domain 推進平滑。引擎不自己算位置。
+  final void Function(double dt) onTick;
+
+  /// 讀取 domain 當前的顯示點。
+  final Vector2 Function() renderedPixelOf;
 
   late final World mapWorld;
   late final CameraComponent cameraComponent;
   late final SpriteComponent mapComponent;
-  late final PositionComponent playerComponent;
+  late final PlayerComponent playerComponent;
 
   double _baseZoom = 1.0;
   final double minZoom = 0.5;
@@ -39,12 +50,8 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector {
     await mapWorld.add(mapComponent);
 
     // 2. 加入玩家佔位圖標 (像素紅點小人)
-    playerComponent = CircleComponent(
-      radius: 8,
-      paint: Paint()..color = const Color(0xFFFF4757),
-      anchor: Anchor.center,
-      position: manifest.defaultSpawnPixel.clone(), // 降落點由圖資提供（PRE-7）
-    );
+    playerComponent =
+        PlayerComponent(position: manifest.defaultSpawnPixel.clone());
     await mapWorld.add(playerComponent);
 
     // 3. 初始化視口相機
@@ -53,12 +60,30 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector {
     cameraComponent.viewfinder.zoom = 1.0;
   }
 
+  @override
+  void update(double dt) {
+    super.update(dt);
+    onTick(dt);
+    playerComponent.syncTo(renderedPixelOf());
+    if (_followPlayer) {
+      cameraComponent.viewfinder.position = playerComponent.position.clone();
+      _clampCameraBounds();
+    }
+  }
+
+  /// 手勢平移時暫時解除跟隨。完整的回歸狀態機屬 REQ-C-08（P1）。
+  bool _followPlayer = true;
+
   // --- 手勢事件處理 ---
 
   @override
   void onScaleStart(ScaleStartInfo info) {
     _baseZoom = cameraComponent.viewfinder.zoom;
+    _followPlayer = false;
   }
+
+  /// 回到我的位置。
+  void recenterOnPlayer() => _followPlayer = true;
 
   @override
   void onScaleUpdate(ScaleUpdateInfo info) {
@@ -94,11 +119,5 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector {
     cameraComponent.viewfinder.position = Vector2(clampedX, clampedY);
   }
 
-  /// 外部呼叫：直接指定小人的顯示點。
-  ///
-  /// 投影、吸附與平滑都在 domain 完成，這裡只負責畫。引擎不得自己算座標——
-  /// 那正是先前把台灣專屬校準器寫進通用引擎的成因。
-  void setRenderedPixel(Vector2 pixel) {
-    playerComponent.position.setFrom(pixel);
-  }
+
 }
