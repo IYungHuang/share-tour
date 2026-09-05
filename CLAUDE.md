@@ -1,0 +1,123 @@
+# Share Tour — 專案工作規範
+
+以旅行為世界觀的 Luggage Roguelite 手機遊戲。Flutter + Flame + Riverpod + geolocator。
+
+---
+
+## 1. 開發流程（不可跳級）
+
+```
+spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
+```
+
+**每一關都必須等使用者明確點頭，才進下一關。**
+
+各階段的產出邊界要嚴格區分：
+
+| 階段 | 該寫什麼 | **不該**寫什麼 |
+|---|---|---|
+| **spec** | 需求、行為契約、可自動化測試的驗收條件（AC）、待決問題 | 目錄結構、套件選型、演算法、類別設計 |
+| **plan** | 分層、抽象邊界、任務拆解、相依順序、選型理由 | 實作碼 |
+| **執行計劃** | 依 plan 施工 | 超出 plan 的範圍 |
+
+設計文件 ≠ spec。若把兩者混在一起，退回重寫。
+
+**SPEC 逐個子系統過關，不一次寫完。** 目前順序：C（GPS 追蹤）→ A（遭遇系統）→ B（行李箱背包）。理由：C 是 A 的前置，範圍最小。
+
+---
+
+## 2. TDD（施工階段強制）
+
+`RED → GREEN → REFACTOR`。先寫失敗的測試，再寫實作。
+
+由此推導出的**硬性架構約束**：
+
+- **`domain/` 不得 import `package:flutter` 或 `package:flame`。** Flame 元件與 GPS 硬體不可測；邏輯留在裡面就做不了 TDD。
+- 所有數值規則、格子演算法、狀態機轉移、座標投影都放 `domain/`，用 `dart test` 跑，不需模擬器。
+
+分層測試策略：
+
+| 層 | 測試方式 | 覆蓋率要求 |
+|---|---|---|
+| `domain/` | 純 `dart test` | 高 |
+| `state/`（Riverpod Notifier） | `ProviderContainer` + fake repository | 高 |
+| `services/gps` | 注入虛擬定位來源，不碰真機 | 中 |
+| `game/`, `ui/` | 煙霧測試 | 不追求 |
+
+**spec 的每條需求都必須附可測的 AC**，否則寫不出測試。
+
+---
+
+## 3. Clean Code 與 SOLID —— 務實，不過度工程
+
+**抽象只在「擋住已知會變的軸」時才做。其餘一律不預先抽象。**
+
+目前**核准的抽象只有三條**：
+
+| 抽象 | 擋住的變動軸 |
+|---|---|
+| `LocationSource` | 真實 GPS 不可測，需可替換為虛擬來源 |
+| `PersistenceRepository` | 存檔後端將來會從本機換成遠端 |
+| `OverworldMapManifest` | 城市圖資模組化注入 |
+
+提出新抽象前，先回答「它擋住哪一條已知會變的軸」。答不出來就不要做。
+
+**明確延後、不要主動提**：軌跡錄製/重播、A* 路網尋路、條件式物品效果系統、多段 GPS 功率模式（只做 active/suspended 兩段）、自訂 `Result<T,E>` 型別。
+
+---
+
+## 4. 圖資模組化注入
+
+**通用引擎不得含任何特定城市的演算法。** 「城市即實體 DLC」。
+
+`OverworldMapManifest` 需提供：投影（經緯度→像素）、反投影（像素→經緯度）、道路吸附、有效地理範圍。
+
+**解耦驗收標準**：能用一個**純數學、不含圖檔與真實地理資料**的 `FakeMapManifest` 跑完整套 domain 測試。做得到才算解耦成立。
+
+### 已知違反（待修）
+
+- `lib/game/universal_overworld_game.dart` 直接呼叫 `TaiwanGeoCalibrator.snapToRoad` —— 台灣專屬演算法寫死在通用引擎裡。
+- `lib/main.dart` 直接 `new TaiwanMapManifest()` —— 應由外部注入。
+- `lib/main.dart` **尚無 `ProviderScope`**，Riverpod 完全未接線。這是所有子系統的前置阻斷項。
+
+---
+
+## 5. 跨系統約束
+
+詳見 `CROSS_CUTTING_CONSTRAINTS.md`。摘要：
+
+- 第一版**純本機運作**，但後端服務是**既定終點**，設計不得排除它。
+- 第一版**禁止實作**：帳號、雲端同步、排行榜、好友、遠端 DLC、伺服器驗證、遙測。**且不得提前埋鉤子。**
+- 實體識別一律 **UUID**，禁用本機自增序號。
+- 時戳一律 **UTC**；「經過了多久」的判定**必須**用**單調時鐘**（否則跨時區失效，且玩家調系統時間就能跳過冷卻）。
+- 存檔採 **append-only 事件日誌**，最終狀態由重播得出。**重播必須是決定性的** —— 事件處理器不得依賴當下時間、亂數（除非種子存於事件內）或外部狀態。
+- **原始 GPS 座標永不離開裝置**（產品承諾）。僅允許持久化：已投影的像素座標、POI 打卡結果、不含原始座標的事件欄位。
+
+---
+
+## 6. 技術選型（已定案）
+
+- `freezed` + `json_serializable`：**導入**。資料模型多且需 JSON 序列化。
+- `riverpod_generator`：**不導入**。Provider 手寫。
+- 不要提議引入其他新套件，除非缺了它需求無法實作。
+
+---
+
+## 7. 文件地圖
+
+| 檔案 | 用途 |
+|---|---|
+| `ARCHITECTURE_BRIEF.md` | 使用者提供的專案目標與任務書 |
+| `CROSS_CUTTING_CONSTRAINTS.md` | 拘束 A/B/C 全部子系統的決策（**優先於各子系統 SPEC**） |
+| `SPEC_C_GPS_TRACKING.md` | 任務 C 規格 |
+| `ARCHITECTURE_DESIGN.md` | 早期設計文件，**參考素材，非權威** |
+
+子系統 SPEC 若與 `CROSS_CUTTING_CONSTRAINTS.md` 牴觸，以後者為準並回報。
+
+---
+
+## 8. 慣例
+
+- 提交訊息：Conventional Commits，正文說明**為什麼**，英文撰寫。
+- `flutter analyze` 必須維持 0 errors / 0 warnings。
+- 動檔前先確認該檔沒有其他 Agent 正在讀寫。
