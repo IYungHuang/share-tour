@@ -3559,4 +3559,8 @@ dart run build_runner build --delete-conflicting-outputs && flutter analyze && f
 ```
 
 **關鍵路徑**：T1 → T2 → T4a → T9／T13 → T12 → T17 → T18。
+
+> **執行中修正的相依（T9）**：AC-4.6 對台灣圖資的驗證需要 `TaiwanMapManifest`
+> 實作 `snapLimitMeters` 與 `metersPerPixelAt`，那是 T4b 的產出。該條測試已移至
+> T4b；T9 只保留以合成資料驗證規則本身的兩條。原相依圖漏了這條邊。
 **可並行**：T6／T8／T9／T10／T11／T13 六者互不相干；T4b 與 T15 亦可與純函式任務並行。
