@@ -119,5 +119,9 @@ spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
 ## 8. 慣例
 
 - 提交訊息：Conventional Commits，正文說明**為什麼**，英文撰寫。
-- `flutter analyze` 必須維持 0 errors / 0 warnings。
+- 生成檔（`*.freezed.dart`、`*.g.dart`）不進版控。clone 後、或修改任何標註類別後，先執行：
+  `dart run build_runner build --delete-conflicting-outputs`
+- **先跑 codegen，再** `flutter analyze`，必須維持 0 errors / 0 warnings。
+  （乾淨 clone 上未跑 codegen 時分析必然失敗，這不是缺陷。）
+- 自 `lib/` import 的套件一律要在 `pubspec.yaml` 宣告直接相依，否則觸發 `depend_on_referenced_packages`。
 - 動檔前先確認該檔沒有其他 Agent 正在讀寫。
