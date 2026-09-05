@@ -27,6 +27,15 @@ final mapManifestProvider = Provider<OverworldMapManifest>(
   (_) => throw UnimplementedError('必須在 ProviderScope 覆寫此 provider 注入圖資'),
 );
 
+/// 除錯建置下忽略 isMocked 標記。
+///
+/// 模擬器注入的座標與 GPX 除錯路徑都會被平台標記為模擬定位，而正式規則會把
+/// 它們歸到 virtual 桶——於是開發機上永遠測不出 gps 模式的行為。
+/// 正式建置一律不忽略：那個標記是誠實歸屬的一部分。
+final ignoreMockedFlagProvider = Provider<bool>(
+  (ref) => !ref.watch(buildFlagsProvider).isRelease,
+);
+
 final permissionGatewayProvider = Provider<LocationPermissionGateway>(
   (_) => GeolocatorPermissionGateway(),
 );
@@ -75,6 +84,7 @@ class LocationNotifier extends Notifier<LocationControllerState> {
       manifest: ref.watch(mapManifestProvider),
       clock: ref.watch(clockProvider),
       flags: ref.watch(buildFlagsProvider),
+      ignoreMockedFlag: ref.watch(ignoreMockedFlagProvider),
     );
     _virtual = ref.watch(virtualSourceProvider);
     _real = ref.watch(realSourceProvider);
