@@ -1,0 +1,149 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:vector_math/vector_math.dart';
+import 'package:share_tour/core/build_flags.dart';
+import 'package:share_tour/domain/location/models/geo_fix.dart';
+import 'package:share_tour/domain/location/models/location_snapshot_dto.dart';
+import 'package:share_tour/domain/location/models/location_status.dart';
+import 'package:share_tour/domain/location/models/rejection_reason.dart';
+import 'package:share_tour/state/location/location_controller.dart';
+import '../../fakes/fake_clock.dart';
+import '../../fakes/fake_map_manifest.dart';
+
+GeoFix at({
+  required double metersNorth,
+  double accuracy = 20,
+  int second = 0,
+  SourceMode mode = SourceMode.gps,
+  bool isMocked = false,
+}) =>
+    GeoFix(
+      latitude: 24.0 + metersNorth / 110574.0,
+      longitude: 121.0,
+      accuracyMeters: accuracy,
+      hasAccuracy: true,
+      speedMetersPerSecond: 1.4,
+      hasSpeed: true,
+      speedAccuracy: 0.5,
+      hasSpeedAccuracy: true,
+      timestampUtc: DateTime.utc(2026, 1, 1).add(Duration(seconds: second)),
+      isMocked: isMocked,
+      sourceMode: mode,
+    );
+
+void main() {
+  late FakeClock clock;
+  late FakeMapManifest manifest;
+
+  LocationController make({bool ignoreMocked = false}) =>
+      LocationController.forTest(
+        manifest: manifest,
+        clock: clock,
+        flags: const BuildFlags.debug(),
+        ignoreMockedFlag: ignoreMocked,
+      );
+
+  setUp(() {
+    clock = FakeClock();
+    manifest = FakeMapManifest.linear();
+  });
+
+  test('AC-13.1 手動切換即時生效', () {
+    final c = make();
+    c.switchMode(SourceMode.virtual, automatic: false);
+    expect(c.state.status.mode, SourceMode.virtual);
+  });
+
+  test('AC-13.2 權限被拒 → 自動切 virtual 並標記為自動', () {
+    final c = make();
+    c.onPermissionChanged(PermissionState.denied);
+    expect(c.state.status.mode, SourceMode.virtual);
+    expect(c.lastSwitchWasAutomatic, isTrue);
+  });
+
+  test('AC-13.3 定位恢復可用 → mode 維持 virtual', () {
+    final c = make();
+    c.onPermissionChanged(PermissionState.denied);
+    c.onPermissionChanged(PermissionState.ready);
+    expect(c.state.status.mode, SourceMode.virtual,
+        reason: '恢復後不自動切回，由玩家決定');
+  });
+
+  test('AC-13.8 isMocked 的 Fix 在 gps 模式下，位移計入 virtual 桶', () {
+    final c = make();
+    c.ingest(at(metersNorth: 0, isMocked: true));
+    c.ingest(at(metersNorth: 60, second: 1, isMocked: true));
+    expect(c.state.virtualDistanceMeters, closeTo(60, 2));
+    expect(c.state.realDistanceMeters, 0);
+  });
+
+  test('AC-13.9 除錯旗標開啟時，isMocked 仍依 mode 歸屬', () {
+    final c = make(ignoreMocked: true);
+    c.ingest(at(metersNorth: 0, isMocked: true));
+    c.ingest(at(metersNorth: 60, second: 1, isMocked: true));
+    expect(c.state.realDistanceMeters, closeTo(60, 2),
+        reason: '模擬器與 GPX 除錯期間 isMocked 恆為真，不覆寫就無法驗證 gps 模式');
+  });
+
+  test('AC-13.10 第一版不持久化模式，重啟後依當時權限重新判定', () {
+    final c = make();
+    c.switchMode(SourceMode.virtual, automatic: false);
+    final restarted = make();
+    expect(restarted.state.status.mode, SourceMode.gps,
+        reason: 'P0 行為：不持久化。持久化為 P1，相依任務 B 的持久化層');
+  });
+
+  test('AC-14.6 診斷計數隨丟棄遞增', () {
+    final c = make();
+    c.ingest(at(metersNorth: 0, accuracy: 150));
+    expect(c.state.diagnostics.rejectedFixCount, 1);
+    expect(c.state.diagnostics.rejectionsByReason[RejectionReason.accuracy], 1);
+  });
+
+  test('AC-12.1 持久化 DTO 的序列化結果不含座標鍵', () {
+    final json = LocationSnapshotDto(
+      renderedPixelX: 100,
+      renderedPixelY: 200,
+      realDistanceMeters: 500,
+      virtualDistanceMeters: 0,
+      mode: SourceMode.gps,
+      savedAtUtc: DateTime.utc(2026),
+    ).toJson();
+    for (final k in ['lat', 'lng', 'latitude', 'longitude']) {
+      expect(json.keys.map((e) => e.toLowerCase()), isNot(contains(k)));
+    }
+  });
+
+  test('顯著位移更新目標點與里程', () {
+    final c = make();
+    c.ingest(at(metersNorth: 0));
+    c.ingest(at(metersNorth: 60, second: 1));
+    expect(c.state.realDistanceMeters, closeTo(60, 2));
+    expect(c.state.targetPixel, isNotNull);
+  });
+
+  test('冷啟動顯示點為預設降落點', () {
+    expect(make().state.renderedPixel, manifest.defaultSpawnPixel);
+  });
+
+  test('coverage 隨範圍外的 Fix 改變，且里程不變', () {
+    final c = make();
+    c.ingest(at(metersNorth: 0));
+    c.ingest(at(metersNorth: 60, second: 1));
+    final before = c.state.realDistanceMeters;
+    c.ingest(GeoFix(
+      latitude: 80.0,
+      longitude: 0.0,
+      accuracyMeters: 20,
+      hasAccuracy: true,
+      speedMetersPerSecond: 1.4,
+      hasSpeed: true,
+      speedAccuracy: 0.5,
+      hasSpeedAccuracy: true,
+      timestampUtc: DateTime.utc(2026, 1, 2),
+      isMocked: false,
+      sourceMode: SourceMode.gps,
+    ));
+    expect(c.state.status.coverage, CoverageState.outside);
+    expect(c.state.realDistanceMeters, before);
+  });
+}
