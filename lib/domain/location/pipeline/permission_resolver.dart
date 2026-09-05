@@ -66,7 +66,14 @@ class PermissionResolver {
     }
 
     var permission = await _gateway.checkPermission();
-    if (permission == PlatformPermission.notDetermined) {
+
+    // 平台語意：denied 的意思是「尚未取得，應該去請求」，不是「使用者拒絕了」。
+    // Android 首次啟動時 checkPermission 回傳的就是 denied；把它當成終局，
+    // 權限對話框永遠不會出現，玩家看到的是一個從未問過就宣稱被拒的 app。
+    //
+    // deniedForever 才是終局——那時再請求，系統也不會顯示對話框。
+    if (permission == PlatformPermission.denied ||
+        permission == PlatformPermission.notDetermined) {
       permission = await _gateway.requestPermission();
     }
 

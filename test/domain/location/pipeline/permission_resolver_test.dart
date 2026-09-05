@@ -25,16 +25,32 @@ void main() {
         reason: '服務總開關關閉時請求權限會靜默失敗');
   });
 
-  test('AC-1.2 權限未決 → 恰請求一次；允許後為 ready', () async {
-    gateway.permission = PlatformPermission.notDetermined;
+  test('AC-1.2 權限為 denied → 請求一次；允許後為 ready', () async {
+    // 平台語意：denied 的意思是「尚未取得，應該去請求」，不是「使用者拒絕了」。
+    // 首次啟動時 checkPermission 回傳的就是 denied——把它當成終局，
+    // 權限對話框永遠不會出現。這是真機測試抓到的實際缺陷。
+    gateway.permission = PlatformPermission.denied;
     await resolver.resolve();
-    expect(gateway.requestCallCount, 1);
+    expect(gateway.requestCallCount, 1, reason: 'denied 必須觸發請求');
+
     gateway.permission = PlatformPermission.granted;
     expect(await resolver.resolve(), PermissionState.ready);
   });
 
-  test('AC-1.4 並發呼叫 3 次，權限請求器只被呼叫 1 次', () async {
+  test('請求後仍為 denied → 才回報 denied', () async {
+    gateway.permission = PlatformPermission.denied;
+    expect(await resolver.resolve(), PermissionState.denied);
+    expect(gateway.requestCallCount, 1);
+  });
+
+  test('notDetermined（僅 web）同樣觸發請求', () async {
     gateway.permission = PlatformPermission.notDetermined;
+    await resolver.resolve();
+    expect(gateway.requestCallCount, 1);
+  });
+
+  test('AC-1.4 並發呼叫 3 次，權限請求器只被呼叫 1 次', () async {
+    gateway.permission = PlatformPermission.denied;
     await Future.wait(
         [resolver.resolve(), resolver.resolve(), resolver.resolve()]);
     expect(gateway.requestCallCount, 1);
