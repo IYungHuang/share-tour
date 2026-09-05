@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vector_math/vector_math.dart';
 import 'package:share_tour/core/build_flags.dart';
 import 'package:share_tour/domain/location/models/geo_fix.dart';
 import 'package:share_tour/domain/location/models/location_snapshot_dto.dart';
