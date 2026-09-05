@@ -1,5 +1,6 @@
 import 'package:vector_math/vector_math.dart';
 
+import '../../../domain/location/projection/control_mesh.dart';
 import '../../../domain/location/projection/map_manifest.dart';
 import '../models/geo_anchor.dart';
 import '../utils/taiwan_geo_calibrator.dart';
@@ -42,6 +43,33 @@ class TaiwanMapManifest implements OverworldMapManifest {
   @override
   double metersPerPixelAt(Vector2 pixel) => 370.4;
 
+  /// 校準控制網。
+  ///
+  /// 三角化是【圖資資料】，不是演算法：控制網怎麼佈取決於這張圖哪裡誇張、
+  /// 哪裡忠實。此處的三角形由 8 個錨點的 Delaunay 三角化算出。
+  ///
+  /// 現行底圖是等距生成的，所以重心插值在這張圖上等同於原本那條線性公式——
+  /// 控制點精確重現、每處的解析度都是 0.268 px / 100 公尺。手繪圖上線時，
+  /// 同一套機制直接支援非線性誇張，只需重標控制點與重算三角化。
+  static const List<List<int>> _triangles = [
+    [3, 7, 0], // 日月潭 - 鵝鑾鼻 - 基隆
+    [4, 6, 7], // 阿里山 - 高雄 - 鵝鑾鼻
+    [3, 4, 7], // 日月潭 - 阿里山 - 鵝鑾鼻
+    [6, 4, 5], // 高雄 - 阿里山 - 台南
+    [4, 2, 5], // 阿里山 - 台中 - 台南
+    [2, 4, 3], // 台中 - 阿里山 - 日月潭
+    [1, 3, 0], // 台北101 - 日月潭 - 基隆
+    [1, 2, 3], // 台北101 - 台中 - 日月潭
+  ];
+
+  late final ControlMesh _mesh = ControlMesh(
+    points: [
+      for (final a in anchors)
+        ControlPoint(name: a.name, lat: a.lat, lng: a.lng, pixel: a.pixelPos),
+    ],
+    triangles: _triangles,
+  );
+
   /// 校準錨點是台灣圖資的實作細節，不在通用契約上——通用引擎不需要、
   /// 也不應該知道某份圖資是用什麼方式做投影的。
   List<GeoAnchor> get anchors => [
@@ -80,11 +108,10 @@ class TaiwanMapManifest implements OverworldMapManifest {
 
   @override
   Vector2 projectToPixel(double lat, double lng) =>
-      TaiwanGeoCalibrator.calculate(lat, lng, anchors);
+      _mesh.projectToPixel(lat, lng);
 
   @override
-  GeoPoint unprojectToGeo(Vector2 pixel) =>
-      TaiwanGeoCalibrator.invert(pixel, anchors);
+  GeoPoint unprojectToGeo(Vector2 pixel) => _mesh.unprojectToGeo(pixel);
 
   @override
   Vector2 snapToRoad(Vector2 pixel) => TaiwanGeoCalibrator.snapToRoad(

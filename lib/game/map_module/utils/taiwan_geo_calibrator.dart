@@ -3,6 +3,19 @@ import 'package:vector_math/vector_math.dart';
 import '../../../domain/location/projection/map_manifest.dart';
 import '../models/geo_anchor.dart';
 
+/// 反距離加權插值（IDW）與公路網吸附。
+///
+/// **投影部分已不再用於正式圖資。** 其權重 1/d² 在控制點處發散，使插值函數在
+/// 每個控制點附近變成局部常數——玩家走 100 公尺，投影位移是 0.00 像素。那不是
+/// 參數問題，是該權重形式的必然結果，換任何控制點佈局都一樣。
+///
+/// 實測：連控制點之間也只有 0.1975 px / 100 公尺，低於可用門檻。
+///
+/// 現由 ControlMesh 的三角化重心座標插值取代，它在控制點精確通過、三角形內部
+/// 線性、反投影是閉式解，且同樣支援手繪圖的非線性誇張。
+///
+/// 保留此類別的理由只有兩個：snapToRoad 仍在使用，以及作為 projection
+/// contract 測試的反例對照。**新圖資不得使用 calculate/invert。**
 class TaiwanGeoCalibrator {
   /// 採用反距離加權插值 (IDW) 計算非線性手繪地圖像素
   static Vector2 calculate(double lat, double lng, List<GeoAnchor> anchors) {
