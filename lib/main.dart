@@ -88,6 +88,18 @@ class _RetroHudOverlay extends ConsumerWidget {
                     style: const TextStyle(fontSize: 10, color: Colors.black)),
                 Text('MOTION: ${s.status.motion.name}',
                     style: const TextStyle(fontSize: 10, color: Colors.black)),
+                // 診斷（REQ-C-14 規則 5）。多條驗收條件依賴這些計數才能斷言，
+                // 而「為什麼沒動」是它們最直接的用途。
+                Text('FIX ok:${s.diagnostics.acceptedFixCount} '
+                    'rej:${s.diagnostics.rejectedFixCount}',
+                    style: const TextStyle(fontSize: 10, color: Colors.black)),
+                Text('ACC: ${s.diagnostics.currentAccuracyMeters.toStringAsFixed(0)} m',
+                    style: const TextStyle(fontSize: 10, color: Colors.black)),
+                if (s.diagnostics.rejectionsByReason.isNotEmpty)
+                  Text(
+                      'REJ: ${s.diagnostics.rejectionsByReason.entries.map((e) => '${e.key.name}=${e.value}').join(' ')}',
+                      style:
+                          const TextStyle(fontSize: 9, color: Color(0xFF8B0000))),
               ],
             ),
             _RetroPanel(

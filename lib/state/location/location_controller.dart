@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:vector_math/vector_math.dart';
 
@@ -145,6 +146,15 @@ class LocationController {
         : fix;
 
     final out = _pipeline.ingest(attributed);
+
+    if (!_flags.isRelease) {
+      debugPrint('[TRACK] lat=${fix.latitude.toStringAsFixed(6)} '
+          'lng=${fix.longitude.toStringAsFixed(6)} '
+          'acc=${fix.accuracyMeters} hasAcc=${fix.hasAccuracy} '
+          'mocked=${fix.isMocked} mode=${attributed.sourceMode.name} '
+          'rej=${out.rejection?.name} target=${out.targetPixel} '
+          'events=${out.events.length} cov=${_manifest.containsGeo(fix.latitude, fix.longitude)}');
+    }
 
     if (out.rejection != null) {
       _rejectedFixCount++;

@@ -37,6 +37,9 @@ class VirtualLocationSource implements LocationSource {
   Vector2 _direction = Vector2.zero();
   bool _running = false;
 
+  /// 點擊尋路與跳點屬於一次性事件：即使方向為零也要送出一筆。
+  bool _pendingEmit = true;
+
   @override
   Stream<GeoFix> get fixes => _controller.stream;
 
@@ -69,12 +72,14 @@ class VirtualLocationSource implements LocationSource {
   void tapNavigateTo(Vector2 pixel) {
     _pixel.setFrom(pixel);
     _direction = Vector2.zero();
+    _pendingEmit = true;
   }
 
   /// 除錯：直接跳到指定經緯度。
   void teleportTo(double lat, double lng) {
     _pixel.setFrom(_manifest.projectToPixel(lat, lng));
     _direction = Vector2.zero();
+    _pendingEmit = true;
   }
 
   Future<void> _loop() async {
@@ -82,6 +87,14 @@ class VirtualLocationSource implements LocationSource {
     while (_running) {
       await _clock.delay(interval);
       if (!_running) break;
+
+      // 靜止時不送。原地以 15 Hz 重送同一個座標沒有任何資訊，卻會把
+      // 「已接受的 Fix」計數灌爆——診斷因此失去意義，實測時它讓一個
+      // 「真實定位從未送達」的狀況看起來像「收了 222 筆卻不動」。
+      // 每秒白跑 15 次完整管線也是浪費。
+      if (_direction.length2 == 0 && !_pendingEmit) continue;
+      _pendingEmit = false;
+
       if (_direction.length2 > 0) {
         _pixel.add(_direction * (_manifest.dpadSpeedPixelsPerSecond * dt));
       }
