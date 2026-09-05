@@ -60,13 +60,19 @@ class LocationController {
     _smoother.jumpTo(manifest.defaultSpawnPixel);
   }
 
-  final OverworldMapManifest _manifest;
+  OverworldMapManifest _manifest;
   final Clock _clock;
   final BuildFlags _flags;
   final bool _ignoreMocked;
-  final LocationPipeline _pipeline;
+
+  /// 是否輸出逐筆追蹤。真機診斷時開啟；測試中關閉以免淹沒輸出。
+  bool traceIngestion = false;
+  LocationPipeline _pipeline;
   final MovementEventFactory _events;
-  final PositionSmoother _smoother;
+  PositionSmoother _smoother;
+
+  /// 最後一筆被接受的地理位置。換層時用它以新模組重新投影。
+  GeoFix? _lastGeo;
 
   final List<MovementEvent> _log = [];
   LocationStatus _status = LocationStatus.initial.copyWith(
@@ -81,6 +87,39 @@ class LocationController {
 
   BuildFlags get flags => _flags;
   List<MovementEvent> get events => List.unmodifiable(_log);
+  OverworldMapManifest get activeManifest => _manifest;
+  double get arrivalThresholdPixels => _smoother.arrivalThresholdPixels;
+
+  /// 執行期更換投影層。
+  ///
+  /// 走獨立路徑：重置兩道閘門的基準、以新模組重新投影當前地理位置、直接指定
+  /// 顯示點。**不經大跨距判定，也不發傳送事件**——判準已改為地理位移，而換層
+  /// 時地理位置完全不變，位移必為零，那條路徑在建構上就不可達。
+  ///
+  /// 位置若落在新模組範圍外，換層仍然成功、只是標記為範圍外。拒絕換層會把
+  /// 玩家困在他正想離開的那一層。
+  ///
+  /// 分桶距離以公尺計、與圖層無關，故不清零：里程是玩家走出來的，
+  /// 不會因為換了一張圖就不算數。
+  void switchLayer(OverworldMapManifest next) {
+    _manifest = next;
+    _pipeline = LocationPipeline(manifest: next, clock: _clock);
+    _smoother = PositionSmoother(
+      manifest: next,
+      halfLife: const Duration(seconds: 1),
+      arrivalMeters: 2,
+      headingMeters: 5,
+    );
+
+    final last = _lastGeo;
+    if (last != null && next.containsGeo(last.latitude, last.longitude)) {
+      _smoother.jumpTo(next.snapToRoad(
+          next.projectToPixel(last.latitude, last.longitude)));
+    } else {
+      _smoother.jumpTo(next.defaultSpawnPixel);
+    }
+    _targetPixel = null;
+  }
 
   LocationControllerState get state {
     final buckets = DistanceBuckets.replay(_log);
@@ -145,9 +184,12 @@ class LocationController {
         ? fix.copyWith(sourceMode: SourceMode.virtual)
         : fix;
 
+    _lastGeo = fix;
     final out = _pipeline.ingest(attributed);
 
-    if (!_flags.isRelease) {
+    // 逐筆追蹤。只在明確開啟時輸出——它在真機診斷時不可或缺，
+    // 但會淹沒測試輸出，而測試本來就有更精確的斷言。
+    if (traceIngestion && !_flags.isRelease) {
       debugPrint('[TRACK] lat=${fix.latitude.toStringAsFixed(6)} '
           'lng=${fix.longitude.toStringAsFixed(6)} '
           'acc=${fix.accuracyMeters} hasAcc=${fix.hasAccuracy} '

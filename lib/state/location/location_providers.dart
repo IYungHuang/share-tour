@@ -85,7 +85,7 @@ class LocationNotifier extends Notifier<LocationControllerState> {
       clock: ref.watch(clockProvider),
       flags: ref.watch(buildFlagsProvider),
       ignoreMockedFlag: ref.watch(ignoreMockedFlagProvider),
-    );
+    )..traceIngestion = !ref.watch(buildFlagsProvider).isRelease;
     _virtual = ref.watch(virtualSourceProvider);
     _real = ref.watch(realSourceProvider);
     ref.onDispose(() => _sub?.cancel());
