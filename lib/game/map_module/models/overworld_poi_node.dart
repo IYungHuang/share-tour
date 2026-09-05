@@ -1,4 +1,4 @@
-import 'package:flame/extensions.dart';
+import 'package:vector_math/vector_math.dart';
 
 enum EncounterType {
   sightseeing, // 觀光打卡 / SAN 提升

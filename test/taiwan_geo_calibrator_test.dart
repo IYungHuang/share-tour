@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flame/extensions.dart';
+import 'package:vector_math/vector_math.dart';
 import 'package:share_tour/game/map_module/manifests/taiwan_map_manifest.dart';
 import 'package:share_tour/game/map_module/utils/taiwan_geo_calibrator.dart';
 
@@ -11,7 +11,7 @@ void main() {
     // 這樣校正錨點時不必同步修改測試。
     test('Exact match on Taipei 101 anchor', () {
       final anchor = manifest.anchors.firstWhere((a) => a.name == '台北101');
-      final pixel = manifest.projectGpsToPixel(anchor.lat, anchor.lng);
+      final pixel = manifest.projectToPixel(anchor.lat, anchor.lng);
       expect((pixel.x - anchor.pixelPos.x).abs() < 1.0, isTrue);
       expect((pixel.y - anchor.pixelPos.y).abs() < 1.0, isTrue);
     });

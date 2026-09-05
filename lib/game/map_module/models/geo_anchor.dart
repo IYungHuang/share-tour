@@ -1,4 +1,4 @@
-import 'package:flame/extensions.dart';
+import 'package:vector_math/vector_math.dart';
 
 /// 地理校準錨點：記錄真實經緯度與手繪地圖像素座標之對應關係
 class GeoAnchor {

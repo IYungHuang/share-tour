@@ -1,19 +1,5 @@
-import 'package:flame/extensions.dart';
-import 'models/geo_anchor.dart';
-import 'models/overworld_poi_node.dart';
-
-/// 地圖資產包抽象介面 (Map Manifest Contract)
-abstract class OverworldMapManifest {
-  String get mapId;
-  String get displayName;
-  String get assetPath;
-  Vector2 get mapDimensions;
-  Color get oceanColor;
-
-  List<GeoAnchor> get anchors;
-  List<Vector2> get roadNodes;
-  List<OverworldPoiNode> get poiNodes;
-
-  /// 經緯度投影算法介面
-  Vector2 projectGpsToPixel(double lat, double lng);
-}
+/// 圖資契約已上移至 domain 層，此處僅轉出，讓既有的 game 層 import 路徑繼續有效。
+///
+/// 契約本身不得含 Flutter 或 dart:ui 型別，否則 domain 的邏輯就無法在
+/// 不啟動框架的條件下測試。
+export '../../domain/location/projection/map_manifest.dart';

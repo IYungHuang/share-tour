@@ -3,7 +3,6 @@ import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'map_module/overworld_map_manifest.dart';
-import 'map_module/utils/taiwan_geo_calibrator.dart';
 
 class UniversalOverworldGame extends FlameGame with ScaleDetector {
   final OverworldMapManifest manifest;
@@ -20,7 +19,7 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector {
   final double maxZoom = 2.5;
 
   @override
-  Color backgroundColor() => manifest.oceanColor;
+  Color backgroundColor() => Color(manifest.oceanColorArgb);
 
   @override
   Future<void> onLoad() async {
@@ -44,7 +43,7 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector {
       radius: 8,
       paint: Paint()..color = const Color(0xFFFF4757),
       anchor: Anchor.center,
-      position: Vector2(1162, 148), // 預設降落台北
+      position: manifest.defaultSpawnPixel.clone(), // 降落點由圖資提供（PRE-7）
     );
     await mapWorld.add(playerComponent);
 
@@ -95,10 +94,11 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector {
     cameraComponent.viewfinder.position = Vector2(clampedX, clampedY);
   }
 
-  /// 外部呼叫：輸入 GPS 座標，更新小人位置
-  void updatePlayerGps(double lat, double lng) {
-    final rawPixel = manifest.projectGpsToPixel(lat, lng);
-    final snappedPixel = TaiwanGeoCalibrator.snapToRoad(rawPixel, manifest.roadNodes);
-    playerComponent.position = snappedPixel;
+  /// 外部呼叫：直接指定小人的顯示點。
+  ///
+  /// 投影、吸附與平滑都在 domain 完成，這裡只負責畫。引擎不得自己算座標——
+  /// 那正是先前把台灣專屬校準器寫進通用引擎的成因。
+  void setRenderedPixel(Vector2 pixel) {
+    playerComponent.position.setFrom(pixel);
   }
 }
