@@ -87,19 +87,99 @@ class TaiwanMapManifest implements OverworldMapManifest {
   /// 原本是 35 像素——在此尺度下等於 12.96 公里，站在新竹就會觸發台北 101。
   @override
   List<PoiMarker> get poiNodes => [
+        // --- 台灣前 10 大知名景點 ---
         PoiMarker(id: 'taipei_101', pixel: Vector2(1162, 148), triggerRadiusMeters: 50),
+        PoiMarker(id: 'palace_museum', pixel: Vector2(1158, 128), triggerRadiusMeters: 50),
+        PoiMarker(id: 'jiufen', pixel: Vector2(1222, 128), triggerRadiusMeters: 50),
         PoiMarker(id: 'taichung_opera', pixel: Vector2(909, 408), triggerRadiusMeters: 50),
+        PoiMarker(id: 'taroko', pixel: Vector2(1178, 409), triggerRadiusMeters: 50),
         PoiMarker(id: 'sun_moon_lake', pixel: Vector2(985, 499), triggerRadiusMeters: 50),
+        PoiMarker(id: 'alishan', pixel: Vector2(954, 603), triggerRadiusMeters: 50),
+        PoiMarker(id: 'chihkan_tower', pixel: Vector2(789, 756), triggerRadiusMeters: 50),
         PoiMarker(id: 'kaohsiung_85', pixel: Vector2(816, 871), triggerRadiusMeters: 50),
+        PoiMarker(id: 'eluanbi', pixel: Vector2(963, 1070), triggerRadiusMeters: 50),
+
+        // --- 台灣高鐵全線 12 座車站 ---
+        PoiMarker(id: 'thsr_nangang', pixel: Vector2(1174, 142), triggerRadiusMeters: 50),
+        PoiMarker(id: 'thsr_taipei', pixel: Vector2(1149, 144), triggerRadiusMeters: 50),
+        PoiMarker(id: 'thsr_banqiao', pixel: Vector2(1134, 154), triggerRadiusMeters: 50),
+        PoiMarker(id: 'thsr_taoyuan', pixel: Vector2(1066, 154), triggerRadiusMeters: 50),
+        PoiMarker(id: 'thsr_hsinchu', pixel: Vector2(1019, 215), triggerRadiusMeters: 50),
+        PoiMarker(id: 'thsr_miaoli', pixel: Vector2(960, 276), triggerRadiusMeters: 50),
+        PoiMarker(id: 'thsr_taichung', pixel: Vector2(903, 423), triggerRadiusMeters: 50),
+        PoiMarker(id: 'thsr_changhua', pixel: Vector2(891, 494), triggerRadiusMeters: 50),
+        PoiMarker(id: 'thsr_yunlin', pixel: Vector2(851, 535), triggerRadiusMeters: 50),
+        PoiMarker(id: 'thsr_chiayi', pixel: Vector2(822, 618), triggerRadiusMeters: 50),
+        PoiMarker(id: 'thsr_tainan', pixel: Vector2(812, 777), triggerRadiusMeters: 50),
+        PoiMarker(id: 'thsr_zuoying', pixel: Vector2(818, 849), triggerRadiusMeters: 50),
+
+        // --- 台灣前 10 大知名夜市 ---
+        PoiMarker(id: 'market_keelung', pixel: Vector2(1211, 120), triggerRadiusMeters: 50),
+        PoiMarker(id: 'market_shilin', pixel: Vector2(1151, 132), triggerRadiusMeters: 50),
+        PoiMarker(id: 'market_raohe', pixel: Vector2(1168, 142), triggerRadiusMeters: 50),
+        PoiMarker(id: 'market_ningxia', pixel: Vector2(1144, 139), triggerRadiusMeters: 50),
+        PoiMarker(id: 'market_fengjia', pixel: Vector2(911, 403), triggerRadiusMeters: 50),
+        PoiMarker(id: 'market_wenhua', pixel: Vector2(857, 612), triggerRadiusMeters: 50),
+        PoiMarker(id: 'market_garden', pixel: Vector2(793, 752), triggerRadiusMeters: 50),
+        PoiMarker(id: 'market_liuhe', pixel: Vector2(822, 865), triggerRadiusMeters: 50),
+        PoiMarker(id: 'market_ruifeng', pixel: Vector2(816, 855), triggerRadiusMeters: 50),
+        PoiMarker(id: 'market_luodong', pixel: Vector2(1217, 254), triggerRadiusMeters: 50),
+
+        // --- 台灣百岳前 10 名 ---
+        PoiMarker(id: 'peak_yushan', pixel: Vector2(996, 615), triggerRadiusMeters: 50),
+        PoiMarker(id: 'peak_xueshan', pixel: Vector2(1071, 342), triggerRadiusMeters: 50),
+        PoiMarker(id: 'peak_xiuguluan', pixel: Vector2(1023, 581), triggerRadiusMeters: 50),
+        PoiMarker(id: 'peak_nanhu', pixel: Vector2(1128, 349), triggerRadiusMeters: 50),
+        PoiMarker(id: 'peak_zhongyangjian', pixel: Vector2(1121, 363), triggerRadiusMeters: 50),
+        PoiMarker(id: 'peak_guanshan', pixel: Vector2(982, 687), triggerRadiusMeters: 50),
+        PoiMarker(id: 'peak_qilai', pixel: Vector2(1096, 421), triggerRadiusMeters: 50),
+        PoiMarker(id: 'peak_dabajian', pixel: Vector2(1078, 319), triggerRadiusMeters: 50),
+        PoiMarker(id: 'peak_hehuan', pixel: Vector2(1082, 414), triggerRadiusMeters: 50),
+        PoiMarker(id: 'peak_beidawu', pixel: Vector2(941, 866), triggerRadiusMeters: 50),
       ];
 
   @override
   List<Vector2> get roadNodes => [
-        Vector2(1162, 148),
-        Vector2(909, 408),
-        Vector2(985, 499),
-        Vector2(789, 756),
-        Vector2(816, 871),
+        // 西部公路路廊
+        Vector2(1207, 127),
+        Vector2(1160, 147),
+        Vector2(1144, 148),
+        Vector2(1064, 167),
+        Vector2(1007, 217),
+        Vector2(960, 297),
+        Vector2(942, 343),
+        Vector2(930, 382),
+        Vector2(908, 407),
+        Vector2(882, 448),
+        Vector2(860, 515),
+        Vector2(853, 603),
+        Vector2(800, 746),
+        Vector2(818, 870),
+        Vector2(867, 854),
+        Vector2(882, 889),
+        Vector2(912, 943),
+        Vector2(931, 979),
+        Vector2(931, 1033),
+        Vector2(938, 1054),
+        // 日月潭聯絡道
+        Vector2(923, 463),
+        Vector2(967, 461),
+        Vector2(998, 467),
+        Vector2(990, 487),
+        Vector2(984, 496),
+        // 高鐵專屬鐵路廊道
+        Vector2(1174, 143),
+        Vector2(1149, 145),
+        Vector2(1134, 155),
+        Vector2(1066, 155),
+        Vector2(1019, 216),
+        Vector2(960, 277),
+        Vector2(903, 424),
+        Vector2(891, 495),
+        Vector2(851, 536),
+        Vector2(822, 619),
+        Vector2(812, 778),
+        Vector2(818, 850),
       ];
 
   @override

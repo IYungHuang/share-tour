@@ -3,6 +3,7 @@ import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import '../domain/location/camera/camera_follow.dart';
+import 'components/ocean_waves_component.dart';
 import 'components/player_component.dart';
 import 'map_module/overworld_map_manifest.dart';
 
@@ -54,7 +55,11 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector {
     );
     await mapWorld.add(mapComponent);
 
-    // 2. 加入玩家佔位圖標 (像素紅點小人)
+    // 2. 加入動態水波組件 (Option B: Dynamic JRPG Ocean Waves)
+    final waveImage = await images.load('ocean_wave_sheet.png');
+    await mapWorld.add(OceanWavesComponent(waveImage: waveImage));
+
+    // 3. 加入玩家佔位圖標 (像素紅點小人)
     playerComponent =
         PlayerComponent(position: manifest.defaultSpawnPixel.clone());
     await mapWorld.add(playerComponent);
