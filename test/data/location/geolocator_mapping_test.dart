@@ -75,4 +75,45 @@ void main() {
     expect(mapPlatformAccuracy(LocationAccuracyStatus.precise).name, 'precise');
     expect(mapPlatformAccuracy(LocationAccuracyStatus.reduced).name, 'reduced');
   });
+
+  // --- Android 平台旗標修復 ---
+  //
+  // geolocator_android 的 AndroidPosition.fromMap 先用 Position.fromMap 算出
+  // 正確的 has* 旗標，接著只把數值欄位搬進 AndroidPosition 的建構子——而該
+  // 建構子沒有 has* 參數，於是旗標全部掉回父類預設 false。Android 上因此
+  // 每一筆 Fix 都是 hasAccuracy=false，實測 100% 被 REQ-C-03 規則 1 丟棄。
+  // （iOS 走 Position.fromMap，旗標正確；這是 Android 獨有的缺陷。）
+  //
+  // 資訊沒有真的遺失：LocationMapper.java 對每個選用欄位都是
+  // `if (location.hasAccuracy()) position.put("accuracy", ...)`，平台沒測到
+  // 就整個省略 key，Dart 端補 0.0。所以「值非零」等價於「量測過」。
+
+  test('精度旗標為 false 但值非零 → 視為已量測（修復 Android 掉旗標）', () {
+    final f = geoFixFromPosition(position(hasAccuracy: false, accuracy: 24.5));
+    expect(f.hasAccuracy, isTrue);
+    expect(f.accuracyMeters, 24.5);
+  });
+
+  test('速度旗標為 false 但值非零 → 視為已量測', () {
+    final f = geoFixFromPosition(
+        position(hasSpeed: false, speed: 1.4, hasSpeedAccuracy: false));
+    expect(f.hasSpeed, isTrue);
+    expect(f.hasSpeedAccuracy, isTrue);
+  });
+
+  test('旗標為 true 時不因值為 0 而被推翻', () {
+    final f = geoFixFromPosition(
+        position(hasAccuracy: true, accuracy: 0, hasSpeed: true, speed: 0));
+    expect(f.hasAccuracy, isTrue);
+    expect(f.hasSpeed, isTrue);
+  });
+
+  test('速度恰為 0 且旗標為 false → 仍視為未量測（安全方向）', () {
+    // 靜止時速度真的是 0.0，無法與「未量測」區分。判為未量測只會讓裝置
+    // 速度不參與 REQ-C-03 規則 5 的交叉檢查，兩點差分照常——這正是規格
+    // 對未量測速度規定的行為。
+    final f = geoFixFromPosition(position(hasSpeed: false, speed: 0));
+    expect(f.hasSpeed, isFalse);
+  });
+
 }
