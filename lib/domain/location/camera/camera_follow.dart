@@ -28,12 +28,25 @@ class CameraFollow {
   Duration? _lastInteraction;
   Vector2? _frozenCenter;
 
+  /// 尚未套用到凍結中心的手勢位移，累積於幀與幀之間。
+  ///
+  /// 手勢事件與相機求值不同步：一幀內可能來好幾筆 delta，也可能一筆都沒有。
+  /// 累積起來、在下一次求值時一次套用並歸零，才能讓「同一次平移只生效一次」。
+  final Vector2 _pendingPan = Vector2.zero();
+
   CameraMode get mode => _mode;
 
-  /// 手勢平移：交出控制權。
-  void onPan() {
+  /// 手勢平移：交出控制權，並記下位移量。
+  ///
+  /// [deltaWorld] 是手指在**世界座標**的位移（呼叫端需先除以 zoom）。相機中心
+  /// 與手指反向移動——手指往右拖，看到的是地圖左邊的內容。
+  ///
+  /// 位移量必須由狀態機持有。引擎端自己去寫相機位置的話，會與每幀的
+  /// targetCenter 形成雙頭寫入，而後者每幀都會把前者蓋掉。
+  void onPan(Vector2 deltaWorld) {
     _mode = CameraMode.free;
     _lastInteraction = _clock.elapsed;
+    _pendingPan.add(deltaWorld);
   }
 
   /// 縮放刻意不算「操作」。捏合只是想看看四周，不該被當成接管相機，
@@ -45,6 +58,7 @@ class CameraFollow {
     _mode = CameraMode.following;
     _frozenCenter = null;
     _lastInteraction = null;
+    _pendingPan.setZero();
   }
 
   Vector2 targetCenter({
@@ -60,11 +74,17 @@ class CameraFollow {
         return desired;
 
       case CameraMode.free:
+        final base = _frozenCenter ?? desired;
+        final panned = _clamp(base - _pendingPan, zoom, viewportSize, mapSize);
+        _pendingPan.setZero();
+        _frozenCenter = panned;
+
         final since = _lastInteraction;
         if (since != null && _clock.elapsed - since >= returnDelay) {
           _mode = CameraMode.returning;
         }
-        return _frozenCenter ??= desired;
+        // 回傳副本：交出內部狀態的參考，呼叫端一改就靜默改到凍結中心。
+        return panned.clone();
 
       case CameraMode.returning:
         final from = _frozenCenter ?? desired;
@@ -79,16 +99,17 @@ class CameraFollow {
     }
   }
 
+  /// 把任一候選中心夾進地圖邊界。玩家位置與平移後的自由中心共用同一條規則。
   Vector2 _clamp(
-      Vector2 player, double zoom, Vector2 viewportSize, Vector2 mapSize) {
+      Vector2 point, double zoom, Vector2 viewportSize, Vector2 mapSize) {
     final halfW = viewportSize.x / (2 * zoom);
     final halfH = viewportSize.y / (2 * zoom);
     final x = halfW * 2 >= mapSize.x
         ? mapSize.x / 2
-        : player.x.clamp(halfW, mapSize.x - halfW);
+        : point.x.clamp(halfW, mapSize.x - halfW);
     final y = halfH * 2 >= mapSize.y
         ? mapSize.y / 2
-        : player.y.clamp(halfH, mapSize.y - halfH);
+        : point.y.clamp(halfH, mapSize.y - halfH);
     return Vector2(x.toDouble(), y.toDouble());
   }
 }

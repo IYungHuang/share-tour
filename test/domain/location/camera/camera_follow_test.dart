@@ -27,12 +27,12 @@ void main() {
 
   test('AC-8.1 手勢平移 → free', () {
     expect(camera.mode, CameraMode.following);
-    camera.onPan();
+    camera.onPan(Vector2.zero());
     expect(camera.mode, CameraMode.free);
   });
 
   test('AC-8.2 停止操作滿 3 秒 → returning，回歸完成後 following', () {
-    camera.onPan();
+    camera.onPan(Vector2.zero());
     clock.advance(const Duration(seconds: 3));
     center();
     expect(camera.mode, CameraMode.returning);
@@ -43,7 +43,7 @@ void main() {
   });
 
   test('AC-8.3 free 下玩家移動，相機中心不變', () {
-    camera.onPan();
+    camera.onPan(Vector2.zero());
     final before = center(player: Vector2(400, 300));
     final after = center(player: Vector2(900, 700));
     expect(after, before);
@@ -68,7 +68,7 @@ void main() {
   });
 
   test('AC-8.5 free 期間僅縮放 → 回歸計時器不重置', () {
-    camera.onPan();
+    camera.onPan(Vector2.zero());
     clock.advance(const Duration(seconds: 2));
     camera.onZoom(); // 縮放不算操作
     clock.advance(const Duration(seconds: 1));
@@ -78,18 +78,68 @@ void main() {
   });
 
   test('recenter 立即回到 following', () {
-    camera.onPan();
+    camera.onPan(Vector2.zero());
     camera.recenter();
     expect(camera.mode, CameraMode.following);
     expect(center(player: Vector2(900, 700)).x, closeTo(900, 0.01));
   });
 
   test('回歸過程中再次平移 → 回到 free', () {
-    camera.onPan();
+    camera.onPan(Vector2.zero());
     clock.advance(const Duration(seconds: 3));
     center();
     expect(camera.mode, CameraMode.returning);
-    camera.onPan();
+    camera.onPan(Vector2.zero());
     expect(camera.mode, CameraMode.free);
   });
+
+  // 玩家取地圖中央：(400, 300) 恰好落在邊界夾制的角落上，平移量會被
+  // _clamp 全數吃掉，測不出位移是否真的套用。
+  test('平移位移量套用到相機中心（手指向右拖，地圖跟著手指走）', () {
+    camera.onPan(Vector2(100, 50));
+    final c = center(player: Vector2(1024, 576));
+    // 中心與手指反向：手指往右拖，看到的是地圖左邊的內容
+    expect(c.x, closeTo(924, 0.01));
+    expect(c.y, closeTo(526, 0.01));
+  });
+
+  test('連續平移累加，且不隨玩家位置回彈', () {
+    camera.onPan(Vector2(100, 0));
+    center(player: Vector2(1024, 576));
+    camera.onPan(Vector2(100, 0));
+    final c = center(player: Vector2(900, 700));
+    expect(c.x, closeTo(824, 0.01));
+    expect(c.y, closeTo(576, 0.01));
+  });
+
+  test('同一次平移只套用一次，之後的幀不再繼續漂移', () {
+    camera.onPan(Vector2(100, 0));
+    final first = center(player: Vector2(1024, 576));
+    final second = center(player: Vector2(1024, 576));
+    expect(second, first);
+  });
+
+  test('AC-8.4 平移不得把相機中心推出地圖邊界', () {
+    camera.onPan(Vector2(5000, 5000));
+    final c = center(player: Vector2(400, 300));
+    // 視口 800x600、zoom 1.0 → 中心最小為 (400, 300)
+    expect(c.x, closeTo(400, 0.01));
+    expect(c.y, closeTo(300, 0.01));
+  });
+
+  test('recenter 清掉未套用的平移量', () {
+    camera.onPan(Vector2(100, 50));
+    camera.recenter();
+    final c = center(player: Vector2(900, 700));
+    expect(c.x, closeTo(900, 0.01));
+    expect(c.y, closeTo(700, 0.01));
+  });
+
+  test('回傳的中心不是內部狀態的別名', () {
+    camera.onPan(Vector2(100, 0));
+    final c = center(player: Vector2(1024, 576));
+    c.setValues(0, 0);
+    expect(center(player: Vector2(1024, 576)).x, closeTo(924, 0.01));
+  });
+
 }

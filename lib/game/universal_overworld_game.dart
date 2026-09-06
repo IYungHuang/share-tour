@@ -101,29 +101,9 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector {
     }
 
     if (info.delta.global.length2 > 0) {
-      cameraFollow.onPan();
-      final delta = info.delta.global / currentZoom;
-      cameraComponent.viewfinder.position -= delta;
-      _clampCameraBounds();
+      // 位移量交給狀態機，引擎不自己寫相機位置：update() 每幀都會用
+      // targetCenter 的結果覆寫，兩邊都寫的話手勢會被靜默蓋掉。
+      cameraFollow.onPan(info.delta.global / currentZoom);
     }
   }
-
-  void _clampCameraBounds() {
-    final currentZoom = cameraComponent.viewfinder.zoom;
-    final viewportSize = cameraComponent.viewport.size;
-
-    final halfW = viewportSize.x / (2 * currentZoom);
-    final halfH = viewportSize.y / (2 * currentZoom);
-
-    final mapW = manifest.mapDimensions.x;
-    final mapH = manifest.mapDimensions.y;
-    final curPos = cameraComponent.viewfinder.position;
-
-    final clampedX = halfW * 2 >= mapW ? mapW / 2 : curPos.x.clamp(halfW, mapW - halfW);
-    final clampedY = halfH * 2 >= mapH ? mapH / 2 : curPos.y.clamp(halfH, mapH - halfH);
-
-    cameraComponent.viewfinder.position = Vector2(clampedX, clampedY);
-  }
-
-
 }
