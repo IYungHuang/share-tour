@@ -86,6 +86,14 @@ class LocationController {
   double _currentAccuracy = 0;
   bool lastSwitchWasAutomatic = false;
 
+  /// 訂閱與省電的實況，由接線層寫入。
+  ///
+  /// 控制器不自己管訂閱：那是 data 層的職責，而它需要平台的生命週期事件。
+  /// 但診斷快照是對外的單一窗口（REQ-C-14 規則 5），所以值要送進來，
+  /// 不能像先前那樣寫死 0 與 active——那讓 AC-2.5 變成恆真的假綠燈。
+  int subscriptionCount = 0;
+  PowerMode powerMode = PowerMode.active;
+
   BuildFlags get flags => _flags;
   List<MovementEvent> get events => List.unmodifiable(_log);
   OverworldMapManifest get activeManifest => _manifest;
@@ -130,15 +138,16 @@ class LocationController {
         acquisition: _pipeline.acquisition,
       ),
       diagnostics: LocationDiagnostics(
-        activeSubscriptionCount: 0,
-        powerMode: PowerMode.active,
+        activeSubscriptionCount: subscriptionCount,
+        powerMode: powerMode,
         acceptedFixCount: _acceptedFixCount,
         rejectedFixCount: _rejectedFixCount,
         rejectionsByReason: Map.unmodifiable(_rejections),
         currentAccuracyMeters: _currentAccuracy,
         realDistanceMeters: buckets.real,
         virtualDistanceMeters: buckets.virtual,
-        secondsSinceLastSignificantMove: 0,
+        secondsSinceLastSignificantMove:
+            _pipeline.secondsSinceLastSignificantMove,
       ),
       renderedPixel: _smoother.rendered,
       targetPixel: _targetPixel,
@@ -158,6 +167,11 @@ class LocationController {
     ));
     lastSwitchWasAutomatic = automatic;
     _status = _status.copyWith(mode: mode);
+
+    // 兩種來源的位置毫無關係：方向鍵可以把小人開到台北，而人在台中。
+    // 不標記不連續的話，首筆新來源的 Fix 會拿舊來源的基準比出一段從未有人
+    // 走過的距離，並記進里程。真機實測灌進 13 萬公尺。
+    _pipeline.markDiscontinuity(RelocationNote.modeSwitch);
   }
 
   void onPermissionChanged(PermissionState permission) {

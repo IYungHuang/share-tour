@@ -30,12 +30,38 @@ class OverworldScaffold extends ConsumerStatefulWidget {
   ConsumerState<OverworldScaffold> createState() => _OverworldScaffoldState();
 }
 
-class _OverworldScaffoldState extends ConsumerState<OverworldScaffold> {
+class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
+    with WidgetsBindingObserver {
   late final UniversalOverworldGame _game;
+
+  /// 前後景事件只有 widget 樹拿得到，所以由這裡轉發給定位層。
+  /// 取消訂閱與否的判斷不在這裡——那是 LocationSubscriptionManager 的職責，
+  /// 每個接線點各自計時的話，寬限期會有好幾份實作。
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final notifier = ref.read(locationControllerProvider.notifier);
+    switch (state) {
+      case AppLifecycleState.resumed:
+        notifier.onAppForeground();
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        notifier.onAppBackground();
+      case AppLifecycleState.inactive:
+        break; // 通知欄下拉、來電中——還沒真的離開，不必動訂閱
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final notifier = ref.read(locationControllerProvider.notifier);
     _game = UniversalOverworldGame(
       manifest: ref.read(mapManifestProvider),

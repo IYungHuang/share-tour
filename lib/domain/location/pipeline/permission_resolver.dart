@@ -45,9 +45,19 @@ class PermissionResolver {
   void observeRawFix({required double accuracyMeters}) {
     if (accuracyMeters > _coarseThresholdMeters) {
       _consecutiveCoarse++;
+      // 恰好跨過門檻時推一次。啟發式若只在 resolve() 被呼叫時才生效，
+      // 就得靠輪詢或運氣——而規則 4 的情境（精度持續劣化）不會自己觸發查詢。
+      if (_consecutiveCoarse == _coarseRunLength) {
+        unawaited(_emitResolved());
+      }
     } else {
       _consecutiveCoarse = 0;
     }
+  }
+
+  Future<void> _emitResolved() async {
+    final state = await resolve();
+    if (!_controller.isClosed) _controller.add(state);
   }
 
   Future<PermissionState> resolve() {

@@ -58,16 +58,25 @@ class LocationSubscriptionManager {
 
   Future<void> _scheduleGrace(Duration at) async {
     await _clock.delay(backgroundGrace);
-    if (_backgroundedAt == at) await _unsubscribe();
+    if (_backgroundedAt != at) return;
+    // 背景超過寬限期即為 suspended（REQ-C-11 規則 3）。取消訂閱卻讓
+    // powerMode 停在 active，診斷就會說「訂閱數 0、電源模式 active」——
+    // 兩個欄位互相矛盾，讀的人無從判斷是哪裡壞了。
+    _powerMode = PowerMode.suspended;
+    await _unsubscribe();
   }
 
-  Future<void> onForeground() async {
+  /// 回到前景。回傳是否**重新建立過訂閱**——呼叫端據此決定要不要標記不連續：
+  /// 訂閱斷過的期間沒有任何 Fix，那段位移不該被當成玩家走出來的里程。
+  Future<bool> onForeground() async {
     final since = _backgroundedAt;
     _backgroundedAt = null;
-    if (_sub != null) return; // 短暫背景，訂閱從未取消
-    if (since == null) return;
+    _powerMode = PowerMode.active;
+    if (_sub != null) return false; // 短暫背景，訂閱從未取消
+    if (since == null) return false;
     await _clock.delay(resumeDebounce);
     await _subscribe();
+    return _sub != null;
   }
 
   Future<void> setPowerMode(PowerMode mode) async {
@@ -83,6 +92,9 @@ class LocationSubscriptionManager {
   void dispose() {
     _sub?.cancel();
     _sub = null;
+    // 來源也要停：NFR-5 要求遊戲實例重建時所有訂閱完全釋放，而平台層的
+    // 定位請求不會因為 Dart 端不再監聽就自己關掉。
+    unawaited(_source.stop());
     _controller.close();
   }
 

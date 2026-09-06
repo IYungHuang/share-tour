@@ -10,7 +10,10 @@ import '../../data/location/geolocator_location_source.dart';
 import '../../data/location/location_permission_gateway.dart';
 import '../../data/location/location_source.dart';
 import '../../data/location/virtual_location_source.dart';
+import '../../data/location/location_subscription_manager.dart';
+import '../../domain/location/pipeline/fix_throttle.dart';
 import '../../domain/location/pipeline/permission_resolver.dart';
+import '../../domain/location/pipeline/relocation_detector.dart';
 import '../../domain/location/models/geo_fix.dart';
 import '../../domain/location/models/location_status.dart';
 import '../../domain/location/projection/map_manifest.dart';
@@ -63,6 +66,28 @@ final virtualSourceProvider = Provider<VirtualLocationSource>((ref) {
   return source;
 });
 
+/// GPS 訂閱的生命週期與省電。虛擬來源不經過它——它沒有平台訂閱要管，
+/// 也不該因為進背景就停下方向鍵。
+final subscriptionManagerProvider = Provider<LocationSubscriptionManager>((ref) {
+  final manager = LocationSubscriptionManager(
+    source: ref.watch(realSourceProvider),
+    clock: ref.watch(clockProvider),
+    manifest: ref.watch(mapManifestProvider),
+  );
+  ref.onDispose(manager.dispose);
+  return manager;
+});
+
+/// 應用層節流（REQ-C-02 規則 6）。虛擬 Fix 由它自己放行，不合併。
+final fixThrottleProvider = Provider<FixThrottle>((ref) {
+  final throttle = FixThrottle(
+    clock: ref.watch(clockProvider),
+    window: const Duration(seconds: 1),
+  );
+  ref.onDispose(throttle.dispose);
+  return throttle;
+});
+
 final locationControllerProvider =
     NotifierProvider<LocationNotifier, LocationControllerState>(
         LocationNotifier.new);
@@ -73,8 +98,16 @@ final locationControllerProvider =
 class LocationNotifier extends Notifier<LocationControllerState> {
   late final LocationController _controller;
   late final VirtualLocationSource _virtual;
-  late final LocationSource _real;
-  StreamSubscription<GeoFix>? _sub;
+  late final LocationSubscriptionManager _subscriptions;
+  late final FixThrottle _throttle;
+  late final PermissionResolver _resolver;
+
+  /// 目前作用中來源 → 節流的訂閱。切換模式時換掉的是這一條。
+  StreamSubscription<GeoFix>? _sourceSub;
+
+  /// 節流 → 控制器的訂閱。它與模式無關，建立一次即可。
+  StreamSubscription<GeoFix>? _ingestSub;
+  StreamSubscription<PermissionState>? _permissionSub;
 
   LocationController get controller => _controller;
 
@@ -87,30 +120,110 @@ class LocationNotifier extends Notifier<LocationControllerState> {
       ignoreMockedFlag: ref.watch(ignoreMockedFlagProvider),
     )..traceIngestion = !ref.watch(buildFlagsProvider).isRelease;
     _virtual = ref.watch(virtualSourceProvider);
-    _real = ref.watch(realSourceProvider);
-    ref.onDispose(() => _sub?.cancel());
+    _subscriptions = ref.watch(subscriptionManagerProvider);
+    _throttle = ref.watch(fixThrottleProvider);
+    _resolver = ref.watch(permissionResolverProvider);
+    ref.onDispose(() {
+      _sourceSub?.cancel();
+      _ingestSub?.cancel();
+      _permissionSub?.cancel();
+    });
+
+    // 服務開關與精度劣化都會從這條串流推過來（REQ-C-01 規則 4、規則 7）。
+    // 不訂閱的話，玩家在遊戲中關掉定位服務，app 只會安靜地收不到 Fix——
+    // 而「壞了」與「沒訊號」在畫面上長得一模一樣。
+    _permissionSub = _resolver.states.listen(_applyPermission);
+
+    // 兩段串接：來源 → 節流 → 控制器。先前是來源直接進控制器，
+    // 節流與訂閱管理兩層都被跳過——寫好、測過、沒接線。
+    _ingestSub = _throttle.output.listen((fix) {
+      _controller.ingest(fix);
+      _syncDiagnostics();
+      state = _controller.state;
+    });
 
     // 開場走方向鍵：桌面與模擬器沒有定位硬體（NFR-6），而且不主動跳系統
     // 權限對話框——那應該是玩家按下 GPS 按鈕時才發生的事。
     _controller.onPermissionChanged(PermissionState.unavailable);
-    _bindSource(SourceMode.virtual);
+    unawaited(_bindSource(SourceMode.virtual));
     return _controller.state;
   }
 
-  void _bindSource(SourceMode mode) {
-    _sub?.cancel();
-    final source = mode == SourceMode.gps ? _real : _virtual;
-    _sub = source.fixes.listen((fix) {
-      _controller.ingest(fix);
-      state = _controller.state;
-    });
-    source.start();
+  Future<void> _bindSource(SourceMode mode) async {
+    await _sourceSub?.cancel();
     if (mode == SourceMode.gps) {
+      _sourceSub = _subscriptions.fixes.listen((fix) {
+        // 精度等級的啟發式必須在品質過濾【之前】評估（§3.0 第 2 步）：
+        // 排在之後的話這些 Fix 早被丟光，精度劣化就無從判定。
+        _resolver.observeRawFix(accuracyMeters: fix.accuracyMeters);
+        _throttle.add(fix);
+      });
       _virtual.stopMoving();
       _virtual.stop();
     } else {
-      _real.stop();
+      _sourceSub = _virtual.fixes.listen(_throttle.add);
+      _virtual.start();
     }
+    // 訂閱管理器依模式自行決定要不要持有平台訂閱（REQ-C-11 規則 3）。
+    // 必須等它完成：平台訂閱的建立是非同步的，不等就會在訂閱還沒建立時
+    // 讀到「訂閱數 0」，而那與「訂閱失敗」無法區分。
+    await _subscriptions.onModeChanged(mode);
+    _syncDiagnostics();
+  }
+
+  /// 把 data 層的訂閱與省電實況送進控制器的診斷快照。
+  void _syncDiagnostics() {
+    _controller
+      ..subscriptionCount = _subscriptions.activeSubscriptionCount
+      ..powerMode = _subscriptions.powerMode;
+  }
+
+  /// app 進入背景。取消訂閱與否由訂閱管理器的寬限期決定，不在這裡判斷。
+  void onAppBackground() {
+    _subscriptions.onBackground();
+    // 寬限期到期是非同步的，屆時沒有人會再讀 state；改由下一次狀態同步帶出。
+    _refreshLater();
+  }
+
+  Future<void> onAppForeground() async {
+    final resubscribed = await _subscriptions.onForeground();
+    if (resubscribed) {
+      // 訂閱斷過的期間沒有任何 Fix。那段位移無從得知是走的還是搭車的，
+      // 不能計入里程——首筆改走不連續路徑。
+      _controller.markDiscontinuity(RelocationNote.backgroundResume);
+    }
+    _syncDiagnostics();
+    state = _controller.state;
+  }
+
+  /// 權限狀態變化的統一入口：串流推來的與主動查詢的走同一段邏輯。
+  Future<void> _applyPermission(PermissionState permission) async {
+    final previousMode = _controller.state.status.mode;
+    _controller.onPermissionChanged(permission);
+
+    const unusable = {
+      PermissionState.denied,
+      PermissionState.deniedForever,
+      PermissionState.serviceDisabled,
+      PermissionState.approximate,
+      PermissionState.unavailable,
+    };
+    // 定位不可用時連 powerMode 一起降下來（REQ-C-11 規則 3），恢復時升回。
+    await _subscriptions
+        .setPowerMode(unusable.contains(permission) ? PowerMode.suspended : PowerMode.active);
+
+    final mode = _controller.state.status.mode;
+    if (mode != previousMode) await _bindSource(mode);
+    _syncDiagnostics();
+    state = _controller.state;
+  }
+
+  /// 寬限期或 debounce 到期後才會改變的診斷欄位，需要一次延後的同步。
+  void _refreshLater() {
+    Future<void>(() {
+      _syncDiagnostics();
+      state = _controller.state;
+    });
   }
 
   void setDirection(double x, double y) {
@@ -128,18 +241,18 @@ class LocationNotifier extends Notifier<LocationControllerState> {
   /// 權限對話框在此才出現——開場就跳，玩家還不知道這是什麼遊戲就被要求定位。
   /// 若權限或精度不可用，會依 REQ-C-13 自動退回方向鍵。
   Future<void> requestGpsMode() async {
-    final permission = await ref.read(permissionResolverProvider).resolve();
-    _controller.onPermissionChanged(permission);
+    final permission = await _resolver.resolve();
+    await _applyPermission(permission);
     if (permission == PermissionState.ready) {
       _controller.switchMode(SourceMode.gps, automatic: false);
     }
-    _bindSource(_controller.state.status.mode);
+    await _bindSource(_controller.state.status.mode);
     state = _controller.state;
   }
 
-  void switchToVirtual() {
+  Future<void> switchToVirtual() async {
     _controller.switchMode(SourceMode.virtual, automatic: false);
-    _bindSource(SourceMode.virtual);
+    await _bindSource(SourceMode.virtual);
     state = _controller.state;
   }
 }
