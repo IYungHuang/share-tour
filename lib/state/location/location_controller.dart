@@ -213,6 +213,8 @@ class LocationController {
       debugPrint('[TRACK] lat=${fix.latitude.toStringAsFixed(6)} '
           'lng=${fix.longitude.toStringAsFixed(6)} '
           'acc=${fix.accuracyMeters} hasAcc=${fix.hasAccuracy} '
+          'spd=${fix.speedMetersPerSecond.toStringAsFixed(2)} '
+          'hasSpd=${fix.hasSpeed} spdAcc=${fix.speedAccuracy.toStringAsFixed(2)} '
           'mocked=${fix.isMocked} mode=${attributed.sourceMode.name} '
           'rej=${out.rejection?.name} target=${out.targetPixel} '
           'events=${out.events.length} cov=${_manifest.containsGeo(fix.latitude, fix.longitude)}');
