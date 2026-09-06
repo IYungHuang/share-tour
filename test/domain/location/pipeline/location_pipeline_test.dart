@@ -3,6 +3,7 @@ import 'package:share_tour/domain/location/models/geo_fix.dart';
 import 'package:share_tour/domain/location/models/movement_event.dart';
 import 'package:share_tour/domain/location/models/rejection_reason.dart';
 import 'package:share_tour/domain/location/pipeline/location_pipeline.dart';
+import 'package:share_tour/domain/location/pipeline/relocation_detector.dart';
 import '../../../fakes/fake_clock.dart';
 import '../../../fakes/fake_map_manifest.dart';
 
@@ -96,4 +97,111 @@ void main() {
     expect(pipeline.rejectionsByReason[RejectionReason.accuracy], 1);
     expect(pipeline.rejectionsByReason[RejectionReason.unmeasuredAccuracy], 1);
   });
+
+  // 切換移動模式造成的不連續（REQ-C-13 規則 5 → REQ-C-07 成因 discontinuity）。
+  //
+  // 虛擬來源與真實來源的位置毫無關係：玩家可能用方向鍵把小人開到台北，
+  // 而人在台中。切換時若不重置基準，首筆真實 Fix 會拿虛擬基準來比，
+  // 那段從未有人走過的距離就被記進 realDistanceMeters。實測灌進 13 萬公尺。
+  group('切換模式的不連續', () {
+    test('標記不連續後的首筆：更新目標點，但不發位移事件、不累計距離', () {
+      pipeline.ingest(at(metersNorth: 0, mode: SourceMode.virtual));
+      pipeline.markDiscontinuity(RelocationNote.modeSwitch);
+
+      final out = pipeline.ingest(at(metersNorth: 5000, second: 60));
+
+      expect(out.targetPixel, isNotNull, reason: '顯示點必須跳到真實位置');
+      expect(out.events.whereType<DisplacementEvent>(), isEmpty,
+          reason: '這段距離沒有人走過，不得計入任何桶');
+    });
+
+    test('跨距超過門檻 → 發出 discontinuity 傳送事件', () {
+      pipeline.ingest(at(metersNorth: 0, mode: SourceMode.virtual));
+      pipeline.markDiscontinuity(RelocationNote.modeSwitch);
+
+      final out = pipeline.ingest(at(metersNorth: 5000, second: 60));
+
+      final ev = out.events.whereType<RelocationEvent>().single;
+      expect(ev.cause, RelocationCause.discontinuity);
+      expect(ev.note, RelocationNote.modeSwitch);
+      expect(ev.distanceMeters, closeTo(5000, 50));
+    });
+
+    test('原地切換（跨距未達門檻）→ 不發任何事件，目標點仍更新', () {
+      pipeline.ingest(at(metersNorth: 0, mode: SourceMode.virtual));
+      pipeline.markDiscontinuity(RelocationNote.modeSwitch);
+
+      final out = pipeline.ingest(at(metersNorth: 5, second: 60));
+
+      expect(out.targetPixel, isNotNull);
+      expect(out.events, isEmpty);
+    });
+
+    test('不連續之後恢復正常累計，基準為不連續的那一筆', () {
+      pipeline.ingest(at(metersNorth: 0, mode: SourceMode.virtual));
+      pipeline.markDiscontinuity(RelocationNote.modeSwitch);
+      pipeline.ingest(at(metersNorth: 5000, second: 60));
+
+      final out = pipeline.ingest(at(metersNorth: 5100, second: 120));
+
+      final d = out.events.whereType<DisplacementEvent>().single;
+      expect(d.distanceMeters, closeTo(100, 5));
+    });
+
+    test('傳送事件的起點為前一個像素位置，不是原點', () {
+      // 要有「前一個像素位置」得先有一次顯著位移：首筆只設基準、不更新目標點。
+      pipeline.ingest(at(metersNorth: 0, mode: SourceMode.virtual));
+      final first = pipeline.ingest(
+          at(metersNorth: 100, second: 10, mode: SourceMode.virtual));
+      pipeline.markDiscontinuity(RelocationNote.modeSwitch);
+
+      final out = pipeline.ingest(at(metersNorth: 5000, second: 60));
+      final ev = out.events.whereType<RelocationEvent>().single;
+
+      expect(first.targetPixel, isNotNull);
+      expect(ev.fromPixelX, closeTo(first.targetPixel!.x, 0.01));
+      expect(ev.fromPixelY, closeTo(first.targetPixel!.y, 0.01));
+    });
+  });
+
+
+  // 圖資範圍外再回到範圍內（REQ-C-05 規則 4 → REQ-C-07 成因 discontinuity）。
+  //
+  // 範圍檢查排在顯著位移閘門【之後】，所以境外的 Fix 雖然不計距離，卻已經把
+  // 顯著性基準推到境外那一點。回到範圍內時，首筆會把整段境外行程算成里程。
+  group('範圍恢復的不連續', () {
+    test('回到範圍內的首筆不累計距離，但目標點更新', () {
+      pipeline.ingest(at(metersNorth: 0));
+      pipeline.ingest(at(metersNorth: 200000, second: 3600)); // 出界
+
+      final out = pipeline.ingest(at(metersNorth: 300, second: 7200));
+
+      expect(out.targetPixel, isNotNull);
+      expect(out.events.whereType<DisplacementEvent>(), isEmpty,
+          reason: '境外那段沒有圖資可投影，距離也就不可信');
+    });
+
+    test('回到範圍內發出 coverageRecovered 的傳送事件', () {
+      pipeline.ingest(at(metersNorth: 0));
+      pipeline.ingest(at(metersNorth: 200000, second: 3600));
+
+      final out = pipeline.ingest(at(metersNorth: 300, second: 7200));
+
+      final ev = out.events.whereType<RelocationEvent>().single;
+      expect(ev.cause, RelocationCause.discontinuity);
+      expect(ev.note, RelocationNote.coverageRecovered);
+    });
+
+    test('回到範圍內之後恢復正常累計', () {
+      pipeline.ingest(at(metersNorth: 0));
+      pipeline.ingest(at(metersNorth: 200000, second: 3600));
+      pipeline.ingest(at(metersNorth: 300, second: 7200));
+
+      final out = pipeline.ingest(at(metersNorth: 400, second: 7260));
+
+      expect(out.events.whereType<DisplacementEvent>().single.distanceMeters,
+          closeTo(100, 5));
+    });
+  });
+
 }

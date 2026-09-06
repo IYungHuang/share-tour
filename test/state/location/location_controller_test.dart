@@ -145,4 +145,46 @@ void main() {
     expect(c.state.status.coverage, CoverageState.outside);
     expect(c.state.realDistanceMeters, before);
   });
+
+  // 真機回歸：切到 GPS 的首筆 Fix 曾把 13 萬公尺灌進 realDistanceMeters。
+  // 虛擬來源把小人開到一處，真實位置在另一處，兩者之間的距離沒有人走過。
+  test('切換模式後的首筆 Fix 不得計入里程', () {
+    final c = make();
+    c.switchMode(SourceMode.virtual, automatic: false);
+    c.ingest(at(metersNorth: 0, mode: SourceMode.virtual));
+    c.ingest(at(metersNorth: 200, second: 10, mode: SourceMode.virtual));
+    final virtualBefore = c.state.virtualDistanceMeters;
+
+    c.switchMode(SourceMode.gps, automatic: false);
+    c.ingest(at(metersNorth: 50000, second: 600));
+
+    expect(c.state.realDistanceMeters, 0,
+        reason: '這段距離是模式切換造成的，不是玩家走的');
+    expect(c.state.virtualDistanceMeters, virtualBefore,
+        reason: '虛擬桶也不得被切換灌水');
+    expect(c.state.targetPixel, isNotNull, reason: '小人仍須跳到真實位置');
+  });
+
+  test('切換模式後的第二筆起，里程正常累計', () {
+    final c = make();
+    c.switchMode(SourceMode.virtual, automatic: false);
+    c.ingest(at(metersNorth: 0, mode: SourceMode.virtual));
+    c.switchMode(SourceMode.gps, automatic: false);
+    c.ingest(at(metersNorth: 50000, second: 600));
+    c.ingest(at(metersNorth: 50100, second: 660));
+
+    expect(c.state.realDistanceMeters, closeTo(100, 5));
+  });
+
+  test('切換造成的大跨距不平滑，顯示點直接指定', () {
+    final c = make();
+    c.switchMode(SourceMode.virtual, automatic: false);
+    c.ingest(at(metersNorth: 0, mode: SourceMode.virtual));
+    c.switchMode(SourceMode.gps, automatic: false);
+    c.ingest(at(metersNorth: 50000, second: 600));
+
+    expect(c.state.renderedPixel, c.state.targetPixel,
+        reason: '傳送事件的語意是直接指定顯示點，不是平滑趨近');
+  });
+
 }

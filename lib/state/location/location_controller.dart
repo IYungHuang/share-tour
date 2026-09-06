@@ -10,6 +10,7 @@ import '../../domain/location/models/movement_event.dart';
 import '../../domain/location/models/rejection_reason.dart';
 import '../../domain/location/pipeline/distance_buckets.dart';
 import '../../domain/location/pipeline/location_pipeline.dart';
+import '../../domain/location/pipeline/relocation_detector.dart';
 import '../../domain/location/projection/map_manifest.dart';
 import '../../domain/location/smoothing/position_smoother.dart';
 
@@ -174,6 +175,11 @@ class LocationController {
     }
   }
 
+  /// 標記下一筆 Fix 為不連續。背景恢復、服務恢復等路徑由接線層呼叫；
+  /// 模式切換與範圍恢復在內部自行標記。
+  void markDiscontinuity(RelocationNote note) =>
+      _pipeline.markDiscontinuity(note);
+
   void ingest(GeoFix fix) {
     _currentAccuracy = fix.accuracyMeters;
 
@@ -217,7 +223,14 @@ class LocationController {
 
     _status = _status.copyWith(coverage: CoverageState.inside);
     _targetPixel = out.targetPixel;
-    _smoother.setTarget(out.targetPixel!);
+
+    // 大跨距不平滑：以 1 秒半衰期趨近數十公里，小人會在地圖上飄很久。
+    // 規格要求直接指定顯示點，過場由畫面層負責。
+    if (out.events.whereType<RelocationEvent>().isNotEmpty) {
+      _smoother.jumpTo(out.targetPixel!);
+    } else {
+      _smoother.setTarget(out.targetPixel!);
+    }
     _log.addAll(out.events);
   }
 

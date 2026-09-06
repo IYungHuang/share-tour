@@ -71,15 +71,47 @@ class LocationPipeline {
   final MovementEventFactory _events;
 
   final Map<RejectionReason, int> _rejections = {};
+
+  /// 最後一筆【顯著】位移的 Fix。大跨距判定的比較對象。
   GeoFix? _lastAccepted;
+
+  /// 最後一筆【通過品質閘門】的 Fix，含判定為靜止者。
+  ///
+  /// 與 _lastAccepted 分開：不連續發生時，玩家最後已知的位置是這一筆，而不是
+  /// 上一次顯著移動的那一筆——站著不動十分鐘再切模式，後者已是十分鐘前的舊值。
+  GeoFix? _lastKnown;
+
+  /// 最後一次更新的目標像素。傳送事件的起點（REQ-C-13 規則 14 要求像素座標）。
+  Vector2? _lastPixel;
+
+  /// 待處理的不連續標記。非空代表下一筆被接受的 Fix 走獨立路徑。
+  RelocationNote? _pendingDiscontinuity;
 
   MotionState get motion => _motion.motion;
   AcquisitionState get acquisition => _motion.acquisition;
+  int get secondsSinceLastSignificantMove =>
+      _motion.secondsSinceLastSignificantMove;
   Map<RejectionReason, int> get rejectionsByReason =>
       Map.unmodifiable(_rejections);
 
   /// 換層或訊號恢復後呼叫：清除兩道閘門的基準，否則跨越的距離會被誤判為漂移。
   void resetBaselines() {
+    _quality.resetBaseline();
+    _significance.reset();
+    _lastAccepted = null;
+  }
+
+  /// 標記下一筆被接受的 Fix 為不連續（REQ-C-13 規則 5 → REQ-C-07）。
+  ///
+  /// 切換移動模式時必須呼叫。虛擬來源的位置與真實位置毫無關係——玩家可以用
+  /// 方向鍵把小人開到台北而人在台中——若不重置基準，首筆真實 Fix 會拿虛擬
+  /// 基準來比，那段從未有人走過的距離就被記進 realDistanceMeters。
+  ///
+  /// 與 resetBaselines 的差別：這裡保留最後已知位置與像素，好讓下一筆能發出
+  /// 帶起訖點的傳送事件。純粹的基準重置（換層）不需要，因為換層時地理位置
+  /// 不變，本來就不該發事件。
+  void markDiscontinuity(RelocationNote note) {
+    _pendingDiscontinuity = note;
     _quality.resetBaseline();
     _significance.reset();
     _lastAccepted = null;
@@ -97,6 +129,15 @@ class LocationPipeline {
     }
     _motion.onAcceptedFix();
 
+    final previousKnown = _lastKnown;
+    _lastKnown = fix;
+
+    final pending = _pendingDiscontinuity;
+    if (pending != null) {
+      _pendingDiscontinuity = null;
+      return _ingestDiscontinuous(fix, pending, previousKnown);
+    }
+
     // 第 6 步：顯著位移閘門（基準凍結）。
     final movedMeters = _significance.evaluate(fix);
     if (movedMeters == null) return const PipelineOutput();
@@ -105,6 +146,9 @@ class LocationPipeline {
     final projected = _projection.project(fix.latitude, fix.longitude);
     if (projected is OutsideCoverage) {
       _lastAccepted = fix;
+      // 回到範圍內時走獨立路徑。範圍檢查排在顯著性閘門之後，基準此刻已被推到
+      // 境外那一點；不標記的話，回國的第一筆會把整段跨海行程算成里程。
+      _pendingDiscontinuity = RelocationNote.coverageRecovered;
       return const PipelineOutput();
     }
     final pixel = (projected as Projected).pixel;
@@ -125,16 +169,7 @@ class LocationPipeline {
         note: RelocationNote.realMovement,
       );
       if (decision != null) {
-        events.add(_events.relocation(
-          decision: decision,
-          sourceMode: fix.sourceMode,
-          fromPixelX: 0,
-          fromPixelY: 0,
-          toPixelX: pixel.x,
-          toPixelY: pixel.y,
-          distancePixels: 0,
-          timestampUtc: _clock.nowUtc(),
-        ));
+        events.add(_relocationEvent(decision, fix, pixel));
       }
     }
 
@@ -147,6 +182,63 @@ class LocationPipeline {
     ));
 
     _lastAccepted = fix;
+    _lastPixel = pixel;
     return PipelineOutput(targetPixel: pixel, events: events);
+  }
+
+  /// 不連續的獨立路徑：重新投影後直接指定目標點。
+  ///
+  /// 不經顯著位移閘門，也不發位移事件——這段距離沒有人走過，計入任何一個桶
+  /// 都是假里程。跨距若達 REQ-C-07 的門檻則發傳送事件，成因必為 discontinuity：
+  /// 訂閱在切換的當下就斷了，不可能是連續追蹤。
+  PipelineOutput _ingestDiscontinuous(
+    GeoFix fix,
+    RelocationNote note,
+    GeoFix? previous,
+  ) {
+    // 設定新基準。首筆必然回傳 null，此處不需要它的回傳值。
+    _significance.evaluate(fix);
+
+    final projected = _projection.project(fix.latitude, fix.longitude);
+    if (projected is OutsideCoverage) {
+      _lastAccepted = fix;
+      return const PipelineOutput();
+    }
+    final pixel = (projected as Projected).pixel;
+
+    final events = <MovementEvent>[];
+    if (previous != null) {
+      final decision = _relocation.evaluate(
+        previousLat: previous.latitude,
+        previousLng: previous.longitude,
+        currentLat: fix.latitude,
+        currentLng: fix.longitude,
+        interval: fix.timestampUtc.difference(previous.timestampUtc),
+        subscriptionWasContinuous: false,
+        note: note,
+      );
+      if (decision != null) {
+        events.add(_relocationEvent(decision, fix, pixel));
+      }
+    }
+
+    _lastAccepted = fix;
+    _lastPixel = pixel;
+    return PipelineOutput(targetPixel: pixel, events: events);
+  }
+
+  MovementEvent _relocationEvent(
+      RelocationDecision decision, GeoFix fix, Vector2 pixel) {
+    final from = _lastPixel ?? pixel;
+    return _events.relocation(
+      decision: decision,
+      sourceMode: fix.sourceMode,
+      fromPixelX: from.x,
+      fromPixelY: from.y,
+      toPixelX: pixel.x,
+      toPixelY: pixel.y,
+      distancePixels: (pixel - from).length,
+      timestampUtc: _clock.nowUtc(),
+    );
   }
 }
