@@ -62,6 +62,7 @@ void main() {
       realDistanceMeters: 500,
       virtualDistanceMeters: 0,
       secondsSinceLastSignificantMove: 4,
+      accuracyGatedFixCount: 0,
     ).toJson();
     for (final k in ['lat', 'lng', 'latitude', 'longitude']) {
       expect(json.keys.map((e) => e.toLowerCase()), isNot(contains(k)));

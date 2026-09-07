@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:share_tour/domain/location/models/geo_fix.dart';
+import 'package:share_tour/domain/location/models/location_status.dart';
 import 'package:share_tour/domain/location/models/movement_event.dart';
 import 'package:share_tour/domain/location/models/rejection_reason.dart';
 import 'package:share_tour/domain/location/pipeline/location_pipeline.dart';
@@ -204,4 +205,80 @@ void main() {
     });
   });
 
+  // 品質標記（REQ-C-13 規則 16、17，修訂二）。
+  //
+  // 精度 > 30 m 的 Fix 仍走管線、仍更新顯示點，但不得成為任何基準——不只是
+  // 顯著性閘門的基準，連「不連續路徑要跟誰比」的 _lastKnown 也不行，否則
+  // 一筆精度差但恰好離得很遠的 Fix，會讓下一筆合格 Fix 算出錯誤的大跨距。
+  group('品質標記', () {
+    test('AC-13.14 精度不合格：更新顯示點，不推進 motion，不計入任何桶', () {
+      pipeline.ingest(at(metersNorth: 0, accuracy: 24));
+      final out =
+          pipeline.ingest(at(metersNorth: 96, accuracy: 40, second: 5));
+
+      expect(out.targetPixel, isNotNull, reason: '仍要更新顯示點');
+      expect(out.qualityGated, isTrue);
+      expect(out.events, isEmpty);
+      expect(pipeline.motion, MotionState.still,
+          reason: '不合格 Fix 不推進 motion');
+    });
+
+    test('AC-13.15 不合格 Fix 不成為顯著性基準：下一筆合格 Fix 仍與原基準比較',
+        () {
+      pipeline.ingest(at(metersNorth: 0, accuracy: 24));
+      pipeline.ingest(at(metersNorth: 96, accuracy: 40, second: 5)); // 不合格
+      final out = pipeline.ingest(at(metersNorth: 200, accuracy: 20, second: 10));
+
+      final events = out.events.whereType<DisplacementEvent>();
+      expect(events.length, 1);
+      expect(events.single.distanceMeters, closeTo(200, 5),
+          reason: '若不合格 Fix 帶走了基準，錯誤實作只會得到約 104m');
+    });
+
+    test('AC-13.16 品質標記門檻：30m 視為合格，30.1m 不合格', () {
+      pipeline.ingest(at(metersNorth: 0, accuracy: 20));
+      final out30 =
+          pipeline.ingest(at(metersNorth: 100, accuracy: 30, second: 5));
+      expect(out30.events.whereType<DisplacementEvent>().single.distanceMeters,
+          closeTo(100, 1));
+      expect(out30.qualityGated, isFalse);
+
+      final other = LocationPipeline(manifest: manifest, clock: FakeClock());
+      other.ingest(at(metersNorth: 0, accuracy: 20));
+      final out301 =
+          other.ingest(at(metersNorth: 100, accuracy: 30.1, second: 5));
+      expect(out301.events, isEmpty);
+      expect(out301.qualityGated, isTrue);
+    });
+
+    test('AC-13.17 不合格 Fix 不消耗不連續標記；下一筆合格 Fix 才消耗', () {
+      pipeline.ingest(at(metersNorth: 0, mode: SourceMode.virtual));
+      pipeline.markDiscontinuity(RelocationNote.modeSwitch);
+
+      // P1：精度 50m（不合格），距切換前最後已知位置（metersNorth 0）5000m。
+      final p1 = pipeline
+          .ingest(at(metersNorth: 5000, accuracy: 50, second: 60));
+      expect(p1.events, isEmpty, reason: '第一筆不合格 Fix 不產生任何事件');
+      expect(p1.qualityGated, isTrue);
+
+      // P2：精度 20m（合格），距 P1 100m、+5s。
+      final p2 = pipeline
+          .ingest(at(metersNorth: 5100, accuracy: 20, second: 65));
+
+      expect(p2.events.length, 1,
+          reason: '恰好一筆傳送事件——若 P1 錯誤地消耗了標記或成為基準，'
+              'P2 距 P1 僅 100m/5s，不會觸發大跨距判定');
+      final ev = p2.events.whereType<RelocationEvent>().single;
+      expect(ev.cause, RelocationCause.discontinuity);
+      expect(ev.note, RelocationNote.modeSwitch);
+      expect(p2.events.whereType<DisplacementEvent>(), isEmpty);
+    });
+
+    test('AC-0.4 / AC-13.18 虛擬 Fix 一律標記為合格', () {
+      pipeline.ingest(at(metersNorth: 0, mode: SourceMode.virtual));
+      final out = pipeline.ingest(
+          at(metersNorth: 96, accuracy: 1, second: 1, mode: SourceMode.virtual));
+      expect(out.qualityGated, isFalse);
+    });
+  });
 }

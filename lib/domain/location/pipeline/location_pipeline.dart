@@ -13,16 +13,28 @@ import 'quality_gate.dart';
 import 'relocation_detector.dart';
 import 'significance_gate.dart';
 
+/// 品質標記門檻（REQ-C-13 規則 16）。精度 ≤ 此值的 Fix 視為「品質合格」。
+///
+/// 與 REQ-C-18 的 `triggerSuitabilityThreshold`、`gridEligibilityThreshold`
+/// 目前同值，但刻意各自宣告為獨立具名常數——見該處的相等性斷言測試。
+/// 隱式共用同一個常數，會讓日後修改其中之一時誤以為連動改了全部。
+const double mileageQualityThreshold = 30;
+
 class PipelineOutput {
   const PipelineOutput({
     this.targetPixel,
     this.events = const [],
     this.rejection,
+    this.qualityGated = false,
   });
 
   final Vector2? targetPixel;
   final List<MovementEvent> events;
   final RejectionReason? rejection;
+
+  /// 這筆 Fix 精度不合格（REQ-C-13 規則 16）：`targetPixel` 若非空僅代表
+  /// 顯示點被更新，不代表發生了顯著位移——`events` 在此為真時恆為空。
+  final bool qualityGated;
 }
 
 /// 處理管線的全序編排。
@@ -129,6 +141,16 @@ class LocationPipeline {
     }
     _motion.onAcceptedFix();
 
+    // 第 6 步：品質標記判定（REQ-C-13 規則 16、17）。不合格者完全繞開
+    // pendingDiscontinuity 檢查與 _lastKnown／_lastAccepted 的更新——
+    // 不是「走到之後才決定不消耗」，是根本不讓後續任何基準看到這筆 Fix。
+    // 虛擬 Fix 一律合格（合成資料無量測誤差，REQ-C-10 規則 5 的理由逐字適用）。
+    final qualityAcceptable = fix.sourceMode == SourceMode.virtual ||
+        fix.accuracyMeters <= mileageQualityThreshold;
+    if (!qualityAcceptable) {
+      return _ingestQualityGated(fix);
+    }
+
     final previousKnown = _lastKnown;
     _lastKnown = fix;
 
@@ -138,11 +160,11 @@ class LocationPipeline {
       return _ingestDiscontinuous(fix, pending, previousKnown);
     }
 
-    // 第 6 步：顯著位移閘門（基準凍結）。
+    // 第 7 步：顯著位移閘門（基準凍結）。
     final movedMeters = _significance.evaluate(fix);
     if (movedMeters == null) return const PipelineOutput();
 
-    // 第 7 步：範圍檢查（在投影之前）。第 8~9 步：投影與吸附。
+    // 第 8 步：範圍檢查（在投影之前）。第 9 步：投影。
     final projected = _projection.project(fix.latitude, fix.longitude);
     if (projected is OutsideCoverage) {
       _lastAccepted = fix;
@@ -155,7 +177,7 @@ class LocationPipeline {
 
     _motion.onSignificantMove();
 
-    // 第 10 步：大跨距判定，用第 7 步之前的地理距離。
+    // 第 10 步：大跨距判定，用第 8 步之前的地理距離。
     final events = <MovementEvent>[];
     final previous = _lastAccepted;
     if (previous != null) {
@@ -184,6 +206,21 @@ class LocationPipeline {
     _lastAccepted = fix;
     _lastPixel = pixel;
     return PipelineOutput(targetPixel: pixel, events: events);
+  }
+
+  /// 品質不合格的 Fix（REQ-C-13 規則 16）：精度 > [mileageQualityThreshold]。
+  ///
+  /// 仍投影更新顯示點（範圍外則不更新，同 REQ-C-05），但不得成為顯著性閘門
+  /// 或大跨距判定的比較基準、不得消耗待處理的不連續標記、不推進 motion，
+  /// 也不產生任何事件——呼叫時機刻意排在 `_lastKnown` 更新與
+  /// `_pendingDiscontinuity` 檢查之前，讓這筆 Fix 對兩者都不可見。
+  PipelineOutput _ingestQualityGated(GeoFix fix) {
+    final projected = _projection.project(fix.latitude, fix.longitude);
+    if (projected is OutsideCoverage) {
+      return const PipelineOutput(qualityGated: true);
+    }
+    final pixel = (projected as Projected).pixel;
+    return PipelineOutput(targetPixel: pixel, qualityGated: true);
   }
 
   /// 不連續的獨立路徑：重新投影後直接指定目標點。

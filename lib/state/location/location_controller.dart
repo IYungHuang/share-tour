@@ -82,6 +82,7 @@ class LocationController {
   Vector2? _targetPixel;
   int _acceptedFixCount = 0;
   int _rejectedFixCount = 0;
+  int _accuracyGatedFixCount = 0;
   final Map<RejectionReason, int> _rejections = {};
   double _currentAccuracy = 0;
   bool lastSwitchWasAutomatic = false;
@@ -148,6 +149,7 @@ class LocationController {
         virtualDistanceMeters: buckets.virtual,
         secondsSinceLastSignificantMove:
             _pipeline.secondsSinceLastSignificantMove,
+        accuracyGatedFixCount: _accuracyGatedFixCount,
       ),
       renderedPixel: _smoother.rendered,
       targetPixel: _targetPixel,
@@ -226,6 +228,7 @@ class LocationController {
       return;
     }
     _acceptedFixCount++;
+    if (out.qualityGated) _accuracyGatedFixCount++;
 
     if (out.targetPixel == null) {
       // 通過品質閘門但未顯著移動，或落在圖資範圍外。

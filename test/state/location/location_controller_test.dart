@@ -98,6 +98,18 @@ void main() {
     expect(c.state.diagnostics.rejectionsByReason[RejectionReason.accuracy], 1);
   });
 
+  test('AC-14.11 品質不合格（但未被丟棄）的 Fix 計入 accuracyGatedFixCount，'
+      '不計入 rejectedFixCount', () {
+    final c = make();
+    c.ingest(at(metersNorth: 0, accuracy: 24));
+    c.ingest(at(metersNorth: 96, accuracy: 40, second: 5));
+
+    expect(c.state.diagnostics.accuracyGatedFixCount, 1);
+    expect(c.state.diagnostics.rejectedFixCount, 0,
+        reason: '精度 40m 沒有超過 REQ-C-03 的 100m 丟棄門檻，這是規則 16 的品質標記，'
+            '不是規則 2 的品質閘門丟棄');
+  });
+
   test('AC-12.1 持久化 DTO 的序列化結果不含座標鍵', () {
     final json = LocationSnapshotDto(
       renderedPixelX: 100,
