@@ -1,7 +1,7 @@
 # 任務 C：SPEC 修訂 v6 — 實作計劃（增量）
 
-狀態：**待覆核**
-流程位置：`spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核`（目前在 **plan**）
+狀態：**執行中**（2026-09-07：T21~T25、T27、T28、T26 已完成並提交；T29 待真機）
+流程位置：`spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核`（目前在 **執行計劃**）
 規格：`SPEC_C_GPS_TRACKING.md`（v6）。本計劃只涵蓋 v6 相對 v5.1 的**增量**——`PLAN_C_GPS_TRACKING.md`（T1~T20）已在真機驗證中執行完畢，`lib/domain/location/`、`lib/data/location/`、`lib/state/location/` 均已存在對應實作，不重寫。
 上位約束：`CROSS_CUTTING_CONSTRAINTS.md`（v3）。
 工作規範：`CLAUDE.md`。
@@ -12,17 +12,19 @@
 
 `SPEC_C_GPS_TRACKING.md` v6 §6.1.2 列出的變更中，屬本計劃範圍（有程式碼動作）的有：
 
-| 任務 | 對應修訂 | 檔案 |
-|---|---|---|
-| T21 | 修訂二：REQ-C-13 規則 16、17（品質標記） | `pipeline/location_pipeline.dart`、`pipeline/quality_gate.dart`、`models/location_status.dart` |
-| T22 | 修訂四：刪除道路吸附 + 接線分類遮罩 | `projection/map_manifest.dart`、`pipeline/projection_stage.dart`、`test/fakes/fake_map_manifest.dart`、`game/map_module/manifests/taiwan_map_manifest.dart`、`game/map_module/utils/taiwan_geo_calibrator.dart`（刪除）、`state/location/location_controller.dart`、`assets/maps/taiwan/mask.png`（接線） |
-| T23 | 修訂五：REQ-C-03 規則 5 簡化 | `pipeline/quality_gate.dart` |
-| T24 | 修訂一：REQ-C-16 裝置喚醒 | 新檔 `domain/location/keep_awake.dart`；新檔 `data/location/wakelock_control.dart` |
-| T25 | 修訂三：REQ-C-18 觸發品質契約 | `pipeline/manifest_geometry_check.dart`（改寫）；新檔 `domain/location/trigger_suitability.dart` |
-| T26 | REQ-C-02 規則 5：Android 平台更新間隔 | `data/location/geolocator_location_source.dart` |
-| T27 | 修訂六：REQ-C-07 規則 6，不連續事件供畫面層 | `state/location/location_controller.dart` |
-| T28 | 修訂八：AC-3.9 測試標題修正 | `test/domain/location/pipeline/significance_gate_test.dart` |
-| T29 | DoD 7a/7b：真機驗收程序更新 | 無程式碼；更新驗收腳本／checklist |
+| 任務 | 狀態 | 對應修訂 | 檔案 |
+|---|---|---|---|
+| T21 | ✅ 已完成（`f94762e`） | 修訂二：REQ-C-13 規則 16、17（品質標記） | `pipeline/location_pipeline.dart`、`pipeline/quality_gate.dart`、`models/location_status.dart` |
+| T22 | ✅ 已完成（`95a02ca`） | 修訂四：刪除道路吸附 + 接線分類遮罩 | `projection/map_manifest.dart`、`pipeline/projection_stage.dart`、`test/fakes/fake_map_manifest.dart`、`game/map_module/manifests/taiwan_map_manifest.dart`、`game/map_module/utils/taiwan_geo_calibrator.dart`（刪除）、`state/location/location_controller.dart`、`assets/maps/taiwan/mask.png`（接線） |
+| T23 | ✅ 已完成（`75e5ec1`） | 修訂五：REQ-C-03 規則 5 簡化 | `pipeline/quality_gate.dart` |
+| T24 | ✅ 已完成（`7aebebc`） | 修訂一：REQ-C-16 裝置喚醒 | 新檔 `domain/location/keep_awake.dart`；新檔 `data/location/wakelock_control.dart` |
+| T25 | ✅ 已完成（`abcd50f`） | 修訂三：REQ-C-18 觸發品質契約 | `pipeline/manifest_geometry_check.dart`（改寫）；新檔 `domain/location/trigger_suitability.dart` |
+| T26 | ✅ 已完成（`746e98d`） | REQ-C-02 規則 5：Android 平台更新間隔 | `data/location/geolocator_location_source.dart` |
+| T27 | ✅ 已完成（`9ec3e2a`） | 修訂六：REQ-C-07 規則 6，不連續事件供畫面層 | `state/location/location_controller.dart` |
+| T28 | ✅ 已完成（`746e98d`） | 修訂八：AC-3.9 測試標題修正 | `test/domain/location/pipeline/significance_gate_test.dart` |
+| T29 | ⏳ **待真機**（無法在此環境執行） | DoD 7a/7b：真機驗收程序更新 | 無程式碼；更新驗收腳本／checklist |
+
+**T21~T28 完成後現況**：`flutter test` 218 passed / 1 skipped，`flutter analyze` 0 issues。T29 需要實體 Android 裝置，本次執行環境無法完成，見文末說明。
 
 **明確排除**（不屬任務 C）：探索網格 id 的產生與持久化（CC-5 新規則 3，屬任務 A／B 的 SPEC 與 plan）；里程角色框定（純文件，SPEC 已記載，無程式碼變更）。
 
@@ -66,10 +68,10 @@ T21+T22+T24+T25+T26+T27 全部完成 ──> T29 真機驗收
 
 **AC 對應**：AC-13.14~13.18（`SPEC_C_GPS_TRACKING.md` REQ-C-13）、AC-0.4（虛擬 Fix 進入品質標記步驟一律合格）、AC-14.11（`accuracyGatedFixCount` 遞增）。
 
-- [ ] **步驟 1（RED）**：在 `test/domain/location/pipeline/location_pipeline_test.dart`（若無則新建）按 AC-13.14~13.17 逐條寫失敗測試。**AC-13.17（不合格 Fix 不消耗不連續標記）優先寫**——這是三向分支裡最容易錯的組合。
-- [ ] **步驟 2**：畫出三向路徑（合格且顯著／合格且不顯著／不合格）× 二向（有無 pending discontinuity）的真值表，再實作品質標記判定與管線分支、`PipelineOutput.qualityGated` 欄位。
-- [ ] **步驟 3**：`LocationController` 新增 `accuracyGatedFixCount` 欄位；`LocationDiagnostics` 新增同名欄位（`models/location_status.dart:77-91`）。**本步驟與 T24 步驟 4 動同一個 `@freezed` 類別，兩者不得真的併行執行——由後完成的一方一次補齊兩個欄位**，見下方任務相依圖的更新。改欄位後先跑 `dart run build_runner build --delete-conflicting-outputs`，再 `flutter analyze`（CLAUDE.md §8 強制順序）。
-- [ ] **步驟 4**：`flutter test test/domain/location/pipeline/` 全綠，`flutter analyze` 0 issue。
+- [x] **步驟 1（RED）**：在 `test/domain/location/pipeline/location_pipeline_test.dart`（若無則新建）按 AC-13.14~13.17 逐條寫失敗測試。**AC-13.17（不合格 Fix 不消耗不連續標記）優先寫**——這是三向分支裡最容易錯的組合。
+- [x] **步驟 2**：畫出三向路徑（合格且顯著／合格且不顯著／不合格）× 二向（有無 pending discontinuity）的真值表，再實作品質標記判定與管線分支、`PipelineOutput.qualityGated` 欄位。
+- [x] **步驟 3**：`LocationController` 新增 `accuracyGatedFixCount` 欄位；`LocationDiagnostics` 新增同名欄位（`models/location_status.dart:77-91`）。**本步驟與 T24 步驟 4 動同一個 `@freezed` 類別，兩者不得真的併行執行——由後完成的一方一次補齊兩個欄位**，見下方任務相依圖的更新。改欄位後先跑 `dart run build_runner build --delete-conflicting-outputs`，再 `flutter analyze`（CLAUDE.md §8 強制順序）。
+- [x] **步驟 4**：`flutter test test/domain/location/pipeline/` 全綠，`flutter analyze` 0 issue。
 
 ---
 
@@ -90,20 +92,20 @@ T21+T22+T24+T25+T26+T27 全部完成 ──> T29 真機驗收
 - **（新增）`assets/maps/taiwan/mask.png`**：已存在於倉庫（另一 agent 先前的地圖美術提交產出），但目前沒有任何程式碼讀取它。本任務要把它接進 `containsGeo`。
 
 **步驟**：
-- [ ] **步驟 1（RED）**：`test/domain/location/projection/map_manifest_test.dart`（或架構測試）新增 AC-4.7：比照 T1 的 `layer_boundaries_test.dart` 手法做原始碼靜態掃描，斷言 `map_manifest.dart` 原始碼不含 `snapToRoad`、`snapLimitMeters`、`roadNodes` 字串。先確認此測試在刪除前失敗。
-- [ ] **步驟 2**：`map_manifest.dart` 移除三個成員。
-- [ ] **步驟 3**：`projection_stage.dart` 改為 `Projected(manifest.projectToPixel(lat, lng))`（不再吸附），文件註解同步刪除「吸附」字樣。
-- [ ] **步驟 4**：`fake_map_manifest.dart` 移除 `snapLimitMeters`、`roadNodes`、`snapToRoad`、`snapCallCount`；`resetCallCounts()` 只留 `projectCallCount`。
-- [ ] **步驟 5（RED→GREEN）**：新增 AC-4.8：`FakeMapManifest` 既有的預設建構子本身就有邊界（`minLat/maxLat/minLng/maxLng`），不需另建 `linearAt`；斷言 `containsGeo` 為假時 `projectCallCount` 不遞增，且以相同座標分別驅動虛擬 Fix 與真實 Fix，兩者 `coverage` 判定相同。
-- [ ] **步驟 6**：處理 `test/taiwan_map_manifest_test.dart`：刪除引用 `roadNodes`／`snapLimitMeters`／`findSnapTriggerConflicts` 的段落（78~115 行）；86~102 行的 POI 間距測試移到 T25 的 `manifest_geometry_check_test.dart` 或確認由其新版取代後刪除。
-- [ ] **步驟 7**：刪除 `lib/game/map_module/utils/taiwan_geo_calibrator.dart` 與 `test/taiwan_geo_calibrator_test.dart`（確認無其他呼叫端後）。
-- [ ] **步驟 8（RED）**：新增 `test/game/map_module/manifests/taiwan_map_manifest_mask_test.dart`：載入 `assets/maps/taiwan/mask.png`，斷言已知落在遮罩外的像素座標（例如台灣海峽中點對應的經緯度投影後的位置）`containsGeo` 為假，已知落在陸地內的座標（現有 POI 附近）為真。先確認在遮罩接線前此測試失敗（現行矩形框會讓海峽座標誤判為真）。
-- [ ] **步驟 9**：實作遮罩查詢：讀取 `mask.png`（建議在建構子預先解碼並量化成 `Uint8List`/`bitset`，避免每次呼叫都解碼圖檔，滿足 NFR-4 常數時間要求），`containsGeo` 改為依經緯度投影到像素座標後查詢遮罩值。遮罩解析度、如何從連續經緯度映射到離散遮罩格的規則需在實作時明確記錄（供 §2.2 規則 4 的「解析度由模組宣告」）。
-- [ ] **步驟 10**：`taiwan_map_manifest.dart` 移除 `snapToRoad`、`snapLimitMeters`、`roadNodes` 相關實作與資料。
-- [ ] **步驟 11**：`location_controller.dart:124-126` 的 `switchLayer()` 改為 `next.projectToPixel(last.latitude, last.longitude)`（不再吸附）。
-- [ ] **步驟 12**：更新 `CLAUDE.md` §4「已知違反（待修）」PRE-8 條目——現況已寫「SPEC v6 已宣告 PRE-8 作廢」但 `CLAUDE.md` 尚未同步，兩份文件目前矛盾；同時把矩形框改遮罩這件事的完成狀態記錄進去（原條目描述的正是矩形框洞，遮罩接線完成後應移入「已解除」）。
-- [ ] **步驟 13**：全域搜尋 `snapToRoad|snapLimitMeters|roadNodes` 確認 `lib/`、`test/` 無殘留（`manifest_geometry_check.dart` 的 `roadNodes` 參數留給 T25 處理）。
-- [ ] **步驟 14**：`flutter analyze` 0 issue；`flutter test` 全綠。
+- [x] **步驟 1（RED）**：`test/domain/location/projection/map_manifest_test.dart`（或架構測試）新增 AC-4.7：比照 T1 的 `layer_boundaries_test.dart` 手法做原始碼靜態掃描，斷言 `map_manifest.dart` 原始碼不含 `snapToRoad`、`snapLimitMeters`、`roadNodes` 字串。先確認此測試在刪除前失敗。
+- [x] **步驟 2**：`map_manifest.dart` 移除三個成員。
+- [x] **步驟 3**：`projection_stage.dart` 改為 `Projected(manifest.projectToPixel(lat, lng))`（不再吸附），文件註解同步刪除「吸附」字樣。
+- [x] **步驟 4**：`fake_map_manifest.dart` 移除 `snapLimitMeters`、`roadNodes`、`snapToRoad`、`snapCallCount`；`resetCallCounts()` 只留 `projectCallCount`。
+- [x] **步驟 5（RED→GREEN）**：新增 AC-4.8：`FakeMapManifest` 既有的預設建構子本身就有邊界（`minLat/maxLat/minLng/maxLng`），不需另建 `linearAt`；斷言 `containsGeo` 為假時 `projectCallCount` 不遞增，且以相同座標分別驅動虛擬 Fix 與真實 Fix，兩者 `coverage` 判定相同。
+- [x] **步驟 6**：處理 `test/taiwan_map_manifest_test.dart`：刪除引用 `roadNodes`／`snapLimitMeters`／`findSnapTriggerConflicts` 的段落（78~115 行）；86~102 行的 POI 間距測試移到 T25 的 `manifest_geometry_check_test.dart` 或確認由其新版取代後刪除。
+- [x] **步驟 7**：刪除 `lib/game/map_module/utils/taiwan_geo_calibrator.dart` 與 `test/taiwan_geo_calibrator_test.dart`（確認無其他呼叫端後）。
+- [x] **步驟 8（RED）**：新增 `test/game/map_module/manifests/taiwan_map_manifest_mask_test.dart`：載入 `assets/maps/taiwan/mask.png`，斷言已知落在遮罩外的像素座標（例如台灣海峽中點對應的經緯度投影後的位置）`containsGeo` 為假，已知落在陸地內的座標（現有 POI 附近）為真。先確認在遮罩接線前此測試失敗（現行矩形框會讓海峽座標誤判為真）。
+- [x] **步驟 9**：實作遮罩查詢：讀取 `mask.png`（建議在建構子預先解碼並量化成 `Uint8List`/`bitset`，避免每次呼叫都解碼圖檔，滿足 NFR-4 常數時間要求），`containsGeo` 改為依經緯度投影到像素座標後查詢遮罩值。遮罩解析度、如何從連續經緯度映射到離散遮罩格的規則需在實作時明確記錄（供 §2.2 規則 4 的「解析度由模組宣告」）。
+- [x] **步驟 10**：`taiwan_map_manifest.dart` 移除 `snapToRoad`、`snapLimitMeters`、`roadNodes` 相關實作與資料。
+- [x] **步驟 11**：`location_controller.dart:124-126` 的 `switchLayer()` 改為 `next.projectToPixel(last.latitude, last.longitude)`（不再吸附）。
+- [x] **步驟 12**：更新 `CLAUDE.md` §4「已知違反（待修）」PRE-8 條目——現況已寫「SPEC v6 已宣告 PRE-8 作廢」但 `CLAUDE.md` 尚未同步，兩份文件目前矛盾；同時把矩形框改遮罩這件事的完成狀態記錄進去（原條目描述的正是矩形框洞，遮罩接線完成後應移入「已解除」）。
+- [x] **步驟 13**：全域搜尋 `snapToRoad|snapLimitMeters|roadNodes` 確認 `lib/`、`test/` 無殘留（`manifest_geometry_check.dart` 的 `roadNodes` 參數留給 T25 處理）。
+- [x] **步驟 14**：`flutter analyze` 0 issue；`flutter test` 全綠。
 
 ---
 
@@ -124,14 +126,14 @@ T21+T22+T24+T25+T26+T27 全部完成 ──> T29 真機驗收
 **釘住一個解讀（架構師覆核提出，先定案避免日後爭議）**：REQ-C-18 規則 1「每筆位置對外提供觸發適用性標記」，本任務的實作是獨立純函式 `isTriggerSuitable(accuracyMeters)`，**不**把這個標記接進 `GeoFix` 或 `PipelineOutput` 成為隨附欄位（這點與 T21 的品質標記處理方式不對稱——後者確實接進管線內部狀態）。**裁決**：「對外提供」以「公開純函式 + 已公開的 `GeoFix.accuracyMeters` 欄位」滿足，呼叫端（任務 A）自行對每筆位置呼叫。若任務 A 開工後認為需要「每筆位置自帶已算好的旗標」，屬其 SPEC／plan 階段的新需求，不視為本任務未完成。
 
 **步驟**：
-- [ ] **步驟 1（RED）**：新增 `test/domain/location/trigger_suitability_test.dart`：三個門檻常數相等性斷言（AC 對應 REQ-C-18 規則 1 附註）、`isTriggerSuitable` 邊界測試（AC-18.1、AC-18.2）。
-- [ ] **步驟 2（RED）**：改寫 `test/domain/location/pipeline/manifest_geometry_check_test.dart`：
+- [x] **步驟 1（RED）**：新增 `test/domain/location/trigger_suitability_test.dart`：三個門檻常數相等性斷言（AC 對應 REQ-C-18 規則 1 附註）、`isTriggerSuitable` 邊界測試（AC-18.1、AC-18.2）。
+- [x] **步驟 2（RED）**：改寫 `test/domain/location/pipeline/manifest_geometry_check_test.dart`：
   - 合法 `FakeMapManifest` 資料 → 綠燈。
   - 刻意違規資料（兩 POI 相距 0.2 像素、r 各 50 m、e = 52.5 m）→ 必須偵測到（AC-18.3 第二點）。
   - `TaiwanMapManifest` 資料 → 綠燈，測試名稱與註解註明「綠燈源自地圖尺度非佈點品質，地方層上線後須重驗」（AC-18.3 第三點）。
-- [ ] **步驟 3**：實作 `trigger_suitability.dart` 與改寫 `manifest_geometry_check.dart`。
-- [ ] **步驟 4**：搜尋 `findSnapTriggerConflicts` 呼叫端（若有整合測試或工具腳本引用舊函式名）一併更新。
-- [ ] **步驟 5**：`flutter test` 全綠、`flutter analyze` 0 issue。
+- [x] **步驟 3**：實作 `trigger_suitability.dart` 與改寫 `manifest_geometry_check.dart`。
+- [x] **步驟 4**：搜尋 `findSnapTriggerConflicts` 呼叫端（若有整合測試或工具腳本引用舊函式名）一併更新。
+- [x] **步驟 5**：`flutter test` 全綠、`flutter analyze` 0 issue。
 
 ---
 
@@ -140,15 +142,15 @@ T21+T22+T24+T25+T26+T27 全部完成 ──> T29 真機驗收
 **現狀**：`lib/domain/location/pipeline/quality_gate.dart:77-89` 的 `_exceedsSpeedLimit` 取兩點差分與裝置回報速度的較小值。
 
 **步驟**：
-- [ ] **步驟 1（RED）**：刪除 `test/domain/location/pipeline/quality_gate_test.dart` 的 `AC-3.10`、`AC-3.11` 兩條測試（`quality_gate_test.dart:111-124`）。確認刪除後既有其餘測試仍綠（尚未改動邏輯）。
-- [ ] **步驟 2**：`quality_gate.dart` 的 `_exceedsSpeedLimit` 改為：
+- [x] **步驟 1（RED）**：刪除 `test/domain/location/pipeline/quality_gate_test.dart` 的 `AC-3.10`、`AC-3.11` 兩條測試（`quality_gate_test.dart:111-124`）。確認刪除後既有其餘測試仍綠（尚未改動邏輯）。
+- [x] **步驟 2**：`quality_gate.dart` 的 `_exceedsSpeedLimit` 改為：
   ```
   final speed = meters / (delta.inMicroseconds / 1e6);
   return speed > maxSpeedMetersPerSecond;
   ```
   移除 `fix.hasSpeed`／`fix.speedAccuracy`／`fix.speedMetersPerSecond` 的取值邏輯（欄位本身在 `GeoFix` 保留，僅管線不再消費，符合 SPEC 修訂五）。
-- [ ] **步驟 3**：函式頭註解補上 F4 的結論（都卜勒與位置解算共用衛星幾何，裝置回報速度非獨立證據源），避免日後被重新提議。
-- [ ] **步驟 4**：`flutter test test/domain/location/pipeline/quality_gate_test.dart` 全綠。
+- [x] **步驟 3**：函式頭註解補上 F4 的結論（都卜勒與位置解算共用衛星幾何，裝置回報速度非獨立證據源），避免日後被重新提議。
+- [x] **步驟 4**：`flutter test test/domain/location/pipeline/quality_gate_test.dart` 全綠。
 
 ---
 
@@ -157,9 +159,9 @@ T21+T22+T24+T25+T26+T27 全部完成 ──> T29 真機驗收
 **現狀**：`lib/data/location/geolocator_location_source.dart` 尚未檢視此欄位是否已宣告；SPEC 新增「Android 另設平台層更新間隔 1 秒」。
 
 **步驟**：
-- [ ] **步驟 1**：確認 `geolocator` 套件的 `AndroidSettings`（或對應設定類別）是否有 `intervalDuration` 參數；若目前 `LocationSettings` 建構未指定，新增 `intervalDuration: const Duration(seconds: 1)`（僅 Android 分支；iOS 的 `AppleSettings` 無此參數，維持原樣）。
-- [ ] **步驟 2**：因涉及平台 API，本檔案屬 `data/` 層，NFR-1 不要求無真機可測；改為在建構參數層寫一條單元測試斷言傳入 `LocationSettings` 的物件確實帶有該值（用可注入的 settings 建構函式或 fake 驗證参数，不必啟動真實定位）。
-- [ ] **步驟 3**：`flutter analyze` 0 issue。真機驗收併入 T29。
+- [x] **步驟 1**：確認 `geolocator` 套件的 `AndroidSettings`（或對應設定類別）是否有 `intervalDuration` 參數；若目前 `LocationSettings` 建構未指定，新增 `intervalDuration: const Duration(seconds: 1)`（僅 Android 分支；iOS 的 `AppleSettings` 無此參數，維持原樣）。
+- [x] **步驟 2**：因涉及平台 API，本檔案屬 `data/` 層，NFR-1 不要求無真機可測；改為在建構參數層寫一條單元測試斷言傳入 `LocationSettings` 的物件確實帶有該值（用可注入的 settings 建構函式或 fake 驗證参数，不必啟動真實定位）。
+- [x] **步驟 3**：`flutter analyze` 0 issue。真機驗收併入 T29。
 
 ---
 
@@ -177,13 +179,13 @@ T21+T22+T24+T25+T26+T27 全部完成 ──> T29 真機驗收
 5. `NFR-5` 的 dispose 路徑須呼叫 `disable()`。
 
 **步驟**：
-- [ ] **步驟 1（RED）**：`test/domain/location/keep_awake_test.dart`，逐條覆蓋 AC-16.1~16.7（純函式測試，無需平台）。
-- [ ] **步驟 2**：實作 `keep_awake.dart`，接上 `LocationController` 的衍生 getter。
-- [ ] **步驟 3**：`flutter pub add wakelock_plus`；實作 `wakelock_control.dart`，接線層（`main.dart` 或 providers）訂閱 `keepAwakeActive` 變化並呼叫。
-- [ ] **步驟 4**：`LocationDiagnostics` 新增 `keepAwakeActive` 欄位（`models/location_status.dart:77-91`，衍生值，非持久狀態）。**本步驟與 T21 步驟 3 動同一個 `@freezed` 類別，不得真的併行——由後完成的一方一次補齊兩個欄位。** 改欄位後先跑 `dart run build_runner build --delete-conflicting-outputs`，再 `flutter analyze`。
-- [ ] **步驟 5**：`NFR-5` 覆核：dispose 測試斷言 `wakelock_control` 呼叫過 `disable()`（用 fake 計數）。
-- [ ] **步驟 6**：真機設定 UI（開關本功能）屬 `game/`／`ui/` 層，煙霧測試即可，不追求覆蓋率（依 CLAUDE.md §2 分層測試策略）。
-- [ ] **步驟 7**：`flutter test` 全綠、`flutter analyze` 0 issue。
+- [x] **步驟 1（RED）**：`test/domain/location/keep_awake_test.dart`，逐條覆蓋 AC-16.1~16.7（純函式測試，無需平台）。
+- [x] **步驟 2**：實作 `keep_awake.dart`，接上 `LocationController` 的衍生 getter。
+- [x] **步驟 3**：`flutter pub add wakelock_plus`；實作 `wakelock_control.dart`，接線層（`main.dart` 或 providers）訂閱 `keepAwakeActive` 變化並呼叫。
+- [x] **步驟 4**：`LocationDiagnostics` 新增 `keepAwakeActive` 欄位（`models/location_status.dart:77-91`，衍生值，非持久狀態）。**本步驟與 T21 步驟 3 動同一個 `@freezed` 類別，不得真的併行——由後完成的一方一次補齊兩個欄位。** 改欄位後先跑 `dart run build_runner build --delete-conflicting-outputs`，再 `flutter analyze`。
+- [x] **步驟 5**：`NFR-5` 覆核：dispose 測試斷言 `wakelock_control` 呼叫過 `disable()`（用 fake 計數）。
+- [x] **步驟 6**：真機設定 UI（開關本功能）屬 `game/`／`ui/` 層，煙霧測試即可，不追求覆蓋率（依 CLAUDE.md §2 分層測試策略）。
+- [x] **步驟 7**：`flutter test` 全綠、`flutter analyze` 0 issue。
 
 ---
 
@@ -196,8 +198,8 @@ T21+T22+T24+T25+T26+T27 全部完成 ──> T29 真機驗收
 **工程師覆核已實地確認（非計劃推測）**：`lib/state/location/location_providers.dart:193` 的 `onAppForeground()` 已經呼叫 `_controller.markDiscontinuity(RelocationNote.backgroundResume)`，接線並非空缺；`location_controller.dart:245-250` 的 `ingest()` 對 `out.events` 一律 `_log.addAll`，不分 `RelocationCause`／`RelocationNote`，證實無過濾。**因此本任務只需補測試，步驟 2 原本的「若紅燈…」備案分支用不到，已移除。**
 
 **步驟**：
-- [ ] **步驟 1（RED）**：`test/state/location/location_controller_test.dart` 新增 AC-7.8：模擬 `markDiscontinuity` 後產生的 `RelocationEvent`（`note` 為 `backgroundResume` 等），斷言可從 `controller.events` 篩出，且不依賴任何任務 A 專屬型別或介面。
-- [ ] **步驟 2**：`flutter test` 全綠（預期本測試直接綠燈，因為接線已存在——寫這條測試的目的是把既有正確行為釘成回歸保護，不是修一個缺陷）。
+- [x] **步驟 1（RED）**：`test/state/location/location_controller_test.dart` 新增 AC-7.8：模擬 `markDiscontinuity` 後產生的 `RelocationEvent`（`note` 為 `backgroundResume` 等），斷言可從 `controller.events` 篩出，且不依賴任何任務 A 專屬型別或介面。
+- [x] **步驟 2**：`flutter test` 全綠（預期本測試直接綠燈，因為接線已存在——寫這條測試的目的是把既有正確行為釘成回歸保護，不是修一個缺陷）。
 
 ---
 
@@ -206,8 +208,8 @@ T21+T22+T24+T25+T26+T27 全部完成 ──> T29 真機驗收
 **現狀**：`test/domain/location/pipeline/significance_gate_test.dart:36-48` 的測試邏輯**已經是正確行為**（0-based 迴圈 `i=3` 對應第 4 筆 Fix，得到 36 m、觸發 1 次），只是**標題與內文用了「恰有第 3 筆」**，與 SPEC v6 改寫後的「恰有第 4 筆」不一致（純標籤問題，非邏輯錯誤——原 SPEC v5.1 的敘述本身有 off-by-one，程式碼從未依照錯誤敘述實作）。
 
 **步驟**：
-- [ ] 將測試標題改為 `'AC-3.9 基準凍結：恰有第 4 筆顯著，累計 36m'`，內文註解同步改為「12 否、24 否、36 是（基準移到 36）、48 距新基準 12 否、60 距 24 否」對應「第 2、3 筆未達門檻，第 4 筆顯著，第 5 筆未達新門檻」的敘述。
-- [ ] `flutter test test/domain/location/pipeline/significance_gate_test.dart` 確認仍綠（純文字變更，行為不變）。
+- [x] 將測試標題改為 `'AC-3.9 基準凍結：恰有第 4 筆顯著，累計 36m'`，內文註解同步改為「12 否、24 否、36 是（基準移到 36）、48 距新基準 12 否、60 距 24 否」對應「第 2、3 筆未達門檻，第 4 筆顯著，第 5 筆未達新門檻」的敘述。
+- [x] `flutter test test/domain/location/pipeline/significance_gate_test.dart` 確認仍綠（純文字變更，行為不變）。
 
 ---
 

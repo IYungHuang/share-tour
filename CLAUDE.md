@@ -117,8 +117,13 @@ spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
 | 檔案 | 用途 |
 |---|---|
 | `ARCHITECTURE_BRIEF.md` | 使用者提供的專案目標與任務書 |
-| `CROSS_CUTTING_CONSTRAINTS.md` | 拘束 A/B/C 全部子系統的決策（**優先於各子系統 SPEC**） |
-| `SPEC_C_GPS_TRACKING.md` | 任務 C 規格 |
+| `CROSS_CUTTING_CONSTRAINTS.md` | 拘束 A/B/C 全部子系統的決策（**優先於各子系統 SPEC**），目前 v3 |
+| `SPEC_C_GPS_TRACKING.md` | 任務 C 規格，目前 v6（已併入下列增修草案全部內容） |
+| `SPEC_C_AMENDMENT_01.md` | 任務 C 實地測試後的增修草案。**已併入 `SPEC_C_GPS_TRACKING.md` v6，狀態為歷史紀錄**，僅供查閱實測證據（F1~F9）與三方覆核的收斂過程，不再是待審文件 |
+| `PLAN_C_GPS_TRACKING.md` | 任務 C 的原始施工計劃（T1~T20），**已於真機驗證中執行完畢** |
+| `PLAN_C_AMENDMENT_01.md` | SPEC v6 相對 v5.1 增量的實作計劃（T21~T29），目前的待執行清單 |
+| `HANDOFF.md` | 交接紀錄，跨對話的進度快照，會隨每次交接改寫 |
+| `TASK_D_LOCAL_TIER_PROPOSAL.md` | 任務 D（地方層地圖）提案 |
 | `ARCHITECTURE_DESIGN.md` | 早期設計文件，**參考素材，非權威** |
 
 子系統 SPEC 若與 `CROSS_CUTTING_CONSTRAINTS.md` 牴觸，以後者為準並回報。
