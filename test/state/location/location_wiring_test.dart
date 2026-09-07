@@ -152,7 +152,7 @@ void main() {
     source.emit(at(metersNorth: 0));
     await pump();
     await clock.advanceAsync(const Duration(seconds: 2));
-    source.emit(at(metersNorth: 200, second: 2));
+    source.emit(at(metersNorth: 150, second: 2));
     await pump();
     await clock.advanceAsync(const Duration(seconds: 10));
 
@@ -178,7 +178,7 @@ void main() {
     await pump();
     // 節流窗長 1 秒：不推進時鐘的話第二筆會被當成窗內的 trailing 壓住。
     await clock.advanceAsync(const Duration(seconds: 2));
-    source.emit(at(metersNorth: 200, second: 2));
+    source.emit(at(metersNorth: 150, second: 2));
     await pump();
     final before = n.controller.state.realDistanceMeters;
     expect(before, greaterThan(0), reason: '前置條件：正常里程有在累計');

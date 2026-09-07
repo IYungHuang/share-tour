@@ -55,17 +55,16 @@ void main() {
     expect((r as Rejected).reason, RejectionReason.speed);
   });
 
-  test('min() 的後果：裝置回報低速時，大跨距不被速度規則丟棄', () {
-    // 規格 REQ-C-03 規則 5 明訂取兩者較小值，理由是裝置的多普勒速度在短
-    // 間隔下比兩點差分可靠。代價是：兩者必須【都】超標才會丟棄，
-    // 所以「跳了一公里但裝置說我在走路」會通過這道閘門。
-    //
-    // 這條測試把該取捨釘成可見的行為，而不是留給日後的人意外發現。
-    // 真正擋住這種情形的是顯著位移閘門之後的大跨距偵測（REQ-C-07）。
+  test('修訂五：裝置回報低速不再豁免速度閘門（F4，不再取 min）', () {
+    // 都卜勒解算與位置解算共用同一組衛星幾何，裝置回報速度不是獨立證據源
+    // （實測：手機靜止時裝置回報速度中位數 1.85 m/s、最大 14.08 m/s）。
+    // 取小值只會讓速度閘門更難丟棄——一個亂報低速的裝置可以整條關掉
+    // 350 km/h 閘門。改為僅用兩點差分後，「跳了一公里但裝置說我在走路」
+    // 必須被丟棄。
     final g = gate();
     g.evaluate(f(secondsFromEpoch: 0));
     final r = g.evaluate(f(lat: 25.009, speed: 1.4, secondsFromEpoch: 1));
-    expect(r, isA<Accepted>());
+    expect((r as Rejected).reason, RejectionReason.speed);
   });
 
   test('AC-3.4 時戳回捲丟棄', () {
@@ -106,21 +105,6 @@ void main() {
     final r = g.evaluate(f(secondsFromEpoch: -2 * 86400));
     expect(r, isA<Accepted>(),
         reason: '時鐘被調整時應重置基準，否則後續全被單調性規則丟棄');
-  });
-
-  test('AC-3.10 裝置 speed 已量測時取較小值', () {
-    final g = gate();
-    g.evaluate(f(secondsFromEpoch: 0));
-    final r = g.evaluate(f(lat: 25.0027, speed: 2, secondsFromEpoch: 1));
-    expect(r, isA<Accepted>());
-  });
-
-  test('AC-3.11 裝置 speed 未量測時只用兩點差分', () {
-    final g = gate();
-    g.evaluate(f(secondsFromEpoch: 0));
-    final r = g.evaluate(
-        f(lat: 25.009, speed: 0, hasSpeed: false, secondsFromEpoch: 1));
-    expect(r, isA<Rejected>(), reason: '佔位 0.0 不得讓速度閘門失效');
   });
 
   test('規則 9：首筆不受速度規則約束', () {

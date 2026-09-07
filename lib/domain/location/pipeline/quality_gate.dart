@@ -74,17 +74,15 @@ class QualityGate {
     return _accept(fix);
   }
 
+  // 推算速度僅用兩點差分（修訂五，SPEC v6）。都卜勒解算與位置解算共用同一組
+  // 衛星幾何，裝置回報速度不是獨立證據源：實測手機靜止時裝置回報速度中位數
+  // 1.85 m/s、最大 14.08 m/s（F4）。取小值只會讓速度閘門更難丟棄——一個亂報
+  // 低速的裝置可以整條關掉 350 km/h 閘門。`hasSpeed`/`hasSpeedAccuracy` 欄位
+  // 保留於 GeoFix（診斷用），此處不再消費。
   bool _exceedsSpeedLimit(GeoFix baseline, GeoFix fix, Duration delta) {
     final meters = haversineMeters(
         baseline.latitude, baseline.longitude, fix.latitude, fix.longitude);
-    final derived = meters / (delta.inMicroseconds / 1e6);
-
-    // 裝置回報的速度由多普勒推導，短間隔時通常比兩點差分可靠，故取較小值。
-    // 但只在確實量測時採用：未量測的 0.0 會把最小值永遠釘在零，等於關掉閘門。
-    final speed = (fix.hasSpeed && fix.hasSpeedAccuracy)
-        ? (derived < fix.speedMetersPerSecond ? derived : fix.speedMetersPerSecond)
-        : derived;
-
+    final speed = meters / (delta.inMicroseconds / 1e6);
     return speed > maxSpeedMetersPerSecond;
   }
 
