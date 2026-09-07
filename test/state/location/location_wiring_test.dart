@@ -11,6 +11,7 @@ import '../../fakes/fake_clock.dart';
 import '../../fakes/fake_location_source.dart';
 import '../../fakes/fake_map_manifest.dart';
 import '../../fakes/fake_permission_gateway.dart';
+import '../../fakes/fake_wakelock_control.dart';
 
 /// 接線層的測試。
 ///
@@ -42,6 +43,7 @@ void main() {
   late FakeMapManifest manifest;
   late FakeLocationSource source;
   late FakePermissionGateway gateway;
+  late FakeWakelockControl wakelock;
   late ProviderContainer container;
 
   setUp(() {
@@ -49,12 +51,14 @@ void main() {
     manifest = FakeMapManifest.linear();
     source = FakeLocationSource();
     gateway = FakePermissionGateway();
+    wakelock = FakeWakelockControl();
     container = ProviderContainer(overrides: [
       clockProvider.overrideWithValue(clock as Clock),
       mapManifestProvider.overrideWithValue(manifest as OverworldMapManifest),
       realSourceProvider.overrideWithValue(source as LocationSource),
       permissionGatewayProvider
           .overrideWithValue(gateway as LocationPermissionGateway),
+      wakelockControlProvider.overrideWithValue(wakelock),
     ]);
   });
 
@@ -223,4 +227,39 @@ void main() {
     expect(n.controller.state.status.mode, SourceMode.virtual);
   });
 
+  test('REQ-C-16：keepAwakeActive 變化驅動喚醒鎖開關', () async {
+    final n = await gpsMode();
+    await pump();
+    expect(wakelock.enableCount, 1,
+        reason: 'requestGpsMode 後 keepAwakeActive 由假變真');
+    expect(wakelock.disableCount, 0);
+
+    n.onAppBackground();
+    await pump();
+    expect(wakelock.disableCount, 1, reason: '進背景後 keepAwakeActive 變假');
+  });
+
+  test('AC-16.7 dispose 後喚醒鎖被釋放', () async {
+    await gpsMode();
+    await pump();
+    expect(wakelock.enableCount, 1);
+
+    container.dispose();
+
+    expect(wakelock.disableCount, greaterThanOrEqualTo(1),
+        reason: 'NFR-5：外部副作用（含喚醒抑制）須隨 dispose 完全釋放');
+  });
+
+  test('REQ-C-16：onAppBackground／onAppForeground 接線 isForeground', () async {
+    final n = await gpsMode();
+    expect(n.controller.state.diagnostics.keepAwakeActive, isTrue);
+
+    n.onAppBackground();
+    expect(n.controller.isForeground, isFalse);
+    expect(n.controller.state.diagnostics.keepAwakeActive, isFalse);
+
+    await n.onAppForeground();
+    expect(n.controller.isForeground, isTrue);
+    expect(n.controller.state.diagnostics.keepAwakeActive, isTrue);
+  });
 }

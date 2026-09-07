@@ -11,6 +11,7 @@ import '../../data/location/location_permission_gateway.dart';
 import '../../data/location/location_source.dart';
 import '../../data/location/virtual_location_source.dart';
 import '../../data/location/location_subscription_manager.dart';
+import '../../data/location/wakelock_control.dart';
 import '../../domain/location/pipeline/fix_throttle.dart';
 import '../../domain/location/pipeline/permission_resolver.dart';
 import '../../domain/location/pipeline/relocation_detector.dart';
@@ -88,6 +89,10 @@ final fixThrottleProvider = Provider<FixThrottle>((ref) {
   return throttle;
 });
 
+/// 螢幕喚醒鎖（REQ-C-16）。不是抽象——見 WakelockControl 的文件註解。
+final wakelockControlProvider =
+    Provider<WakelockControl>((_) => WakelockControl());
+
 final locationControllerProvider =
     NotifierProvider<LocationNotifier, LocationControllerState>(
         LocationNotifier.new);
@@ -123,10 +128,24 @@ class LocationNotifier extends Notifier<LocationControllerState> {
     _subscriptions = ref.watch(subscriptionManagerProvider);
     _throttle = ref.watch(fixThrottleProvider);
     _resolver = ref.watch(permissionResolverProvider);
+    final wakelock = ref.watch(wakelockControlProvider);
+
+    // REQ-C-16 規則 6：keepAwakeActive 的值變化驅動喚醒鎖的開關。用
+    // listenSelf 而非在每個寫 state 的地方各自呼叫一次，才不會有遺漏。
+    listenSelf((previous, next) {
+      final was = previous?.diagnostics.keepAwakeActive ?? false;
+      final now = next.diagnostics.keepAwakeActive;
+      if (now == was) return;
+      unawaited(now ? wakelock.enable() : wakelock.disable());
+    });
+
     ref.onDispose(() {
       _sourceSub?.cancel();
       _ingestSub?.cancel();
       _permissionSub?.cancel();
+      // NFR-5：外部副作用（含喚醒抑制）必須隨 dispose 完全釋放，否則玩家
+      // 手機不再自動熄屏，且無從得知原因。
+      unawaited(wakelock.disable());
     });
 
     // 服務開關與精度劣化都會從這條串流推過來（REQ-C-01 規則 4、規則 7）。
@@ -180,12 +199,14 @@ class LocationNotifier extends Notifier<LocationControllerState> {
 
   /// app 進入背景。取消訂閱與否由訂閱管理器的寬限期決定，不在這裡判斷。
   void onAppBackground() {
+    _controller.isForeground = false;
     _subscriptions.onBackground();
     // 寬限期到期是非同步的，屆時沒有人會再讀 state；改由下一次狀態同步帶出。
     _refreshLater();
   }
 
   Future<void> onAppForeground() async {
+    _controller.isForeground = true;
     final resubscribed = await _subscriptions.onForeground();
     if (resubscribed) {
       // 訂閱斷過的期間沒有任何 Fix。那段位移無從得知是走的還是搭車的，

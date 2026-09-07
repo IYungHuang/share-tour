@@ -4,6 +4,7 @@ import 'package:vector_math/vector_math.dart';
 
 import '../../core/build_flags.dart';
 import '../../core/time/clock.dart';
+import '../../domain/location/keep_awake.dart';
 import '../../domain/location/models/geo_fix.dart';
 import '../../domain/location/models/location_status.dart';
 import '../../domain/location/models/movement_event.dart';
@@ -95,6 +96,15 @@ class LocationController {
   int subscriptionCount = 0;
   PowerMode powerMode = PowerMode.active;
 
+  /// app 是否在前景，由接線層寫入（比照 subscriptionCount／powerMode）。
+  bool isForeground = true;
+
+  /// REQ-C-16 規則 5：可關閉本功能，預設開啟。第一版不跨進程持久化
+  /// （Q26），重啟後一律回到 true。
+  bool _keepAwakeFeatureEnabled = true;
+  void setKeepAwakeFeatureEnabled(bool value) =>
+      _keepAwakeFeatureEnabled = value;
+
   BuildFlags get flags => _flags;
   List<MovementEvent> get events => List.unmodifiable(_log);
   OverworldMapManifest get activeManifest => _manifest;
@@ -150,6 +160,12 @@ class LocationController {
         secondsSinceLastSignificantMove:
             _pipeline.secondsSinceLastSignificantMove,
         accuracyGatedFixCount: _accuracyGatedFixCount,
+        keepAwakeActive: shouldKeepAwake(
+          mode: _status.mode,
+          permission: _status.permission,
+          isForeground: isForeground,
+          featureEnabled: _keepAwakeFeatureEnabled,
+        ),
       ),
       renderedPixel: _smoother.rendered,
       targetPixel: _targetPixel,

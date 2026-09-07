@@ -110,6 +110,53 @@ void main() {
             '不是規則 2 的品質閘門丟棄');
   });
 
+  // REQ-C-16：keepAwakeActive 是五維度狀態 + isForeground + featureEnabled
+  // 的衍生值，不落地成獨立欄位；由接線層寫入 isForeground（比照
+  // subscriptionCount／powerMode 的既有模式）。
+  group('REQ-C-16 keepAwakeActive', () {
+    test('AC-16.1 gps + ready + 前景 + 功能開啟 → 為真', () {
+      final c = make();
+      expect(c.state.diagnostics.keepAwakeActive, isTrue);
+    });
+
+    test('AC-16.2 mode=virtual → 為假', () {
+      final c = make();
+      c.switchMode(SourceMode.virtual, automatic: false);
+      expect(c.state.diagnostics.keepAwakeActive, isFalse);
+    });
+
+    test('AC-16.3 permission 離開 ready → 為假', () {
+      final c = make();
+      c.onPermissionChanged(PermissionState.approximate);
+      expect(c.state.diagnostics.keepAwakeActive, isFalse);
+    });
+
+    test('AC-16.4 背景 → 為假；回到前景 → 為真', () {
+      final c = make();
+      c.isForeground = false;
+      expect(c.state.diagnostics.keepAwakeActive, isFalse);
+      c.isForeground = true;
+      expect(c.state.diagnostics.keepAwakeActive, isTrue);
+    });
+
+    test('AC-16.5 powerMode 變 suspended（Mini-game）而其餘條件不變 → 維持為真',
+        () {
+      final c = make();
+      c.powerMode = PowerMode.suspended;
+      expect(c.state.diagnostics.keepAwakeActive, isTrue,
+          reason: 'keepAwakeActive 的述詞不吃 powerMode，Mini-game 期間'
+              '玩家仍全程注視螢幕，不該被錯誤釋放');
+    });
+
+    test('AC-16.6 玩家關閉本功能 → 為假，其餘狀態不受影響', () {
+      final c = make();
+      c.setKeepAwakeFeatureEnabled(false);
+      expect(c.state.diagnostics.keepAwakeActive, isFalse);
+      expect(c.state.status.mode, SourceMode.gps);
+      expect(c.state.status.permission, PermissionState.ready);
+    });
+  });
+
   test('AC-12.1 持久化 DTO 的序列化結果不含座標鍵', () {
     final json = LocationSnapshotDto(
       renderedPixelX: 100,

@@ -85,6 +85,7 @@ abstract class LocationDiagnostics with _$LocationDiagnostics {
     required double virtualDistanceMeters,
     required int secondsSinceLastSignificantMove,
     required int accuracyGatedFixCount,
+    required bool keepAwakeActive,
   }) = _LocationDiagnostics;
 
   factory LocationDiagnostics.fromJson(Map<String, dynamic> json) =>
