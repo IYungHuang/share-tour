@@ -68,10 +68,8 @@ class FakeMapManifest implements OverworldMapManifest {
   double get _maxLng => geoMinLng + 2.0;
 
   int projectCallCount = 0;
-  int snapCallCount = 0;
   void resetCallCounts() {
     projectCallCount = 0;
-    snapCallCount = 0;
   }
 
   @override
@@ -86,15 +84,8 @@ class FakeMapManifest implements OverworldMapManifest {
   Vector2 get defaultSpawnPixel => Vector2(10, 10);
   @override
   double get dpadSpeedPixelsPerSecond => 40;
-  @override
-  double get snapLimitMeters => 50;
 
-  /// 單一水平線段 y=100，x 由 0 到 200。
-  @override
-  List<Vector2> get roadNodes =>
-      [_origin + Vector2(0, 100), _origin + Vector2(200, 100)];
-
-  /// 兩個 POI，間距 150 px，遠大於觸發半徑 50m + 吸附上限 50m。
+  /// 兩個 POI，間距 150 px，遠大於觸發半徑總和。
   @override
   List<PoiMarker> get poiNodes => [
         PoiMarker(
@@ -124,18 +115,6 @@ class FakeMapManifest implements OverworldMapManifest {
     final local = pixel - _origin;
     return GeoPoint(_maxLat - local.y / pixelsPerDegree,
         geoMinLng + local.x / pixelsPerDegree);
-  }
-
-  /// 垂直投影到 y=100 的水平線段；超過上限則不吸附。
-  @override
-  Vector2 snapToRoad(Vector2 pixel) {
-    snapCallCount++;
-    final limitPixels = snapLimitMeters / metersPerPixelAt(pixel);
-    final roadY = _origin.y + 100;
-    final dy = (pixel.y - roadY).abs();
-    final withinX = pixel.x >= _origin.x && pixel.x <= _origin.x + 200;
-    if (!withinX || dy > limitPixels) return pixel;
-    return Vector2(pixel.x, roadY);
   }
 
   @override

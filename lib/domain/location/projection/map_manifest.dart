@@ -44,16 +44,13 @@ abstract class OverworldMapManifest {
   /// 才移動一個像素。速度屬於圖層的尺度，故由圖層宣告。
   double get dpadSpeedPixelsPerSecond;
 
-  /// 道路吸附的距離上限，以公尺表達。
-  double get snapLimitMeters;
-
-  List<Vector2> get roadNodes;
   List<PoiMarker> get poiNodes;
 
+  /// 地理範圍判定，由模組宣告的分類遮罩實作（修訂四，v6）。方向鍵驅動的
+  /// 虛擬 Fix 與真實 GPS 的 Fix 共用同一條判定路徑，不得分歧。
   bool containsGeo(double lat, double lng);
   Vector2 projectToPixel(double lat, double lng);
   GeoPoint unprojectToGeo(Vector2 pixel);
-  Vector2 snapToRoad(Vector2 pixel);
 
   /// 該像素處的公尺/像素比例。非線性地圖上隨位置變化，故需帶位置查詢。
   double metersPerPixelAt(Vector2 pixel);

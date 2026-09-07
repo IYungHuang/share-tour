@@ -56,8 +56,13 @@ void expectNoDeadZones(
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('台灣圖資', () {
-    final m = TaiwanMapManifest();
+    late TaiwanMapManifest m;
+
+    setUpAll(() async {
+      m = await TaiwanMapManifest.load();
+    });
 
     test('每個控制點附近都沒有死區', () {
       expectNoDeadZones(

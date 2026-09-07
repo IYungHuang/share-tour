@@ -49,6 +49,31 @@ void main() {
         reason: 'IDW 對範圍外輸入不報錯，只回傳凸包內看似合理的錯點');
   });
 
+  test('AC-4.8 方向鍵與真實 GPS 在同一座標上得到相同的範圍判定', () {
+    // ProjectionStage 本身不分辨 sourceMode，兩者天生走同一段判定——這條
+    // 測試把「不得分歧」釘成可回歸的斷言。首筆 Fix 只建立基準、不會走到
+    // 範圍檢查，故先各自餵一筆範圍內基準，第二筆才是真正測試的目標。
+    final gpsPipeline = LocationPipeline(manifest: manifest, clock: FakeClock());
+    final virtualPipeline =
+        LocationPipeline(manifest: manifest, clock: FakeClock());
+
+    gpsPipeline.ingest(at(metersNorth: 0));
+    virtualPipeline.ingest(at(metersNorth: 0, mode: SourceMode.virtual));
+    manifest.resetCallCounts();
+
+    final gpsOut = gpsPipeline
+        .ingest(at(metersNorth: 0, baseLat: 80.0, lng: 0.0, second: 1));
+    final virtualOut = virtualPipeline.ingest(at(
+        metersNorth: 0,
+        baseLat: 80.0,
+        lng: 0.0,
+        second: 1,
+        mode: SourceMode.virtual));
+
+    expect(gpsOut.targetPixel, isNull, reason: '範圍外，gps 不更新目標點');
+    expect(virtualOut.targetPixel, isNull, reason: '範圍外，virtual 亦同');
+  });
+
   test('AC-0.3 未顯著移動者不進入後續步驟', () {
     pipeline.ingest(at(metersNorth: 0));
     manifest.resetCallCounts();

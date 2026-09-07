@@ -9,12 +9,15 @@ import 'game/map_module/manifests/taiwan_map_manifest.dart';
 import 'game/universal_overworld_game.dart';
 import 'state/location/location_providers.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // 分類遮罩的解碼是非同步的（讀圖檔），故圖資載入本身也非同步——
+  // 在此等待完成，之後 containsGeo 是常數時間的陣列查詢。
+  final manifest = await TaiwanMapManifest.load();
   runApp(
     ProviderScope(
       // 圖資在此注入。通用引擎與畫面都不知道自己跑的是哪座城市。
-      overrides: [mapManifestProvider.overrideWithValue(TaiwanMapManifest())],
+      overrides: [mapManifestProvider.overrideWithValue(manifest)],
       child: const MaterialApp(
         debugShowCheckedModeBanner: false,
         home: OverworldScaffold(),

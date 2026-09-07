@@ -3,7 +3,7 @@ import 'package:vector_math/vector_math.dart';
 import '../../../domain/location/projection/control_mesh.dart';
 import '../../../domain/location/projection/map_manifest.dart';
 import '../models/geo_anchor.dart';
-import '../utils/taiwan_geo_calibrator.dart';
+import 'classification_mask.dart';
 
 /// 台灣圖資模組。
 ///
@@ -11,6 +11,21 @@ import '../utils/taiwan_geo_calibrator.dart';
 /// 為常數。最終手繪圖會重新引入非線性誇張，屆時錨點需重新量測，而
 /// metersPerPixelAt 必須改為逐點計算。
 class TaiwanMapManifest implements OverworldMapManifest {
+  TaiwanMapManifest._(this._mask);
+
+  /// 遮罩解析度 256×144，主圖層 2048×1152：scale = 8。
+  /// 圖檔載入是非同步的（解碼 PNG），故建構本身也是非同步——完成後
+  /// containsGeo 是常數時間的陣列查詢，不會在管線每次呼叫時重新解碼。
+  static Future<TaiwanMapManifest> load() async {
+    final mask = await ClassificationMask.loadFromAsset(
+      'assets/maps/taiwan/mask.png',
+      scale: 8,
+    );
+    return TaiwanMapManifest._(mask);
+  }
+
+  final ClassificationMask _mask;
+
   @override
   String get mapId => 'taiwan_overworld';
 
@@ -35,9 +50,6 @@ class TaiwanMapManifest implements OverworldMapManifest {
   /// 才移動一個像素，台北到高雄需連續操作近六小時。
   @override
   double get dpadSpeedPixelsPerSecond => 40;
-
-  @override
-  double get snapLimitMeters => 50;
 
   /// 過渡底圖為等距投影，故為常數；最終手繪圖需改為逐點計算。
   @override
@@ -138,53 +150,14 @@ class TaiwanMapManifest implements OverworldMapManifest {
         PoiMarker(id: 'peak_beidawu', pixel: Vector2(941, 866), triggerRadiusMeters: 50),
       ];
 
-  @override
-  List<Vector2> get roadNodes => [
-        // 西部公路路廊
-        Vector2(1207, 127),
-        Vector2(1160, 147),
-        Vector2(1144, 148),
-        Vector2(1064, 167),
-        Vector2(1007, 217),
-        Vector2(960, 297),
-        Vector2(942, 343),
-        Vector2(930, 382),
-        Vector2(908, 407),
-        Vector2(882, 448),
-        Vector2(860, 515),
-        Vector2(853, 603),
-        Vector2(800, 746),
-        Vector2(818, 870),
-        Vector2(867, 854),
-        Vector2(882, 889),
-        Vector2(912, 943),
-        Vector2(931, 979),
-        Vector2(931, 1033),
-        Vector2(938, 1054),
-        // 日月潭聯絡道
-        Vector2(923, 463),
-        Vector2(967, 461),
-        Vector2(998, 467),
-        Vector2(990, 487),
-        Vector2(984, 496),
-        // 高鐵專屬鐵路廊道
-        Vector2(1174, 143),
-        Vector2(1149, 145),
-        Vector2(1134, 155),
-        Vector2(1066, 155),
-        Vector2(1019, 216),
-        Vector2(960, 277),
-        Vector2(903, 424),
-        Vector2(891, 495),
-        Vector2(851, 536),
-        Vector2(822, 619),
-        Vector2(812, 778),
-        Vector2(818, 850),
-      ];
-
+  /// 地理範圍判定改由分類遮罩查詢（修訂四，v6），取代先前的矩形框
+  /// （`lat ∈ [21.4, 25.7]`、`lng ∈ [119.7, 122.3]`——台灣海峽、太平洋皆在
+  /// 框內）。查詢用的像素座標來自本模組自己的控制網投影，與 §3.0 管線
+  /// 之後會再次執行的投影步驟相互獨立，不違反「範圍檢查必須在投影之前」
+  /// 的排序契約——那條契約管的是管線的輸出順序，不是本模組內部怎麼求值。
   @override
   bool containsGeo(double lat, double lng) =>
-      lat >= 21.4 && lat <= 25.7 && lng >= 119.7 && lng <= 122.3;
+      _mask.isInside(_mesh.projectToPixel(lat, lng));
 
   @override
   Vector2 projectToPixel(double lat, double lng) =>
@@ -192,11 +165,4 @@ class TaiwanMapManifest implements OverworldMapManifest {
 
   @override
   GeoPoint unprojectToGeo(Vector2 pixel) => _mesh.unprojectToGeo(pixel);
-
-  @override
-  Vector2 snapToRoad(Vector2 pixel) => TaiwanGeoCalibrator.snapToRoad(
-        pixel,
-        roadNodes,
-        threshold: snapLimitMeters / metersPerPixelAt(pixel),
-      );
 }

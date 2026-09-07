@@ -76,18 +76,18 @@ spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
 
 ### 已知違反（待修）
 
-- **PRE-8｜圖資資料**：`TaiwanMapManifest` 的 5 個道路節點中，有 4 個與 POI 座標完全相同（實測間距 0.000 px）。吸附上限 50 公尺，玩家走近景點會被吸到節點上，而節點就是 POI —— 等於自動打卡，任務 A 的遭遇系統一接上就會誤觸發。
-  規則本身的測試是綠的，紅的只有台灣資料組（`test/taiwan_map_manifest_test.dart` 掛 `skip`，理由寫在 skip 訊息裡）。屬**任務 D**，修法是補上真正的路網節點。
+（目前無）
 
 ### 已解除（勿再依此判斷）
 
-以下三條在 2026-09-06 確認皆已清償，程式碼與本節原本的記載不符：
+以下各條已清償，程式碼與本節原本的記載不符：
 
-- 通用引擎已不呼叫 `TaiwanGeoCalibrator`；吸附改由 `TaiwanMapManifest.snapToRoad` 轉呼叫（PRE-3）。
+- 通用引擎已不呼叫 `TaiwanGeoCalibrator`；該類別與其測試已於 SPEC C v6 修訂四隨道路吸附整項刪除（PRE-3，2026-09-06 確認吸附死碼，2026-09-07 執行刪除）。
 - 圖資已由 `main.dart` 的 `ProviderScope.overrides` 注入（PRE-5）。
 - `ProviderScope` 已存在於 `main.dart`，Riverpod 已接線（PRE-1）。
+- **PRE-8｜圖資資料**（原「5 個道路節點中 4 個與 POI 座標完全相同」的吸附誤觸風險）：SPEC C v6 修訂四刪除道路吸附整項能力，`containsGeo` 改為查詢 `assets/maps/taiwan/mask.png` 的分類遮罩（`TaiwanMapManifest.load()`，2026-09-07）。原本要修的洞（矩形框把台灣海峽、太平洋含在範圍內）已隨遮罩接線一併解除；問題成因（道路節點）已不存在，不需要再補路網資料。
 
-契約本體位於 `lib/domain/location/projection/map_manifest.dart`，`lib/game/map_module/overworld_map_manifest.dart` 僅為轉出。介面不含 `dart:ui` 型別（海洋色為 `int oceanColorArgb`），且已提供反投影、有效範圍、降落點、公尺/像素比例、方向鍵速度、POI 與道路節點列舉。**解耦驗收成立**：`FakeMapManifest` 跑得完整套 domain 測試。
+契約本體位於 `lib/domain/location/projection/map_manifest.dart`，`lib/game/map_module/overworld_map_manifest.dart` 僅為轉出。介面不含 `dart:ui` 型別（海洋色為 `int oceanColorArgb`），且已提供反投影、有效範圍（分類遮罩查詢）、降落點、公尺/像素比例、方向鍵速度、POI 節點列舉。**解耦驗收成立**：`FakeMapManifest` 跑得完整套 domain 測試。
 
 ---
 

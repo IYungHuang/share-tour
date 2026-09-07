@@ -133,8 +133,7 @@ class LocationController {
 
     final last = _lastGeo;
     if (last != null && next.containsGeo(last.latitude, last.longitude)) {
-      _smoother.jumpTo(next.snapToRoad(
-          next.projectToPixel(last.latitude, last.longitude)));
+      _smoother.jumpTo(next.projectToPixel(last.latitude, last.longitude));
     } else {
       _smoother.jumpTo(next.defaultSpawnPixel);
     }

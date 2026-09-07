@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vector_math/vector_math.dart';
-import 'package:share_tour/domain/location/pipeline/manifest_geometry_check.dart';
 import 'package:share_tour/game/map_module/manifests/taiwan_map_manifest.dart';
 
 /// 錨點資料的回歸測試。
@@ -9,7 +8,12 @@ import 'package:share_tour/game/map_module/manifests/taiwan_map_manifest.dart';
 /// 錨點若不自洽，投影就會在該區域產生方位錯誤，而這種錯誤
 /// 從演算法看不出來，只能靠對資料本身的約束來擋。
 void main() {
-  final manifest = TaiwanMapManifest();
+  TestWidgetsFlutterBinding.ensureInitialized();
+  late TaiwanMapManifest manifest;
+
+  setUpAll(() async {
+    manifest = await TaiwanMapManifest.load();
+  });
 
   group('錨點資料自洽性', () {
     test('像素 x 隨經度單調遞增', () {
@@ -75,44 +79,16 @@ void main() {
     });
   });
 
-  group('POI 與道路節點', () {
+  // POI 之間的距離約束、道路節點與 POI 的幾何間距檢查，已隨修訂四移至
+  // manifest_geometry_check_test.dart（REQ-C-18，AC-18.3）。
+
+  group('地理範圍判定（修訂四：分類遮罩）', () {
     test('每個 POI 都落在畫布內', () {
       for (final poi in manifest.poiNodes) {
         expect(poi.pixel.x, inInclusiveRange(0, manifest.mapDimensions.x));
         expect(poi.pixel.y, inInclusiveRange(0, manifest.mapDimensions.y));
       }
     });
-
-    test('POI 之間的距離大於觸發半徑總和，避免同時觸發兩個遭遇', () {
-      // 觸發半徑現在以公尺定義，故兩邊都換算成公尺再比較——
-      // 直接拿像素距離跟公尺半徑比，單位不一致，斷言會失去意義。
-      final pois = manifest.poiNodes;
-      final mpp = manifest.metersPerPixelAt(Vector2.zero());
-      for (var i = 0; i < pois.length; i++) {
-        for (var j = i + 1; j < pois.length; j++) {
-          final metersApart = pois[i].pixel.distanceTo(pois[j].pixel) * mpp;
-          expect(
-            metersApart,
-            greaterThan(
-                pois[i].triggerRadiusMeters + pois[j].triggerRadiusMeters),
-            reason: '${pois[i].id} 與 ${pois[j].id} 的觸發範圍重疊',
-          );
-        }
-      }
-    });
-
-    test('AC-4.6 台灣圖資的道路節點與 POI 幾何間距', () {
-      final conflicts = findSnapTriggerConflicts(
-        roadNodes: manifest.roadNodes,
-        pois: manifest.poiNodes,
-        snapLimitMeters: manifest.snapLimitMeters,
-        metersPerPixel: manifest.metersPerPixelAt(Vector2.zero()),
-      );
-      expect(conflicts, isEmpty);
-    },
-        skip: 'PRE-8：5 個道路節點中 4 個與 POI 同座標（實測間距 0.000 px），'
-            '吸附會把玩家從數公里外瞬移到 POI 上並誤觸發遭遇。'
-            '待路網升級為路段拓撲後解除（任務 A／D）。');
 
     test('AC-10.1 反投影往返誤差小於 2 像素', () {
       for (final p in [Vector2(1162, 148), Vector2(909, 408), Vector2(816, 871)]) {
@@ -126,6 +102,14 @@ void main() {
       expect(manifest.containsGeo(25.034, 121.564), isTrue, reason: '台北');
       expect(manifest.containsGeo(21.902, 120.852), isTrue, reason: '鵝鑾鼻');
       expect(manifest.containsGeo(35.011, 135.768), isFalse, reason: '京都');
+    });
+
+    test('舊矩形框（lat 21.4~25.7、lng 119.7~122.3）內的海域現在正確判為範圍外',
+        () {
+      // 修訂四動機：原本的矩形框把台灣海峽、巴士海峽、太平洋全部含在內。
+      // 台灣海峽中點約 (24.0, 119.9)——在舊矩形框內，但在遮罩上是海洋。
+      expect(manifest.containsGeo(24.0, 119.9), isFalse,
+          reason: '台灣海峽中點：矩形框會誤判為範圍內，遮罩正確判為範圍外');
     });
   });
 }
