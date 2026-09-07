@@ -1,32 +1,35 @@
-import 'package:vector_math/vector_math.dart';
-
 import '../projection/map_manifest.dart';
 
-/// 檢查道路節點與 POI 的幾何間距。
+/// 檢查任兩個 POI 之間是否滿足 REQ-C-18 規則 3 的幾何約束：
+/// `d(A, B) > r_A + r_B + positionErrorBound`。
 ///
-/// 吸附把玩家拉到最近的道路上。若道路節點就坐在 POI 上，吸附會把玩家瞬移到
-/// POI 正中央，距離變成 0，於是必然落入觸發半徑——遭遇會從數公里外被觸發。
+/// 推導：玩家於 A 的觸發範圍內任一點（距 A 最遠 r_A），量測點偏離真位置
+/// 最多 positionErrorBound，要求量測點距 B 超過 r_B。本約束為**對稱**式
+/// （含 r_A 與 r_B 兩項），故每對 POI 驗一次即可。它不保證 A 自身觸發得到
+/// （偽陰性方向屬任務 A）。
 ///
-/// 正確的防護條件是這條幾何約束，不是「吸附上限小於觸發半徑」：後者在節點與
-/// POI 同座標時完全擋不住，只給出一種安全的假象。
+/// [positionErrorBound] 必填、無預設值：安全裕度的大小應由誤觸發的代價
+/// 決定，只有任務 A 知道那個代價；本函式不代為裁決。
 ///
-/// 門檻由呼叫端注入，因為觸發半徑的公尺數值屬遊戲設計（任務 A），不在此裁定。
-/// 這讓「規則寫得對不對」與「某份圖資合不合格」成為兩個可分別驗證的問題。
-List<String> findSnapTriggerConflicts({
-  required List<Vector2> roadNodes,
+/// 取代已刪除的 `findSnapTriggerConflicts`（原驗證道路節點與 POI 的間距，
+/// 隨道路吸附整項刪除而失去對象——見 SPEC_C_AMENDMENT_01.md 修訂三）。
+List<String> findPoiProximityConflicts({
   required List<PoiMarker> pois,
-  required double snapLimitMeters,
+  required double positionErrorBound,
   required double metersPerPixel,
 }) {
   final conflicts = <String>[];
-  for (final poi in pois) {
-    final requiredMeters = poi.triggerRadiusMeters + snapLimitMeters;
-    for (var i = 0; i < roadNodes.length; i++) {
-      final metersApart = roadNodes[i].distanceTo(poi.pixel) * metersPerPixel;
+  for (var i = 0; i < pois.length; i++) {
+    for (var j = i + 1; j < pois.length; j++) {
+      final a = pois[i];
+      final b = pois[j];
+      final metersApart = a.pixel.distanceTo(b.pixel) * metersPerPixel;
+      final requiredMeters =
+          a.triggerRadiusMeters + b.triggerRadiusMeters + positionErrorBound;
       if (metersApart <= requiredMeters) {
-        conflicts.add(
-            '道路節點 #$i 距 POI「${poi.id}」僅 ${metersApart.toStringAsFixed(1)} m，'
-            '需大於 ${requiredMeters.toStringAsFixed(1)} m');
+        conflicts.add('POI「${a.id}」與「${b.id}」僅相距 '
+            '${metersApart.toStringAsFixed(1)} m，需大於 '
+            '${requiredMeters.toStringAsFixed(1)} m');
       }
     }
   }
