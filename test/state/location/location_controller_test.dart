@@ -3,7 +3,9 @@ import 'package:share_tour/core/build_flags.dart';
 import 'package:share_tour/domain/location/models/geo_fix.dart';
 import 'package:share_tour/domain/location/models/location_snapshot_dto.dart';
 import 'package:share_tour/domain/location/models/location_status.dart';
+import 'package:share_tour/domain/location/models/movement_event.dart';
 import 'package:share_tour/domain/location/models/rejection_reason.dart';
+import 'package:share_tour/domain/location/pipeline/relocation_detector.dart';
 import 'package:share_tour/state/location/location_controller.dart';
 import '../../fakes/fake_clock.dart';
 import '../../fakes/fake_map_manifest.dart';
@@ -246,4 +248,20 @@ void main() {
         reason: '傳送事件的語意是直接指定顯示點，不是平滑趨近');
   });
 
+  test('AC-7.8 discontinuity 事件可從 controller.events 讀到，'
+      '不依賴任何任務 A 專屬型別或介面（REQ-C-07 規則 6）', () {
+    final c = make();
+    c.switchMode(SourceMode.virtual, automatic: false);
+    c.ingest(at(metersNorth: 0, mode: SourceMode.virtual));
+    c.switchMode(SourceMode.gps, automatic: false);
+    c.ingest(at(metersNorth: 50000, second: 600));
+
+    final discontinuityEvents = c.events
+        .whereType<RelocationEvent>()
+        .where((e) => e.cause == RelocationCause.discontinuity);
+    expect(discontinuityEvents, isNotEmpty,
+        reason: '畫面層須能獨立於任務 A 訂閱到不連續事件，'
+            '否則玩家鎖屏長時間後回來，只有里程沒動而 HUD 顯示正常');
+    expect(discontinuityEvents.single.note, RelocationNote.modeSwitch);
+  });
 }
