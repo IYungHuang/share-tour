@@ -116,4 +116,21 @@ void main() {
     expect(f.hasSpeed, isFalse);
   });
 
+  // --- REQ-C-02 規則 5：Android 平台層更新間隔 ---
+
+  test('Android：平台設定帶 1 秒更新間隔', () {
+    final settings = buildLocationSettings(
+        distanceFilterMeters: 10, isAndroid: true);
+    expect(settings, isA<AndroidSettings>());
+    expect((settings as AndroidSettings).intervalDuration,
+        const Duration(seconds: 1));
+    expect(settings.distanceFilter, 10);
+  });
+
+  test('非 Android：不帶更新間隔參數（iOS CLLocationManager 無此參數）', () {
+    final settings = buildLocationSettings(
+        distanceFilterMeters: 10, isAndroid: false);
+    expect(settings, isNot(isA<AndroidSettings>()));
+    expect(settings.distanceFilter, 10);
+  });
 }

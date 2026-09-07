@@ -33,7 +33,7 @@ void main() {
     expect(d!, closeTo(60, 1));
   });
 
-  test('AC-3.9 基準凍結：恰有第 3 筆顯著，累計 36m', () {
+  test('AC-3.9 基準凍結：恰有第 4 筆顯著，累計 36m', () {
     final g = SignificanceGate(coefficient: 0.75);
     final significant = <double>[];
     for (var i = 0; i <= 5; i++) {
@@ -41,7 +41,8 @@ void main() {
       if (d != null) significant.add(d);
     }
     // 門檻 0.75 * (20+20) = 30m。基準凍結在 0m：
-    //   12 否、24 否、36 是（基準移到 36）、48 距新基準 12 否、60 距 24 否
+    //   第 2、3 筆（12、24）未達門檻，第 4 筆（36）顯著（基準移到 36），
+    //   第 5 筆距新基準 12 未達門檻。
     expect(significant.length, 1,
         reason: '基準前移的實作會得到 0 次；每筆都算的實作會得到 5 次');
     expect(significant.single, closeTo(36, 1));

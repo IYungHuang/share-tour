@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:geolocator/geolocator.dart';
 
@@ -66,6 +67,31 @@ PlatformAccuracy mapPlatformAccuracy(LocationAccuracyStatus s) => switch (s) {
       LocationAccuracyStatus.unknown => PlatformAccuracy.unavailable,
     };
 
+/// 建構平台特定的定位設定（REQ-C-02 規則 5）。
+///
+/// 獨立成函式而非直接寫在 `start()` 內，是為了在無真機的條件下驗證
+/// Android 分支確實帶上了更新間隔——`isAndroid` 由呼叫端傳入而非在此
+/// 讀 `Platform.isAndroid`，讓這條分支邏輯本身可測。
+///
+/// iOS 的 `CLLocationManager` 沒有對應的更新間隔參數，維持原樣使用
+/// 基底的 `LocationSettings`。
+LocationSettings buildLocationSettings({
+  required int distanceFilterMeters,
+  required bool isAndroid,
+}) {
+  if (isAndroid) {
+    return AndroidSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: distanceFilterMeters,
+      intervalDuration: const Duration(seconds: 1),
+    );
+  }
+  return LocationSettings(
+    accuracy: LocationAccuracy.high,
+    distanceFilter: distanceFilterMeters,
+  );
+}
+
 /// 真實 GPS 來源。
 ///
 /// 平台層的距離門檻是主要省電手段：它的語意是「移動未達門檻就不推送」，
@@ -85,9 +111,9 @@ class GeolocatorLocationSource implements LocationSource {
   Future<void> start() async {
     if (_sub != null) return;
     _sub = Geolocator.getPositionStream(
-      locationSettings: LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: distanceFilterMeters,
+      locationSettings: buildLocationSettings(
+        distanceFilterMeters: distanceFilterMeters,
+        isAndroid: Platform.isAndroid,
       ),
     ).listen((p) {
       if (!_controller.isClosed) _controller.add(geoFixFromPosition(p));
