@@ -1,9 +1,11 @@
 import 'package:vector_math/vector_math.dart';
 
+import '../../../domain/location/models/district_attraction.dart';
 import '../../../domain/location/projection/control_mesh.dart';
 import '../../../domain/location/projection/map_manifest.dart';
 import '../models/geo_anchor.dart';
 import 'classification_mask.dart';
+import 'taiwan_attractions_catalog.dart';
 
 /// 台灣圖資模組。
 ///
@@ -81,6 +83,14 @@ class TaiwanMapManifest implements OverworldMapManifest {
     ],
     triangles: _triangles,
   );
+
+  @override
+  late final List<AdministrativeDistrict> administrativeDistricts =
+      buildTaiwanAdministrativeDistricts(_mesh);
+
+  @override
+  late final List<DistrictAttraction> districtAttractions =
+      buildTaiwanAttractionsCatalog(_mesh);
 
   /// 校準錨點是台灣圖資的實作細節，不在通用契約上——通用引擎不需要、
   /// 也不應該知道某份圖資是用什麼方式做投影的。

@@ -1,4 +1,5 @@
 import 'package:vector_math/vector_math.dart';
+import '../models/district_attraction.dart';
 
 /// 一個地理座標點。
 class GeoPoint {
@@ -45,6 +46,12 @@ abstract class OverworldMapManifest {
   double get dpadSpeedPixelsPerSecond;
 
   List<PoiMarker> get poiNodes;
+
+  /// 地理行政區熱門旅遊景點清單。模組化由圖資注入。
+  List<DistrictAttraction> get districtAttractions => const [];
+
+  /// 地理行政區清單。模組化由圖資注入。
+  List<AdministrativeDistrict> get administrativeDistricts => const [];
 
   /// 地理範圍判定，由模組宣告的分類遮罩實作（修訂四，v6）。方向鍵驅動的
   /// 虛擬 Fix 與真實 GPS 的 Fix 共用同一條判定路徑，不得分歧。

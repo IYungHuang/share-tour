@@ -1,4 +1,5 @@
 import 'package:vector_math/vector_math.dart';
+import 'package:share_tour/domain/location/models/district_attraction.dart';
 import 'package:share_tour/domain/location/projection/map_manifest.dart';
 
 /// 純數學圖資模組：不載入圖檔、不含真實地理資料。
@@ -96,6 +97,32 @@ class FakeMapManifest implements OverworldMapManifest {
             id: 'poi_b',
             pixel: _origin + Vector2(170, 20),
             triggerRadiusMeters: 50),
+      ];
+
+  @override
+  List<DistrictAttraction> get districtAttractions => [
+        DistrictAttraction(
+          id: 'fake_spot_1',
+          title: '假地標甲',
+          districtCode: 'fake_district',
+          districtName: '假行政區',
+          geo: const GeoPoint(24.0, 121.0),
+          pixel: _origin + Vector2(50, 50),
+          rating: 4.8,
+          reviewCount: 10000,
+          category: AttractionCategory.landmark,
+          minZoom: 1.0,
+        ),
+      ];
+
+  @override
+  List<AdministrativeDistrict> get administrativeDistricts => [
+        AdministrativeDistrict(
+          code: 'fake_district',
+          name: '假行政區',
+          centerGeo: const GeoPoint(24.0, 121.0),
+          centerPixel: _origin + Vector2(50, 50),
+        ),
       ];
 
   @override
