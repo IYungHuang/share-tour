@@ -36,7 +36,7 @@ void main() {
         cameraLevel: 1,
         waistBagLevel: 1,
         completedRuns: 0,
-        lastMonotonicSeq: 1, // genesis 已佔用 seq 1
+        lastMonotonicSeq: 1,
         updatedAtUtc: DateTime.utc(2026, 9, 11),
       );
       final customContainer = ProviderContainer(
@@ -47,6 +47,9 @@ void main() {
       );
       addTearDown(customContainer.dispose);
 
+      // 讓日誌自己建立身分事件 (seq 1)，之後的操作接著編號
+      await fakeRepo.loadSave();
+
       final controller = customContainer.read(
         curatorRunControllerProvider.notifier,
       );
@@ -56,18 +59,7 @@ void main() {
       controller.upgradeEquipment(EquipmentType.camera);
       await controller.pendingPersist;
 
-      // 身分事件在真實環境由 repository 落地；此處補上以構成完整日誌
-      final log = [
-        CuratorEvent(
-          eventId: 'genesis',
-          seq: 1,
-          type: CuratorEventType.profileCreated,
-          occurredAtUtc: DateTime.utc(2026, 9, 11),
-          payload: const {'profileId': 'round-trip'},
-        ),
-        ...fakeRepo.events,
-      ];
-      final replayed = replayCuratorEvents(log);
+      final replayed = replayCuratorEvents(fakeRepo.events);
       final live = customContainer.read(curatorRunControllerProvider).equipment;
 
       // 寫出去的東西重播回來，必須還是同一個局外狀態
@@ -76,8 +68,8 @@ void main() {
       expect(replayed.cameraLevel, live.camera.level);
       expect(
         fakeRepo.events.map((e) => e.seq).toList(),
-        [2, 3, 4],
-        reason: 'seq 必須接在 genesis 之後嚴格遞增，不得撞號',
+        [1, 2, 3, 4],
+        reason: 'genesis 佔 1，之後的操作接著嚴格遞增，不得撞號',
       );
     });
 

@@ -32,7 +32,6 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
        _uuid = uuid ?? const Uuid(),
        _resolver = resolver,
        _persistenceRepository = persistenceRepository,
-       _lastMonotonicSeq = initialSaveData?.lastMonotonicSeq ?? 0,
        super(
          initialState ??
              (initialSaveData != null
@@ -49,7 +48,6 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
   final PersistenceRepository? _persistenceRepository;
   final DateTime Function() _nowUtc;
   final Uuid _uuid;
-  int _lastMonotonicSeq;
 
   /// 設定景點素材解析器
   void setResolver(PoiMaterialResolver resolver) {
@@ -252,9 +250,9 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
   /// 追加一筆局外進度事件 (CC-3 append-only)。
   /// 最終狀態由重播得出，此處不覆寫任何既有資料。
   void _append(CuratorEventType type, Map<String, Object?> payload) {
-    final event = CuratorEvent(
+    // 只產生草稿：seq 由日誌指派，控制器無從猜測也無從撞號。
+    final event = CuratorEventDraft(
       eventId: _uuid.v4(),
-      seq: ++_lastMonotonicSeq,
       type: type,
       occurredAtUtc: _nowUtc(),
       payload: payload,
@@ -264,7 +262,7 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     _pendingPersist = pendingPersist.then((_) => _writeEvent(event));
   }
 
-  Future<void> _writeEvent(CuratorEvent event) async {
+  Future<void> _writeEvent(CuratorEventDraft event) async {
     final repo = _persistenceRepository;
     if (repo == null) return;
     try {

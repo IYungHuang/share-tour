@@ -56,31 +56,25 @@ class LocalPersistenceRepository implements PersistenceRepository {
   }
 
   @override
-  Future<void> appendEvents(List<CuratorEvent> events) {
-    if (events.isEmpty) return Future<void>.value();
-    final queued = _writeChain.then((_) => _doAppend(events));
+  Future<List<CuratorEvent>> appendEvents(List<CuratorEventDraft> drafts) {
+    if (drafts.isEmpty) return Future.value(const []);
+    final queued = _writeChain.then((_) => _doAppend(drafts));
     // 一筆失敗不得讓後續追加全部連坐失敗，但錯誤仍要回傳給呼叫端。
-    _writeChain = queued.catchError((Object _) {});
+    _writeChain = queued.catchError((Object _) => const <CuratorEvent>[]);
     return queued;
   }
 
-  Future<void> _doAppend(List<CuratorEvent> events) async {
+  Future<List<CuratorEvent>> _doAppend(List<CuratorEventDraft> drafts) async {
     final prefs = await _getPrefs();
     final existing = await loadEvents();
-    final lastSeq = existing.isEmpty ? 0 : existing.last.seq;
-    for (final event in events) {
-      if (event.seq <= lastSeq) {
-        throw StateError(
-          '事件 seq ${event.seq} 未大於日誌現有的 $lastSeq；'
-          '重複或倒退的 seq 會讓重播排序未定義',
-        );
-      }
-    }
-    final merged = [...existing, ...events];
+    var nextSeq = existing.isEmpty ? 0 : existing.last.seq;
+    final sealed = [for (final draft in drafts) draft.seal(++nextSeq)];
+    final merged = [...existing, ...sealed];
     await prefs.setString(
       eventLogKey,
       jsonEncode(merged.map((e) => e.toJson()).toList()),
     );
+    return sealed;
   }
 
   @override
@@ -102,15 +96,15 @@ class LocalPersistenceRepository implements PersistenceRepository {
     }
 
     // 首次啟動或日誌已損毀：落地一筆身分事件，讓日誌自始即可重播。
-    final genesis = CuratorEvent(
-      eventId: _uuid.v4(),
-      seq: 1,
-      type: CuratorEventType.profileCreated,
-      occurredAtUtc: DateTime.now().toUtc(),
-      payload: {'profileId': _uuid.v4()},
-    );
-    await appendEvents([genesis]);
-    return replayCuratorEvents([genesis]);
+    final sealed = await appendEvents([
+      CuratorEventDraft(
+        eventId: _uuid.v4(),
+        type: CuratorEventType.profileCreated,
+        occurredAtUtc: DateTime.now().toUtc(),
+        payload: {'profileId': _uuid.v4()},
+      ),
+    ]);
+    return replayCuratorEvents(sealed);
   }
 
   @override

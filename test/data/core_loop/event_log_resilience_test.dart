@@ -18,30 +18,35 @@ void main() {
       repo = LocalPersistenceRepository(prefs: prefs);
     }
 
+    CuratorEventDraft draft(
+      int n,
+      CuratorEventType type,
+      Map<String, Object?> p,
+    ) => CuratorEventDraft(
+      eventId: 'evt-$n',
+      type: type,
+      occurredAtUtc: DateTime.utc(2026, 9, 11, 6, n),
+      payload: p,
+    );
+
     CuratorEvent event(int seq, CuratorEventType type, Map<String, Object?> p) =>
-        CuratorEvent(
-          eventId: 'evt-$seq',
-          seq: seq,
-          type: type,
-          occurredAtUtc: DateTime.utc(2026, 9, 11, 6, seq),
-          payload: p,
-        );
+        draft(seq, type, p).seal(seq);
 
     test('AC-CC-3.8 並行追加不得遺失事件', () async {
       await freshRepo();
       await repo.appendEvents([
-        event(1, CuratorEventType.profileCreated, {'profileId': 'p1'}),
+        draft(1, CuratorEventType.profileCreated, {'profileId': 'p1'}),
       ]);
 
       // 不 await 前一筆就發下一筆：黑市連點兩次升級就是這個形狀
       final a = repo.appendEvents([
-        event(2, CuratorEventType.equipmentUpgraded, {
+        draft(2, CuratorEventType.equipmentUpgraded, {
           'equipment': 'sneakers',
           'cost': 300,
         }),
       ]);
       final b = repo.appendEvents([
-        event(3, CuratorEventType.equipmentUpgraded, {
+        draft(3, CuratorEventType.equipmentUpgraded, {
           'equipment': 'camera',
           'cost': 300,
         }),
@@ -56,19 +61,21 @@ void main() {
       );
     });
 
-    test('AC-CC-3.9 追加拒絕重複或倒退的 seq', () async {
+    test('AC-CC-3.9 seq 由日誌指派，呼叫端無從指定或撞號', () async {
       await freshRepo();
-      await repo.appendEvents([
-        event(1, CuratorEventType.profileCreated, {'profileId': 'p1'}),
+
+      final first = await repo.appendEvents([
+        draft(1, CuratorEventType.profileCreated, {'profileId': 'p1'}),
+      ]);
+      final second = await repo.appendEvents([
+        draft(9, CuratorEventType.runSettled, {'earnedCoins': 10}),
+        draft(9, CuratorEventType.philosophyRerolled, {'cost': 100}),
       ]);
 
-      expect(
-        () => repo.appendEvents([
-          event(1, CuratorEventType.runSettled, {'earnedCoins': 10}),
-        ]),
-        throwsA(isA<StateError>()),
-        reason: 'seq 撞號會讓重播排序未定義，決定性失效',
-      );
+      // 草稿上的編號完全不影響結果：日誌接著自己的最後一號往下發
+      expect(first.single.seq, 1);
+      expect(second.map((e) => e.seq), [2, 3]);
+      expect((await repo.loadEvents()).map((e) => e.seq), [1, 2, 3]);
     });
 
     test('AC-CC-3.10 語意壞掉的日誌不得讓載入拋出', () async {

@@ -11,8 +11,10 @@ abstract class PersistenceRepository {
   /// 依 seq 遞增順序讀出完整事件日誌。無存檔時回傳空清單。
   Future<List<CuratorEvent>> loadEvents();
 
-  /// 追加事件。實作不得修改或刪除既有事件。
-  Future<void> appendEvents(List<CuratorEvent> events);
+  /// 追加事件草稿。由日誌指派 seq 並回傳已編號的事件。
+  ///
+  /// 呼叫端不指定 seq —— 它是日誌的屬性。實作不得修改或刪除既有事件。
+  Future<List<CuratorEvent>> appendEvents(List<CuratorEventDraft> drafts);
 
   /// 重播事件日誌得出的局外存檔狀態。
   /// 日誌為空時自行建立 profileCreated 事件並落地，回傳初始存檔。
