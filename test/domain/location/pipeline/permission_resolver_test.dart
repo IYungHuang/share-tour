@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:share_tour/data/location/location_permission_gateway.dart';
+import 'package:share_tour/domain/location/models/location_permission_gateway.dart';
 import 'package:share_tour/domain/location/models/location_status.dart';
 import 'package:share_tour/domain/location/pipeline/permission_resolver.dart';
 import '../../../fakes/fake_permission_gateway.dart';

@@ -4,7 +4,7 @@ import 'dart:io' show Platform;
 import 'package:geolocator/geolocator.dart';
 
 import '../../domain/location/models/geo_fix.dart';
-import 'location_permission_gateway.dart';
+import '../../domain/location/models/location_permission_gateway.dart';
 import 'location_source.dart';
 
 /// 把平台的 Position 轉成 GeoFix。

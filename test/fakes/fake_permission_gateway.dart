@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:share_tour/data/location/location_permission_gateway.dart';
+import 'package:share_tour/domain/location/models/location_permission_gateway.dart';
 
 class FakePermissionGateway implements LocationPermissionGateway {
   bool serviceEnabled = true;

@@ -7,7 +7,7 @@ import '../../core/build_flags.dart';
 import '../../core/time/clock.dart';
 import '../../core/time/system_clock.dart';
 import '../../data/location/geolocator_location_source.dart';
-import '../../data/location/location_permission_gateway.dart';
+import '../../domain/location/models/location_permission_gateway.dart';
 import '../../data/location/location_source.dart';
 import '../../data/location/virtual_location_source.dart';
 import '../../data/location/location_subscription_manager.dart';

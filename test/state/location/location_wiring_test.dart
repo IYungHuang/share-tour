@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:share_tour/core/time/clock.dart';
-import 'package:share_tour/data/location/location_permission_gateway.dart';
+import 'package:share_tour/domain/location/models/location_permission_gateway.dart';
 import 'package:share_tour/data/location/location_source.dart';
 import 'package:share_tour/domain/location/models/geo_fix.dart';
 import 'package:share_tour/domain/location/models/location_status.dart';

@@ -4,7 +4,7 @@ import 'package:vector_math/vector_math.dart';
 import 'package:share_tour/core/build_flags.dart';
 import 'package:share_tour/game/components/player_component.dart';
 import 'package:share_tour/state/location/location_providers.dart';
-import 'package:share_tour/data/location/location_permission_gateway.dart';
+import 'package:share_tour/domain/location/models/location_permission_gateway.dart';
 import '../fakes/fake_clock.dart';
 import '../fakes/fake_map_manifest.dart';
 import '../fakes/fake_permission_gateway.dart';

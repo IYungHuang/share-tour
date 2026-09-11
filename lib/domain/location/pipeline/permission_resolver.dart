@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import '../../../data/location/location_permission_gateway.dart';
+import '../models/location_permission_gateway.dart';
 import '../models/location_status.dart';
 
 /// 解析權限、服務與精度等級。
