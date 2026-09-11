@@ -24,7 +24,37 @@ class CuratorRunState {
     this.latestReport,
   });
 
-  /// 建立全新單局 (產生新 UUID，CC-1)
+  /// 建立全新單局初始狀態 (預設 philosophizing 階段，UUID 遵循 CC-1)
+  factory CuratorRunState.initial({
+    ClientSpec? client,
+    TravelPhilosophy? philosophy,
+    EquipmentInventory? equipment,
+    String? runId,
+  }) {
+    final effectiveClient = client ?? ClientSpec.budgetWorker;
+    final effectivePhilosophy = philosophy ?? TravelPhilosophy.midnight;
+    final effectiveEquipment = equipment ?? EquipmentInventory.initial();
+    final effectiveId = runId ?? const Uuid().v4();
+    final resources = GuideResources.initial(
+      startingBudget: effectiveClient.targetBudget,
+      equipment: effectiveEquipment,
+    );
+    final inventory = MaterialInventory(capacity: effectiveEquipment.waistBag.capacity);
+    final itinerary = TimelineItinerary.empty();
+
+    return CuratorRunState(
+      runId: effectiveId,
+      phase: CuratorRunPhase.philosophizing,
+      client: effectiveClient,
+      philosophy: effectivePhilosophy,
+      resources: resources,
+      inventory: inventory,
+      itinerary: itinerary,
+      equipment: effectiveEquipment,
+    );
+  }
+
+  /// 建立全新單局 (產生新 UUID，CC-1，進入 fieldTrip 階段)
   factory CuratorRunState.create({
     required ClientSpec client,
     required TravelPhilosophy philosophy,
@@ -116,6 +146,24 @@ class CuratorRunState {
   CuratorRunState upgradeEquipment(EquipmentType type) {
     final nextEquipment = equipment.upgrade(type);
     return copyWith(equipment: nextEquipment);
+  }
+
+  /// 4 槽位是否已全部填滿可呈送審查
+  bool get canSubmit => itinerary.canSubmit;
+
+  /// 當前 4 槽位時間線之即時計算指標 (包含哲學加權與相機倍率)
+  ItineraryStats get currentStats => itinerary.calculateStats(
+        philosophy: philosophy,
+        cameraMultiplier: equipment.camera.cameraMultiplier,
+      );
+
+  /// Near Miss 或 Rejected 時返回微調行程 (退回 nightEditing 階段，保留槽位與腰包)
+  CuratorRunState tweakItinerary() {
+    if (phase != CuratorRunPhase.clientReview &&
+        phase != CuratorRunPhase.settled) {
+      return this;
+    }
+    return copyWith(phase: CuratorRunPhase.nightEditing);
   }
 
   /// 觸發「再來一局 (Restart Run)」(AC-ML-7)

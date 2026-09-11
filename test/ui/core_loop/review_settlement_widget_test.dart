@@ -1,0 +1,227 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:share_tour/domain/core_loop/models/review_outcome.dart';
+import 'package:share_tour/domain/core_loop/models/travel_material.dart';
+import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
+import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
+import 'package:share_tour/state/core_loop/curator_run_controller.dart';
+import 'package:share_tour/state/core_loop/curator_run_providers.dart';
+import 'package:share_tour/ui/core_loop/review_settlement_modal.dart';
+
+void main() {
+  final sampleMaterials = [
+    const TravelMaterial(
+      id: 'm1',
+      name: '景點 1',
+      tags: ['#深夜'],
+      themeValue: 30,
+      hypeValue: 20,
+      cost: 500,
+    ),
+    const TravelMaterial(
+      id: 'm2',
+      name: '景點 2',
+      tags: ['#深夜'],
+      themeValue: 30,
+      hypeValue: 20,
+      cost: 500,
+    ),
+    const TravelMaterial(
+      id: 'm3',
+      name: '景點 3',
+      tags: ['#深夜'],
+      themeValue: 30,
+      hypeValue: 20,
+      cost: 500,
+    ),
+    const TravelMaterial(
+      id: 'm4',
+      name: '景點 4',
+      tags: ['#深夜'],
+      themeValue: 30,
+      hypeValue: 20,
+      cost: 660, // 總額 2160 超支 160
+    ),
+  ];
+
+  Widget createSubject({
+    required CuratorRunState state,
+    ReviewReport? initialReport,
+  }) {
+    return ProviderScope(
+      key: UniqueKey(),
+      overrides: [
+        curatorMaterialPoolProvider.overrideWithValue(sampleMaterials),
+        curatorRunControllerProvider.overrideWith(
+          (ref) => CuratorRunController(
+            materialPool: sampleMaterials,
+            initialState: state,
+          ),
+        ),
+      ],
+      child: MaterialApp(
+        home: Scaffold(
+          body: ReviewSettlementModal(initialReport: initialReport),
+        ),
+      ),
+    );
+  }
+
+  group('雙客戶動態評審與 Near Miss 結算彈窗 Widget 測試 (AC-UI-3)', () {
+    testWidgets(
+      'AC-UI-3.1: 預設載入 budgetWorker，提供切換頁籤 client_tab_hypeInfluencer',
+      (tester) async {
+        tester.view.physicalSize = const Size(360, 640);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+
+        final state = CuratorRunState.initial();
+        await tester.pumpWidget(createSubject(state: state));
+
+        expect(
+          find.byKey(const Key('client_tab_budgetWorker')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('client_tab_hypeInfluencer')),
+          findsOneWidget,
+        );
+        expect(find.textContaining('社畜小林'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'AC-UI-3.2: 社畜超支 Near Miss (68分) 蓋上 stamp_near_miss 印章並標示超支扣分',
+      (tester) async {
+        tester.view.physicalSize = const Size(360, 640);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+
+        const workerReport = ReviewReport(
+          clientType: 'budgetWorker',
+          outcome: ReviewOutcome.nearMiss,
+          satisfaction: 68,
+          earnedCoins: 30,
+          feedbackQuote: '差點就完美了！超支了 160 円...',
+          subscores: {
+            'budgetScore': 38,
+            'themeScore': 30,
+            'boredomPenalty': 0,
+            'totalCost': 2160,
+            'targetBudget': 2000,
+          },
+        );
+
+        final state = CuratorRunState.initial().copyWith(
+          phase: CuratorRunPhase.clientReview,
+          latestReport: workerReport,
+        );
+
+        await tester.pumpWidget(
+          createSubject(state: state, initialReport: workerReport),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('stamp_near_miss')), findsOneWidget);
+        expect(find.textContaining('超支扣分提醒'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'AC-UI-3.3: 網紅無絕景 Near Miss (67分) 蓋上 stamp_near_miss 印章並標示無絕景',
+      (tester) async {
+        tester.view.physicalSize = const Size(360, 640);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+
+        const influencerReport = ReviewReport(
+          clientType: 'hypeInfluencer',
+          outcome: ReviewOutcome.nearMiss,
+          satisfaction: 67,
+          earnedCoins: 40,
+          feedbackQuote: '熱度很高，但缺少焦點絕景！經紀人強制打五折...',
+          subscores: {
+            'effectiveHype': 100,
+            'spotlightMultiplier': 0.5,
+            'themeFactor': 1.0,
+          },
+        );
+
+        final state = CuratorRunState.initial().copyWith(
+          phase: CuratorRunPhase.clientReview,
+          latestReport: influencerReport,
+        );
+
+        await tester.pumpWidget(
+          createSubject(state: state, initialReport: influencerReport),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('stamp_near_miss')), findsOneWidget);
+        expect(find.textContaining('無絕景'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'AC-UI-3.4: 在 Near Miss 下點擊 btn_tweak_itinerary 返回微調，控制器退回 nightEditing',
+      (tester) async {
+        tester.view.physicalSize = const Size(360, 640);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+
+        const report = ReviewReport(
+          clientType: 'budgetWorker',
+          outcome: ReviewOutcome.nearMiss,
+          satisfaction: 68,
+          earnedCoins: 30,
+          feedbackQuote: '差 160 円...',
+          subscores: {},
+        );
+
+        final state = CuratorRunState.initial().copyWith(
+          phase: CuratorRunPhase.clientReview,
+          latestReport: report,
+        );
+
+        await tester.pumpWidget(
+          createSubject(state: state, initialReport: report),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.byKey(const Key('btn_tweak_itinerary')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('btn_tweak_itinerary')));
+        await tester.pump();
+      },
+    );
+
+    testWidgets('AC-UI-3.5: 點擊 btn_restart_run 重啟新單局', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      const report = ReviewReport(
+        clientType: 'budgetWorker',
+        outcome: ReviewOutcome.rejected,
+        satisfaction: 40,
+        earnedCoins: 0,
+        feedbackQuote: '太差了！',
+        subscores: {},
+      );
+
+      final state = CuratorRunState.initial().copyWith(
+        phase: CuratorRunPhase.clientReview,
+        latestReport: report,
+      );
+
+      await tester.pumpWidget(
+        createSubject(state: state, initialReport: report),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('btn_restart_run')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('btn_restart_run')));
+      await tester.pump();
+    });
+  });
+}
