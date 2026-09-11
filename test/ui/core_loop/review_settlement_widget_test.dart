@@ -91,7 +91,7 @@ void main() {
           name: '巷弄散步',
           tags: ['#深夜'],
           themeValue: 30,
-          hypeValue: 20,
+          hypeValue: 50,
           cost: 100,
         );
         var state = CuratorRunState.create(

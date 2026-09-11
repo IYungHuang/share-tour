@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:share_tour/data/core_loop/kyoto_night_catalog.dart';
 import 'package:share_tour/domain/core_loop/models/review_outcome.dart';
 import 'package:share_tour/domain/core_loop/models/timeline_itinerary.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
@@ -34,8 +35,8 @@ void main() {
       hasSpotlight: hasSpotlight || (spotlightCount != null && spotlightCount > 0),
     );
 
-    test('AC-ML-5.1 社畜滿分 (Perfect): 花費 <= 2000, Theme >= 60, Hype >= 30', () {
-      final stats = createStats(cost: 1800, theme: 90, hype: 45, story: 4);
+    test('AC-ML-5.1 社畜滿分 (Perfect): 花費 <= 2000, Theme >= 60, Hype >= boredomThreshold', () {
+      final stats = createStats(cost: 1800, theme: 90, hype: 200, story: 4);
       final report = ClientReviewEngine.evaluate(
         client: ClientSpec.budgetWorker,
         stats: stats,
@@ -47,7 +48,7 @@ void main() {
       expect(report.earnedCoins, 1000 * 1.5 + (4 * 5)); // 1500 + 20 = 1520
     });
 
-    test('AC-ML-5.2 社畜反無聊打擊: 0 花費但 Hype < 30，扣 25 分無法達成 Perfect', () {
+    test('AC-ML-5.2 社畜反無聊打擊: 0 花費但 Hype < boredomThreshold，扣 25 分無法達成 Perfect', () {
       final stats = createStats(cost: 0, theme: 70, hype: 15, story: 4);
       final report = ClientReviewEngine.evaluate(
         client: ClientSpec.budgetWorker,
@@ -61,16 +62,16 @@ void main() {
     });
 
     test(
-      'AC-ML-5.3 社畜超支扣分: 超支 160 円 (扣 32 分), Theme 60 得 34 分 -> 滿意度 46 分',
+      'AC-ML-5.3 社畜比例超支扣分: 超支 640 円 (32%, 扣 32 分), Theme 60 得 34 分 -> 滿意度 46 分',
       () {
-        final stats = createStats(cost: 2160, theme: 60, hype: 35, story: 4);
+        final stats = createStats(cost: 2640, theme: 60, hype: 200, story: 4);
         final report = ClientReviewEngine.evaluate(
           client: ClientSpec.budgetWorker,
           stats: stats,
           philosophy: TravelPhilosophy.slow,
         );
 
-        // BudgetScore: 44 - (160 / 10 * 2) = 44 - 32 = 12
+        // BudgetScore: 44 - round(640 / 2000 * 100) = 44 - 32 = 12
         // ThemeScore: round(56 * 0.6) = 34
         // Boredom: 0
         // Total: 12 + 34 = 46
@@ -159,8 +160,8 @@ void main() {
 
     group('AC-A1-1.7 & AC-A1-1.8 Theme 傳導到兩位客戶滿意度 (T3)', () {
       test('AC-A1-1.7 社畜參考行程：Theme 90 得分 85~95，Theme 降至 30 時降幅 >= 20', () {
-        // 固定參考輸入：未超支 (cost 1000 <= 2000), 無聊不觸發 (hype 50 >= 30)
-        final stats90 = createStats(cost: 1000, hype: 50, theme: 90);
+        // 固定參考輸入：未超支 (cost 1000 <= 2000), 無聊不觸發 (hype 200 >= boredomThreshold)
+        final stats90 = createStats(cost: 1000, hype: 200, theme: 90);
         final report90 = ClientReviewEngine.evaluate(
           client: ClientSpec.budgetWorker,
           stats: stats90,
@@ -168,7 +169,7 @@ void main() {
         );
         expect(report90.satisfaction, inInclusiveRange(85, 95));
 
-        final stats30 = createStats(cost: 1000, hype: 50, theme: 30);
+        final stats30 = createStats(cost: 1000, hype: 200, theme: 30);
         final report30 = ClientReviewEngine.evaluate(
           client: ClientSpec.budgetWorker,
           stats: stats30,
@@ -418,6 +419,151 @@ void main() {
           final netHypeOther = reportOther.subscores['netHype'] as int;
           expect(netHypeOther, lessThan(100), reason: '${phil.displayName} Hype 側必須扣除疲勞');
         }
+      });
+    });
+
+    group('Amendment-01: 比例超支與反無聊測試 (AC-A1-2)', () {
+      test('AC-A1-2.1 對 budgetWorker 存在四槽組合使滿意度落入 Rejected', () {
+        final all = kyotoNightMaterials;
+        final m1 = all.firstWhere((m) => m.id == 'kyoto_gion_kappo'); // cost 5000
+        final m2 = all.firstWhere((m) => m.id == 'kyoto_sagano_torokko'); // cost 2000
+        final m3 = all.firstWhere((m) => m.id == 'kyoto_kurama_night_train'); // cost 1000
+        final m4 = all.firstWhere((m) => m.id == 'kyoto_yasaka_pagoda'); // cost 400
+
+        final itinerary = TimelineItinerary(slots: [m1, m2, m3, m4]);
+        final stats = itinerary.calculateStats(
+          philosophy: TravelPhilosophy.slow,
+          cameraMultiplier: 1.5,
+        );
+
+        final report = ClientReviewEngine.evaluate(
+          client: ClientSpec.budgetWorker,
+          stats: stats,
+          philosophy: TravelPhilosophy.slow,
+        );
+
+        expect(report.outcome, equals(ReviewOutcome.rejected));
+        expect(report.satisfaction, lessThan(60));
+      });
+
+      test('AC-A1-2.2 對 budgetWorker 存在四槽組合使滿意度落入 Perfect', () {
+        final all = kyotoNightMaterials;
+        final m1 = all.firstWhere((m) => m.id == 'kyoto_pontocho_cat');
+        final m2 = all.firstWhere((m) => m.id == 'kyoto_ghost_vending');
+        final m3 = all.firstWhere((m) => m.id == 'kyoto_gion_tatsumi');
+        final m4 = all.firstWhere((m) => m.id == 'kyoto_fushimi_torii');
+
+        final itinerary = TimelineItinerary(slots: [m1, m2, m3, m4]);
+        final stats = itinerary.calculateStats(
+          philosophy: TravelPhilosophy.midnight,
+          cameraMultiplier: 1.5,
+        );
+
+        final report = ClientReviewEngine.evaluate(
+          client: ClientSpec.budgetWorker,
+          stats: stats,
+          philosophy: TravelPhilosophy.midnight,
+        );
+
+        expect(report.outcome, equals(ReviewOutcome.perfect));
+        expect(report.satisfaction, greaterThanOrEqualTo(90));
+      });
+
+      test('AC-A1-2.3 在 Theme 滿分下，Perfect 超支上界與 Rejected 超支下界差 >= 預算 30%，且滿意度單調不增', () {
+        const client = ClientSpec.budgetWorker;
+        final themeScore = (client.themeWeight * 100 / 100).round(); // 56
+        expect(themeScore, equals(56));
+
+        // 逐百分點 (0% ~ 200%) 測試超支比例
+        var prevSat = 100;
+        double? maxROverspendPerfect;
+        double? minROverspendRejected;
+
+        for (var pct = 0; pct <= 200; pct++) {
+          final overspendRatio = pct / 100.0;
+          final totalCost = (client.targetBudget * (1.0 + overspendRatio)).round();
+
+          final stats = createStats(
+            cost: totalCost,
+            theme: 100,
+            hype: 300, // 高 Hype 不觸發反無聊
+          );
+
+          final report = ClientReviewEngine.evaluate(
+            client: client,
+            stats: stats,
+            philosophy: TravelPhilosophy.slow,
+          );
+
+          // 驗證滿意度對超支比例單調不增
+          expect(
+            report.satisfaction,
+            lessThanOrEqualTo(prevSat),
+            reason: '超支比例 $pct% 之滿意度 (${report.satisfaction}) 必須 <= 前一比例滿意度 ($prevSat)',
+          );
+          prevSat = report.satisfaction;
+
+          if (report.outcome == ReviewOutcome.perfect) {
+            maxROverspendPerfect = overspendRatio;
+          }
+          if (report.outcome == ReviewOutcome.rejected && minROverspendRejected == null) {
+            minROverspendRejected = overspendRatio;
+          }
+        }
+
+        expect(maxROverspendPerfect, isNotNull);
+        expect(minROverspendRejected, isNotNull);
+        final boundDiff = minROverspendRejected! - maxROverspendPerfect!;
+        expect(
+          boundDiff,
+          greaterThanOrEqualTo(0.30),
+          reason: 'Perfect 上界 ($maxROverspendPerfect) 與 Rejected 下界 ($minROverspendRejected) 差值 ($boundDiff) 必須 >= 30%',
+        );
+      });
+
+      test('AC-A1-2.4 對 budgetWorker 存在四槽組合觸發反無聊懲罰且總成本低於預算', () {
+        final all = kyotoNightMaterials;
+        // 尋找總成本 <= 2000 且觸發反無聊 (totalHype < boredomThreshold) 的四槽組合
+        final cheapLowHype = all.where((m) => m.cost <= 500 && m.hypeValue <= 35).toList();
+        expect(cheapLowHype.length, greaterThanOrEqualTo(4));
+
+        ReviewReport? boredReport;
+        for (var i = 0; i < cheapLowHype.length; i++) {
+          for (var j = 0; j < cheapLowHype.length; j++) {
+            if (j == i) continue;
+            for (var k = 0; k < cheapLowHype.length; k++) {
+              if (k == i || k == j) continue;
+              for (var l = 0; l < cheapLowHype.length; l++) {
+                if (l == i || l == j || l == k) continue;
+                final itin = TimelineItinerary(
+                  slots: [cheapLowHype[i], cheapLowHype[j], cheapLowHype[k], cheapLowHype[l]],
+                );
+                final stats = itin.calculateStats(
+                  philosophy: TravelPhilosophy.slow,
+                  cameraMultiplier: 1.5,
+                );
+                if (stats.totalCost <= ClientSpec.budgetWorker.targetBudget) {
+                  final rep = ClientReviewEngine.evaluate(
+                    client: ClientSpec.budgetWorker,
+                    stats: stats,
+                    philosophy: TravelPhilosophy.slow,
+                  );
+                  if ((rep.subscores['boredomPenalty'] as int? ?? 0) > 0) {
+                    boredReport = rep;
+                    break;
+                  }
+                }
+              }
+              if (boredReport != null) break;
+            }
+            if (boredReport != null) break;
+          }
+          if (boredReport != null) break;
+        }
+
+        expect(boredReport, isNotNull, reason: '必須存在總成本低於預算但因無聊受罰的四槽組合');
+        expect(boredReport!.subscores['boredomPenalty'], equals(25));
+        expect(boredReport.subscores['totalCost'], lessThanOrEqualTo(ClientSpec.budgetWorker.targetBudget));
       });
     });
   });

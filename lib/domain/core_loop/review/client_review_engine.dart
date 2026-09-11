@@ -31,21 +31,23 @@ class ClientReviewEngine {
     final themeWeight = client.themeWeight;
     final maxBudgetScore = 100 - themeWeight;
 
-    // 1. 預算得分 (滿分 100 - themeWeight = 44): 不超支得滿分，超支每 10 円扣 2 分
+    // 1. 預算得分 (滿分 100 - themeWeight = 44): 不超支得滿分，超支依預算比例扣分 (D7)
     final int budgetScore;
     if (stats.totalCost <= client.targetBudget) {
       budgetScore = maxBudgetScore;
     } else {
-      final overspent = stats.totalCost - client.targetBudget;
-      final penalty = (overspent ~/ 10) * 2;
+      final overspendRatio =
+          (stats.totalCost - client.targetBudget) / client.targetBudget;
+      final penalty = (overspendRatio * client.overspendPenaltyPoints).round();
       budgetScore = (maxBudgetScore - penalty).clamp(0, maxBudgetScore);
     }
 
     // 2. 主題得分 (滿分 themeWeight = 56): round(themeWeight * finalTheme / 100)
     final int themeScore = (themeWeight * stats.finalTheme / 100).round();
 
-    // 3. 反無聊懲罰 (Boredom Penalty): Hype < 30 扣 25 分
-    final int boredomPenalty = (stats.totalHype < 30) ? 25 : 0;
+    // 3. 反無聊懲罰 (Boredom Penalty): Hype < client.boredomThreshold 扣 25 分 (D7)
+    final int boredomPenalty =
+        (stats.totalHype < client.boredomThreshold) ? 25 : 0;
 
     // 4. 總滿意度計算
     final int satisfaction = (budgetScore + themeScore - boredomPenalty).clamp(

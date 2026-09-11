@@ -1,9 +1,10 @@
 // ignore_for_file: avoid_print
 
 import 'package:share_tour/data/core_loop/kyoto_night_catalog.dart';
+import 'package:share_tour/domain/core_loop/models/timeline_itinerary.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
-
+import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 
 typedef D2Candidate = ({
   int oneTagCoeff,
@@ -21,6 +22,13 @@ typedef D4D5D6Candidate = ({
   int d4FatigueRatio,
   List<int> d5Ladder,
   int d6PurityBonus,
+});
+
+typedef D7Candidate = ({
+  int penaltyPoints,
+  int boredomRatio,
+  int boredomThreshold,
+  double triggerRate,
 });
 
 class ItineraryFeature {
@@ -317,6 +325,208 @@ void main() {
   for (final c in feasibleD456.take(5)) {
     print('  d4=${c.d4FatigueRatio}%, d5=${c.d5Ladder}, d6=+${c.d6PurityBonus}');
   }
+
+  // 5. D7 候選域搜尋 (超支比例與反無聊門檻)
+  print('\n--- Searching D7 (Budget Overspend & Anti-Boredom) ---');
+  print('Domain: penaltyPoints=50..100 (step 1), boredomRatio=100..1000% (step 5%)');
+
+  final allMats = kyotoNightMaterials;
+  final costs4 = <int>[];
+  final hypes4 = <int>[];
+
+  for (var i = 0; i < allMats.length; i++) {
+    final m0 = allMats[i];
+    for (var j = 0; j < allMats.length; j++) {
+      if (j == i) continue;
+      final m1 = allMats[j];
+      final c01 = m1.sharesTagWith(m0);
+      for (var k = 0; k < allMats.length; k++) {
+        if (k == i || k == j) continue;
+        final m2 = allMats[k];
+        final c12 = m2.sharesTagWith(m1);
+        final baseH2 = (m2.hypeValue * 1.5).round();
+        final effH2 = c12 ? (m2.hypeValue * 1.5 * 1.2).round() : baseH2;
+
+        for (var l = 0; l < allMats.length; l++) {
+          if (l == i || l == j || l == k) continue;
+          final m3 = allMats[l];
+          final c23 = m3.sharesTagWith(m2);
+          final effH0 = m0.hypeValue;
+          final effH1 = c01 ? (m1.hypeValue * 1.2).round() : m1.hypeValue;
+          final effH3 = c23 ? (m3.hypeValue * 1.2).round() : m3.hypeValue;
+
+          hypes4.add(effH0 + effH1 + effH2 + effH3);
+          costs4.add(m0.cost + m1.cost + m2.cost + m3.cost);
+        }
+      }
+    }
+  }
+
+  // 3 槽合法排列 Hype
+  final hypes3 = <int>[];
+  for (var i = 0; i < allMats.length; i++) {
+    final m0 = allMats[i];
+    for (var j = 0; j < allMats.length; j++) {
+      if (j == i) continue;
+      final m1 = allMats[j];
+      final c01 = m1.sharesTagWith(m0);
+      for (var k = 0; k < allMats.length; k++) {
+        if (k == i || k == j) continue;
+        final m2 = allMats[k];
+        // [0, 1, 2, null]
+        final c12 = m2.sharesTagWith(m1);
+        final effH0 = m0.hypeValue;
+        final effH1 = c01 ? (m1.hypeValue * 1.2).round() : m1.hypeValue;
+        final effH2 = c12 ? (m2.hypeValue * 1.5 * 1.2).round() : (m2.hypeValue * 1.5).round();
+        hypes3.add(effH0 + effH1 + effH2);
+
+        // [null, 1, 2, 3]
+        final c12B = m1.sharesTagWith(m0);
+        final c23B = m2.sharesTagWith(m1);
+        final effH1B = m0.hypeValue;
+        final effH2B = c12B ? (m1.hypeValue * 1.5 * 1.2).round() : (m1.hypeValue * 1.5).round();
+        final effH3B = c23B ? (m2.hypeValue * 1.2).round() : m2.hypeValue;
+        hypes3.add(effH1B + effH2B + effH3B);
+      }
+    }
+  }
+
+  final cat = allMats.firstWhere((m) => m.id == 'kyoto_pontocho_cat');
+  final ghost = allMats.firstWhere((m) => m.id == 'kyoto_ghost_vending');
+  final delta = allMats.firstWhere((m) => m.id == 'kyoto_kamogawa_delta');
+  final kappo = allMats.firstWhere((m) => m.id == 'kyoto_gion_kappo');
+  final hand = [cat, ghost, delta, kappo];
+  final pure3 = [cat, ghost, delta];
+
+  var totalTestedD7 = 0;
+  final feasibleD7 = <D7Candidate>[];
+
+  final targetBudget = ClientSpec.budgetWorker.targetBudget;
+  final targetHype = ClientSpec.budgetWorker.targetHype;
+  final themeWeight = ClientSpec.budgetWorker.themeWeight;
+  final maxBudgetScore = 100 - themeWeight; // 44
+
+  for (var pp = 50; pp <= 100; pp++) {
+    // 檢查 AC-A1-2.3 條件
+    double maxRPerfect = 0.0;
+    for (var rInt = 0; rInt <= 200; rInt++) {
+      final r = rInt / 100.0;
+      final bScore = (maxBudgetScore - (r * pp).round()).clamp(0, maxBudgetScore);
+      if (bScore + themeWeight >= 90) {
+        if (r > maxRPerfect) maxRPerfect = r;
+      }
+    }
+    double minRRejected = 999.0;
+    for (var rInt = 0; rInt <= 200; rInt++) {
+      final r = rInt / 100.0;
+      final bScore = (maxBudgetScore - (r * pp).round()).clamp(0, maxBudgetScore);
+      if (bScore + themeWeight < 60) {
+        if (r < minRRejected) minRRejected = r;
+      }
+    }
+
+    if (minRRejected - maxRPerfect < 0.30) continue;
+
+    for (var br = 100; br <= 1000; br += 5) {
+      totalTestedD7++;
+      final threshold = (targetHype * br / 100).round();
+
+      // AC-A1-2.4: 存在 4 槽 totalCost <= 2000 且 totalHype < threshold
+      var pass24 = false;
+      for (var idx = 0; idx < hypes4.length; idx++) {
+        if (costs4[idx] <= targetBudget && hypes4[idx] < threshold) {
+          pass24 = true;
+          break;
+        }
+      }
+      if (!pass24) continue;
+
+      // AC-A1-3.2: 驗證手牌 3 槽純行程 > 4 槽全部
+      var max3Pure = -1;
+      final perms3 = [
+        [pure3[0], pure3[1], pure3[2]], [pure3[0], pure3[2], pure3[1]],
+        [pure3[1], pure3[0], pure3[2]], [pure3[1], pure3[2], pure3[0]],
+        [pure3[2], pure3[0], pure3[1]], [pure3[2], pure3[1], pure3[0]],
+      ];
+      for (final p in perms3) {
+        for (final slots in [
+          [p[0], p[1], p[2], null],
+          [null, p[0], p[1], p[2]],
+        ]) {
+          final itin = TimelineItinerary(slots: slots);
+          final stats = itin.calculateStats(philosophy: TravelPhilosophy.midnight, cameraMultiplier: 1.5);
+          final overspend = (stats.totalCost - targetBudget).clamp(0, 999999) / targetBudget;
+          final bScore = (maxBudgetScore - (overspend * pp).round()).clamp(0, maxBudgetScore);
+          final tScore = (themeWeight * stats.finalTheme / 100).round();
+          final bPen = stats.totalHype < threshold ? 25 : 0;
+          final sat = (bScore + tScore - bPen).clamp(0, 100);
+          if (sat > max3Pure) max3Pure = sat;
+        }
+      }
+
+      var max4 = -1;
+      void perm4(List<TravelMaterial> list, int idx) {
+        if (idx == list.length - 1) {
+          final itin = TimelineItinerary(slots: [list[0], list[1], list[2], list[3]]);
+          final stats = itin.calculateStats(philosophy: TravelPhilosophy.midnight, cameraMultiplier: 1.5);
+          final overspend = (stats.totalCost - targetBudget).clamp(0, 999999) / targetBudget;
+          final bScore = (maxBudgetScore - (overspend * pp).round()).clamp(0, maxBudgetScore);
+          final tScore = (themeWeight * stats.finalTheme / 100).round();
+          final bPen = stats.totalHype < threshold ? 25 : 0;
+          final sat = (bScore + tScore - bPen).clamp(0, 100);
+          if (sat > max4) max4 = sat;
+          return;
+        }
+        for (var x = idx; x < list.length; x++) {
+          final tmp = list[idx]; list[idx] = list[x]; list[x] = tmp;
+          perm4(list, idx + 1);
+          final tmp2 = list[idx]; list[idx] = list[x]; list[x] = tmp2;
+        }
+      }
+      perm4(List.of(hand), 0);
+
+      if (max3Pure <= max4) continue;
+
+      // 全卡表觸發率 (母體 922,560)
+      var trigCount = 0;
+      for (var idx = 0; idx < hypes4.length; idx++) {
+        if (hypes4[idx] < threshold) trigCount++;
+      }
+      for (var idx = 0; idx < hypes3.length; idx++) {
+        if (hypes3[idx] < threshold) trigCount++;
+      }
+      final trigRate = trigCount / (hypes4.length + hypes3.length);
+
+      feasibleD7.add((
+        penaltyPoints: pp,
+        boredomRatio: br,
+        boredomThreshold: threshold,
+        triggerRate: trigRate,
+      ));
+    }
+  }
+
+  print('Total D7 candidates tested: $totalTestedD7');
+  print('Feasible D7 candidates count: ${feasibleD7.length}');
+
+  feasibleD7.sort((a, b) {
+    final cmpPP = b.penaltyPoints.compareTo(a.penaltyPoints);
+    if (cmpPP != 0) return cmpPP;
+
+    final diffA = (a.triggerRate - 0.25).abs();
+    final diffB = (b.triggerRate - 0.25).abs();
+    final cmpTrig = diffA.compareTo(diffB);
+    if (cmpTrig != 0) return cmpTrig;
+
+    return a.boredomRatio.compareTo(b.boredomRatio);
+  });
+
+  final winnerD7 = feasibleD7.first;
+  print('\nSelected D7 Winner:');
+  print('  penaltyPoints: ${winnerD7.penaltyPoints}');
+  print('  boredomRatio: ${winnerD7.boredomRatio}%');
+  print('  boredomThreshold: ${winnerD7.boredomThreshold} (for targetHype=30)');
+  print('  triggerRate: ${(winnerD7.triggerRate * 100).toStringAsFixed(2)}%');
 }
 
 List<List<int>> _generateD5Ladders() {

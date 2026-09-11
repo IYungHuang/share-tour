@@ -16,6 +16,8 @@ class ClientSpec {
     required this.baseCommission,
     this.themeWeight = 56,
     this.themeFloor = 44,
+    this.overspendPenaltyPoints = 100,
+    this.boredomHypeRatio = 560,
   });
 
   final ClientType type;
@@ -28,6 +30,15 @@ class ClientSpec {
   final int themeWeight;
   final int themeFloor;
 
+  /// 超支每一整份 targetBudget 扣除的預算分數 (D7: 100)
+  final int overspendPenaltyPoints;
+
+  /// 反無聊門檻佔 targetHype 的百分比 (D7: 560%)
+  final int boredomHypeRatio;
+
+  /// 反無聊 Hype 門檻 (D7: 依 targetHype 比例計算，30 * 560% = 168)
+  int get boredomThreshold => (targetHype * boredomHypeRatio / 100).round();
+
   /// 客戶 A：極限窮遊社畜
   static const budgetWorker = ClientSpec(
     type: ClientType.budgetWorker,
@@ -38,6 +49,8 @@ class ClientSpec {
     targetHype: 30,
     baseCommission: 1000,
     themeWeight: 56,
+    overspendPenaltyPoints: 100,
+    boredomHypeRatio: 560,
   );
 
   /// 客戶 B：IG 網紅
