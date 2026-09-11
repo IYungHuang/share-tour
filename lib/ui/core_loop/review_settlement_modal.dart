@@ -64,6 +64,21 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
     });
   }
 
+  /// 本局指派客戶的報告。結算的去留與佣金一律以它為準；
+  /// 客戶頁籤只是「另一位客戶會怎麼評」的唯讀對照，不得變成免費重骰。
+  ReviewReport _assignedReport() {
+    final state = ref.read(curatorRunControllerProvider);
+    final assigned = state.client;
+    final latest = state.latestReport;
+    if (latest != null && latest.clientType == assigned.type.name) {
+      return latest;
+    }
+    return ClientReviewEngine.evaluate(
+      client: assigned,
+      stats: state.currentStats,
+    );
+  }
+
   ReviewReport _resolveReport() {
     if (_report != null) return _report!;
     final state = ref.read(curatorRunControllerProvider);
@@ -86,8 +101,11 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
     final outcome = report.outcome;
     final runState = ref.watch(curatorRunControllerProvider);
     final isSettled = runState.phase == CuratorRunPhase.settled;
-    final isNearMissOrRejected =
-        outcome == ReviewOutcome.nearMiss || outcome == ReviewOutcome.rejected;
+    // 行動區 (收佣金 / 返回微調) 依指派客戶的結果決定，與當前檢視的頁籤無關。
+    final assignedReport = _assignedReport();
+    final assignedOutcome = assignedReport.outcome;
+    final isNearMissOrRejected = assignedOutcome == ReviewOutcome.nearMiss ||
+        assignedOutcome == ReviewOutcome.rejected;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -391,13 +409,13 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
                   onPressed: () {
                     ref
                         .read(curatorRunControllerProvider.notifier)
-                        .acceptReview(acceptedReport: _resolveReport());
+                        .acceptReview(acceptedReport: assignedReport);
                     if (widget.onClose != null) {
                       widget.onClose!();
                     }
                   },
                   child: Text(
-                    '💰 收下佣金 (+${report.earnedCoins} 金幣)',
+                    '💰 收下佣金 (+${assignedReport.earnedCoins} 金幣)',
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,

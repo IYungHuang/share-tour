@@ -225,9 +225,11 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     TravelPhilosophy? nextPhilosophy,
     Random? random,
   }) {
+    // nextClient 為 null 時交由 createBriefing 重新抽籤；沿用 state.client
+    // 會讓整個遊戲生涯的客戶鎖死在第一局抽到的那位。
     final briefing = CuratorRunState.createBriefing(
       equipment: state.equipment,
-      client: nextClient ?? state.client,
+      client: nextClient,
       random: random,
     );
     state = nextPhilosophy != null
@@ -235,7 +237,20 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
         : briefing;
   }
 
+  /// 最近一次存檔寫入失敗的原因 (null 表示未曾失敗)。
+  /// 寫入是背景進行的，失敗必須留下痕跡，否則玩家的金幣與等級會靜默消失。
+  Object? get lastPersistError => _lastPersistError;
+  Object? _lastPersistError;
+
+  /// 背景存檔寫入的完成 Future (供測試等待；無待處理寫入時立即完成)
+  Future<void> get pendingPersist => _pendingPersist ?? Future<void>.value();
+  Future<void>? _pendingPersist;
+
   void _persistSave() {
+    _pendingPersist = _writeSave();
+  }
+
+  Future<void> _writeSave() async {
     final repo = _persistenceRepository;
     if (repo != null) {
       final saveData = CuratorSaveData(
@@ -248,7 +263,12 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
         lastMonotonicSeq: ++_lastMonotonicSeq,
         updatedAtUtc: DateTime.now().toUtc(),
       );
-      repo.save(saveData);
+      try {
+        await repo.save(saveData);
+        _lastPersistError = null;
+      } catch (e) {
+        _lastPersistError = e;
+      }
     }
   }
 }

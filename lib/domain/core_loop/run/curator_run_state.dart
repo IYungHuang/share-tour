@@ -216,7 +216,7 @@ class CuratorRunState {
     return copyWith(
       equipment: nextEquipment,
       philosophyChoices: newChoices,
-      selectedPhilosophy: null,
+      clearSelectedPhilosophy: true,
       rerollsUsed: rerollsUsed + 1,
     );
   }
@@ -227,6 +227,12 @@ class CuratorRunState {
       throw const PreconditionFailedException('必須先選定一項旅行哲學方可出發踩線');
     }
     final chosenPhilosophy = selectedPhilosophy!;
+    // 候選卡非空時 (行前準備階段)，選擇必須仍在當前候選卡內；
+    // 否則重擲後殘留的舊選擇會讓玩家帶著一張沒被發到的哲學出發。
+    if (philosophyChoices.isNotEmpty &&
+        !philosophyChoices.contains(chosenPhilosophy)) {
+      throw const PreconditionFailedException('選定的旅行哲學不在當前候選卡內');
+    }
     final snapshot = equipment;
     final nextResources = GuideResources.initial(
       startingBudget: client.targetBudget,
@@ -406,6 +412,7 @@ class CuratorRunState {
     TravelPhilosophy? philosophy,
     List<TravelPhilosophy>? philosophyChoices,
     TravelPhilosophy? selectedPhilosophy,
+    bool clearSelectedPhilosophy = false,
     int? rerollsUsed,
     GuideResources? resources,
     MaterialInventory? inventory,
@@ -420,7 +427,9 @@ class CuratorRunState {
     client: client ?? this.client,
     philosophy: philosophy ?? this.philosophy,
     philosophyChoices: philosophyChoices ?? this.philosophyChoices,
-    selectedPhilosophy: selectedPhilosophy ?? this.selectedPhilosophy,
+    selectedPhilosophy: clearSelectedPhilosophy
+        ? null
+        : (selectedPhilosophy ?? this.selectedPhilosophy),
     rerollsUsed: rerollsUsed ?? this.rerollsUsed,
     resources: resources ?? this.resources,
     inventory: inventory ?? this.inventory,

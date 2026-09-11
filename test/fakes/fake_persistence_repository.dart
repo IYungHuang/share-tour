@@ -8,6 +8,9 @@ class FakePersistenceRepository implements PersistenceRepository {
 
   CuratorSaveData? _currentData;
   bool simulateCorruption = false;
+
+  /// 模擬寫入失敗 (磁碟滿、平台通道錯誤)，驗證呼叫端不會靜默吞掉錯誤
+  bool simulateWriteFailure = false;
   int saveCount = 0;
   final List<CuratorSaveData> savedHistory = [];
 
@@ -21,6 +24,9 @@ class FakePersistenceRepository implements PersistenceRepository {
 
   @override
   Future<void> save(CuratorSaveData data) async {
+    if (simulateWriteFailure) {
+      throw StateError('模擬存檔寫入失敗');
+    }
     saveCount++;
     savedHistory.add(data);
     _currentData = data;

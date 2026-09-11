@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
+import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
+import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/domain/core_loop/models/review_outcome.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
@@ -75,6 +78,56 @@ void main() {
   }
 
   group('雙客戶動態評審與 Near Miss 結算彈窗 Widget 測試 (AC-UI-3)', () {
+    testWidgets(
+      'AC-FIX-5.1: 切換客戶頁籤只是唯讀對照，收下的報告一律以本局指派客戶為準',
+      (tester) async {
+        tester.view.physicalSize = const Size(360, 1400);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+
+        // 廉價素材：社畜 (指派客戶) 不超支可收佣金，網紅則因熱度不足退件
+        const cheap = TravelMaterial(
+          id: 'cheap',
+          name: '巷弄散步',
+          tags: ['#深夜'],
+          themeValue: 30,
+          hypeValue: 20,
+          cost: 100,
+        );
+        var state = CuratorRunState.create(
+          client: ClientSpec.budgetWorker,
+          philosophy: TravelPhilosophy.midnight,
+          equipment: EquipmentInventory.initial(),
+        );
+        for (var i = 0; i < 4; i++) {
+          state = state.setTimelineSlot(i, cheap);
+        }
+        state = state.copyWith(phase: CuratorRunPhase.clientReview);
+
+        await tester.pumpWidget(createSubject(state: state));
+
+        // 玩家切到另一位客戶的頁籤，想改拿那份報告
+        await tester.tap(find.byKey(const Key('client_tab_hypeInfluencer')));
+        await tester.pumpAndSettle();
+
+        // 行動區必須仍由指派客戶驅動，不因檢視頁籤而改變
+        expect(find.byKey(const Key('btn_collect_rewards')), findsOneWidget);
+        await tester.tap(find.byKey(const Key('btn_collect_rewards')));
+        await tester.pumpAndSettle();
+
+        final container = ProviderScope.containerOf(
+          tester.element(find.byType(MaterialApp)),
+        );
+        final settled = container.read(curatorRunControllerProvider);
+
+        expect(
+          settled.latestReport!.clientType,
+          'budgetWorker',
+          reason: '結算視窗切換頁籤不得變成免費重骰客戶',
+        );
+      },
+    );
+
     testWidgets(
       'AC-UI-3.1: 預設載入 budgetWorker，提供切換頁籤 client_tab_hypeInfluencer',
       (tester) async {

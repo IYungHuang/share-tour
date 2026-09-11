@@ -118,13 +118,21 @@ class CuratorSaveData {
   };
 
   factory CuratorSaveData.fromJson(Map<String, dynamic> json) {
+    // 身分與時戳缺一不可：就地捏造 UUID 會讓玩家換一個身分，
+    // 就地灌入當下時間會讓同一份 JSON 兩次載入得出不同物件 (違反 CC-3 決定性重播)。
+    // 兩者皆由 toJson 必定寫入，缺少即代表存檔已損毀，交由上層走備份流程。
     final updatedAtRaw = json['updatedAtUtc'] as String?;
-    final parsedDate = updatedAtRaw != null
-        ? DateTime.parse(updatedAtRaw).toUtc()
-        : DateTime.now().toUtc();
+    if (updatedAtRaw == null) {
+      throw const FormatException('存檔缺少 updatedAtUtc 欄位');
+    }
+    final profileId = json['profileId'] as String?;
+    if (profileId == null) {
+      throw const FormatException('存檔缺少 profileId 欄位');
+    }
+    final parsedDate = DateTime.parse(updatedAtRaw).toUtc();
 
     return CuratorSaveData(
-      profileId: json['profileId'] as String? ?? _uuid.v4(),
+      profileId: profileId,
       saveVersion: json['saveVersion'] as int? ?? currentSaveVersion,
       lastMonotonicSeq: json['lastMonotonicSeq'] as int? ?? 0,
       coins: json['coins'] as int? ?? 0,

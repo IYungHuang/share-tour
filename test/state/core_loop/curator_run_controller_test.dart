@@ -203,6 +203,27 @@ void main() {
     );
 
     test(
+      'AC-FIX-2.1: restartRun 未指定客戶時必須重新隨機揭曉今日客戶，不得沿用上一局',
+      () {
+        final controller = container.read(
+          curatorRunControllerProvider.notifier,
+        );
+
+        final seen = <ClientSpec>{};
+        for (var seed = 0; seed < 20; seed++) {
+          controller.restartRun(random: Random(seed));
+          seen.add(container.read(curatorRunControllerProvider).client);
+        }
+
+        expect(
+          seen.length,
+          2,
+          reason: '20 次重開局應同時出現兩種客戶，否則客戶已被鎖死為第一局那位',
+        );
+      },
+    );
+
+    test(
       'AC-UI-1.8: restartRun 清空 4 槽位與腰包，HP 恢復滿值，佣金裝備不變，runId 變更為全新 UUID (CC-1)',
       () {
         final controller = container.read(

@@ -26,6 +26,20 @@ void main() {
 
     tearDown(() => container.dispose());
 
+    test('AC-FIX-3.1: 存檔寫入失敗時必須被捕捉並可觀測，不得靜默丟失', () async {
+      fakeRepo.simulateWriteFailure = true;
+      final controller = container.read(curatorRunControllerProvider.notifier);
+
+      controller.rerollPhilosophies();
+      await controller.pendingPersist;
+
+      expect(
+        controller.lastPersistError,
+        isNotNull,
+        reason: '寫入失敗必須被記錄，否則玩家的金幣與等級會靜默消失',
+      );
+    });
+
     test('AC-M4-1: canExploreProvider 在行前準備 (philosophizing) 必須為 false，出發後為 true', () {
       final controller = container.read(curatorRunControllerProvider.notifier);
       final initialState = container.read(curatorRunControllerProvider);

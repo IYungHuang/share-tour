@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:share_tour/domain/core_loop/models/core_loop_exceptions.dart';
 import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
+import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
 import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
@@ -94,6 +95,40 @@ void main() {
       expect(rerolledFunded.equipment.coins, 50);
       expect(rerolledFunded.nextRerollCost, 100);
       expect(rerolledFunded.canReroll, isFalse); // 50 < 100
+    });
+
+    test('AC-FIX-1.1: 靈感重擲必須清空既有哲學選擇，重擲後不得直接出發', () {
+      final state = CuratorRunState.createBriefing(
+        equipment: EquipmentInventory.initial(),
+        random: Random(7),
+      );
+      final chosen = state.philosophyChoices.first;
+      final selected = state.selectPhilosophy(chosen);
+      expect(selected.canDepart, isTrue);
+
+      final rerolled = selected.rerollPhilosophies(random: Random(99));
+
+      expect(
+        rerolled.selectedPhilosophy,
+        isNull,
+        reason: '重擲換掉候選卡後，舊的選擇必須失效',
+      );
+      expect(rerolled.canDepart, isFalse);
+    });
+
+    test('AC-FIX-1.2: 選定的哲學不在候選卡內時不得出發', () {
+      final state = CuratorRunState.createBriefing(
+        equipment: EquipmentInventory.initial(),
+        random: Random(7),
+      );
+      final outsider = TravelPhilosophy.values.firstWhere(
+        (p) => !state.philosophyChoices.contains(p),
+      );
+
+      expect(
+        () => state.selectPhilosophy(outsider).departToFieldTrip(),
+        throwsA(isA<PreconditionFailedException>()),
+      );
     });
 
     test('AC-M4-2.4: 局內即時指標防作弊：升級裝備新數值存檔保留，但當局計算嚴格依據 equipmentSnapshot', () {
