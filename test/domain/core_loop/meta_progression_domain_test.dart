@@ -4,35 +4,6 @@ import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 
 void main() {
   group('Milestone M4 領域層存檔與數值階梯測試 (AC-M4-2, AC-M4-3)', () {
-    test('AC-FIX-4.1: fromJson 必須決定性；缺少身分或時戳的存檔視為損毀', () {
-      const completeJson = <String, dynamic>{
-        'profileId': 'f0e1d2c3-b4a5-4697-8899-aabbccddeeff',
-        'saveVersion': 1,
-        'lastMonotonicSeq': 3,
-        'coins': 720,
-        'sneakersLevel': 2,
-        'cameraLevel': 1,
-        'waistBagLevel': 1,
-        'completedRuns': 4,
-        'updatedAtUtc': '2026-09-11T06:30:00.000Z',
-      };
-
-      // 決定性：同一份 JSON 解析兩次必須全等 (AC-CC-3.1)
-      expect(
-        CuratorSaveData.fromJson(completeJson),
-        equals(CuratorSaveData.fromJson(completeJson)),
-      );
-
-      for (final missing in ['profileId', 'updatedAtUtc']) {
-        final broken = Map<String, dynamic>.from(completeJson)..remove(missing);
-        expect(
-          () => CuratorSaveData.fromJson(broken),
-          throwsA(isA<FormatException>()),
-          reason: '缺少 $missing 時不得就地捏造身分或當下時間',
-        );
-      }
-    });
-
     test('AC-M4-2.1: 升級球鞋 Lv.1 -> Lv.2 需 300 幣，扣款後 HP 升至 125', () {
       final inventory = EquipmentInventory.initial().copyWith(coins: 350);
       expect(inventory.sneakers.level, 1);
@@ -103,13 +74,11 @@ void main() {
       expect(initialData.completedRuns, 0);
       expect(initialData.updatedAtUtc.isUtc, isTrue);
 
-      final json = initialData.toJson();
-      final restored = CuratorSaveData.fromJson(json);
-      expect(restored, equals(initialData));
-      expect(restored.updatedAtUtc.isUtc, isTrue);
+      // 序列化已移交事件日誌 (CuratorEvent)；此型別只是重播出的投影。
+      expect(initialData.copyWith(), equals(initialData));
     });
 
-    test('CuratorSaveData 與 EquipmentInventory 雙向轉換正確性', () {
+    test('CuratorSaveData 投影可還原為 EquipmentInventory', () {
       final inventory = EquipmentInventory(
         coins: 800,
         sneakers: const EquipmentItem(type: EquipmentType.sneakers, level: 2),
@@ -117,9 +86,12 @@ void main() {
         waistBag: const EquipmentItem(type: EquipmentType.waistBag, level: 3),
       );
 
-      final saveData = CuratorSaveData.fromEquipment(
+      final saveData = CuratorSaveData(
         profileId: 'uuid-1234',
-        equipment: inventory,
+        coins: inventory.coins,
+        sneakersLevel: inventory.sneakers.level,
+        cameraLevel: inventory.camera.level,
+        waistBagLevel: inventory.waistBag.level,
         completedRuns: 3,
         lastMonotonicSeq: 15,
         updatedAtUtc: DateTime.utc(2026, 9, 11, 10, 30),

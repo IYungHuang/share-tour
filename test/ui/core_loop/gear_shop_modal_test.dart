@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:share_tour/domain/core_loop/events/curator_event.dart';
 import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 import 'package:share_tour/state/core_loop/curator_run_controller.dart';
@@ -89,8 +90,9 @@ void main() {
       // 驗證金幣扣減為 200，球鞋升至 Lv.2
       expect(find.textContaining('200'), findsWidgets);
       expect(find.textContaining('Lv. 2'), findsWidgets);
-      expect(fakeRepo.saveCount, 1);
-      expect(fakeRepo.savedHistory.last.sneakersLevel, 2);
+      expect(fakeRepo.appendCount, 1);
+      expect(fakeRepo.events.last.type, CuratorEventType.equipmentUpgraded);
+      expect(fakeRepo.events.last.payload['equipment'], 'sneakers');
     });
 
     testWidgets('滿級 Lv.3 裝備顯示 MAX 標籤且按鈕禁用', (tester) async {

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:share_tour/domain/core_loop/events/curator_event.dart';
 import 'package:share_tour/domain/core_loop/models/curator_save_data.dart';
 import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
@@ -87,8 +88,10 @@ void main() {
 
       final stateAfter = customContainer.read(curatorRunControllerProvider);
       expect(stateAfter.equipment.coins, 200); // 300 - 100 = 200
-      expect(fakeRepo.saveCount, 1);
-      expect(fakeRepo.savedHistory.last.coins, 200);
+      await controller.pendingPersist;
+      expect(fakeRepo.appendCount, 1);
+      expect(fakeRepo.events.last.type, CuratorEventType.philosophyRerolled);
+      expect(fakeRepo.events.last.payload['cost'], 100);
     });
 
     test('AC-M4-2.1 & 3.1: 透過 Controller 升級裝備，即時扣幣、升級並寫入存檔', () async {
@@ -121,9 +124,11 @@ void main() {
       final stateAfter = customContainer.read(curatorRunControllerProvider);
       expect(stateAfter.equipment.sneakers.level, 2);
       expect(stateAfter.equipment.coins, 200); // 500 - 300 = 200
-      expect(fakeRepo.saveCount, 1);
-      expect(fakeRepo.savedHistory.last.sneakersLevel, 2);
-      expect(fakeRepo.savedHistory.last.coins, 200);
+      await controller.pendingPersist;
+      expect(fakeRepo.appendCount, 1);
+      expect(fakeRepo.events.last.type, CuratorEventType.equipmentUpgraded);
+      expect(fakeRepo.events.last.payload['equipment'], 'sneakers');
+      expect(fakeRepo.events.last.payload['cost'], 300);
     });
 
     test('AC-M4-3.1: 審查結算後 acceptReview() 自動累加佣金至局外資產並持久化儲存', () async {
@@ -158,9 +163,10 @@ void main() {
       final settledState = container.read(curatorRunControllerProvider);
       expect(settledState.phase, CuratorRunPhase.settled);
       expect(settledState.equipment.coins, report.earnedCoins);
-      expect(fakeRepo.saveCount, 1);
-      expect(fakeRepo.savedHistory.last.coins, report.earnedCoins);
-      expect(fakeRepo.savedHistory.last.completedRuns, 1);
+      await controller.pendingPersist;
+      expect(fakeRepo.appendCount, 1);
+      expect(fakeRepo.events.last.type, CuratorEventType.runSettled);
+      expect(fakeRepo.events.last.payload['earnedCoins'], report.earnedCoins);
     });
   });
 }

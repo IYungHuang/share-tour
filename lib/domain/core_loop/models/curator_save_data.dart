@@ -64,28 +64,6 @@ class CuratorSaveData {
     );
   }
 
-  /// 從既有 EquipmentInventory 建立存檔
-  factory CuratorSaveData.fromEquipment({
-    required String profileId,
-    required EquipmentInventory equipment,
-    int completedRuns = 0,
-    int lastMonotonicSeq = 0,
-    DateTime? updatedAtUtc,
-  }) {
-    final effectiveNow = updatedAtUtc ?? DateTime.now().toUtc();
-    return CuratorSaveData(
-      profileId: profileId,
-      saveVersion: currentSaveVersion,
-      lastMonotonicSeq: lastMonotonicSeq,
-      coins: equipment.coins,
-      sneakersLevel: equipment.sneakers.level,
-      cameraLevel: equipment.camera.level,
-      waistBagLevel: equipment.waistBag.level,
-      completedRuns: completedRuns,
-      updatedAtUtc: effectiveNow.isUtc ? effectiveNow : effectiveNow.toUtc(),
-    );
-  }
-
   /// 還原為純領域 EquipmentInventory
   EquipmentInventory toEquipmentInventory() {
     return EquipmentInventory(
@@ -105,44 +83,8 @@ class CuratorSaveData {
     );
   }
 
-  Map<String, dynamic> toJson() => {
-    'profileId': profileId,
-    'saveVersion': saveVersion,
-    'lastMonotonicSeq': lastMonotonicSeq,
-    'coins': coins,
-    'sneakersLevel': sneakersLevel,
-    'cameraLevel': cameraLevel,
-    'waistBagLevel': waistBagLevel,
-    'completedRuns': completedRuns,
-    'updatedAtUtc': updatedAtUtc.toUtc().toIso8601String(),
-  };
-
-  factory CuratorSaveData.fromJson(Map<String, dynamic> json) {
-    // 身分與時戳缺一不可：就地捏造 UUID 會讓玩家換一個身分，
-    // 就地灌入當下時間會讓同一份 JSON 兩次載入得出不同物件 (違反 CC-3 決定性重播)。
-    // 兩者皆由 toJson 必定寫入，缺少即代表存檔已損毀，交由上層走備份流程。
-    final updatedAtRaw = json['updatedAtUtc'] as String?;
-    if (updatedAtRaw == null) {
-      throw const FormatException('存檔缺少 updatedAtUtc 欄位');
-    }
-    final profileId = json['profileId'] as String?;
-    if (profileId == null) {
-      throw const FormatException('存檔缺少 profileId 欄位');
-    }
-    final parsedDate = DateTime.parse(updatedAtRaw).toUtc();
-
-    return CuratorSaveData(
-      profileId: profileId,
-      saveVersion: json['saveVersion'] as int? ?? currentSaveVersion,
-      lastMonotonicSeq: json['lastMonotonicSeq'] as int? ?? 0,
-      coins: json['coins'] as int? ?? 0,
-      sneakersLevel: json['sneakersLevel'] as int? ?? 1,
-      cameraLevel: json['cameraLevel'] as int? ?? 1,
-      waistBagLevel: json['waistBagLevel'] as int? ?? 1,
-      completedRuns: json['completedRuns'] as int? ?? 0,
-      updatedAtUtc: parsedDate,
-    );
-  }
+  // 刻意不提供 toJson / fromJson：本型別是事件日誌重播出的投影，
+  // 不是持久化格式。持久化的是 CuratorEvent，最終狀態一律重播得出 (CC-3)。
 
   CuratorSaveData copyWith({
     String? profileId,

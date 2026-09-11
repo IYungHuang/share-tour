@@ -124,7 +124,9 @@ void main() {
 
     test('AC-M3-1.1 開局狀態：canExploreProvider 為 true，推進至 fieldTrip 探索', () {
       final controller = container.read(curatorRunControllerProvider.notifier);
-      controller.startFieldTrip();
+      final briefing = container.read(curatorRunControllerProvider);
+      controller.selectPhilosophy(briefing.philosophyChoices.first);
+      controller.departToFieldTrip();
 
       final canExplore = container.read(canExploreProvider);
       final runState = container.read(curatorRunControllerProvider);

@@ -114,6 +114,13 @@ class EquipmentInventory {
   final EquipmentItem camera;
   final EquipmentItem waistBag;
 
+  /// 取出指定種類的裝備
+  EquipmentItem itemOf(EquipmentType type) => switch (type) {
+    EquipmentType.sneakers => sneakers,
+    EquipmentType.camera => camera,
+    EquipmentType.waistBag => waistBag,
+  };
+
   /// 執行裝備升級
   EquipmentInventory upgrade(EquipmentType type) {
     final item = switch (type) {

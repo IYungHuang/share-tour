@@ -1,6 +1,9 @@
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
+
+import 'package:share_tour/domain/core_loop/events/curator_event.dart';
 import 'package:share_tour/domain/core_loop/models/core_loop_exceptions.dart';
 import 'package:share_tour/domain/core_loop/models/curator_save_data.dart';
 import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
@@ -22,11 +25,13 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     CuratorRunState? initialState,
     PersistenceRepository? persistenceRepository,
     CuratorSaveData? initialSaveData,
+    DateTime Function()? nowUtc,
+    Uuid? uuid,
   }) : _materialPool = materialPool,
+       _nowUtc = nowUtc ?? (() => DateTime.now().toUtc()),
+       _uuid = uuid ?? const Uuid(),
        _resolver = resolver,
        _persistenceRepository = persistenceRepository,
-       _profileId = initialSaveData?.profileId,
-       _completedRuns = initialSaveData?.completedRuns ?? 0,
        _lastMonotonicSeq = initialSaveData?.lastMonotonicSeq ?? 0,
        super(
          initialState ??
@@ -42,18 +47,13 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
   final List<TravelMaterial> _materialPool;
   PoiMaterialResolver? _resolver;
   final PersistenceRepository? _persistenceRepository;
-  final String? _profileId;
-  int _completedRuns;
+  final DateTime Function() _nowUtc;
+  final Uuid _uuid;
   int _lastMonotonicSeq;
 
   /// 設定景點素材解析器
   void setResolver(PoiMaterialResolver resolver) {
     _resolver = resolver;
-  }
-
-  /// 開始踩線取材階段 (推進至 fieldTrip)
-  void startFieldTrip() {
-    state = state.copyWith(phase: CuratorRunPhase.fieldTrip);
   }
 
   /// 踩線取材發動 (REQ-M3-03, AC-M3-3)
@@ -93,8 +93,9 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
 
   /// 行前靈感重擲刷新候選卡 (首局零幣免費，其餘扣除 100 幣並寫入存檔)
   void rerollPhilosophies({Random? random}) {
+    final cost = state.nextRerollCost;
     state = state.rerollPhilosophies(random: random);
-    _persistSave();
+    _append(CuratorEventType.philosophyRerolled, {'cost': cost});
   }
 
   /// 確認出發踩線 (狀態轉至 fieldTrip，原子鎖定裝備快照)
@@ -104,8 +105,12 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
 
   /// 黑市升級局外裝備 (即時扣幣並寫入存檔)
   void upgradeEquipment(EquipmentType type) {
+    final cost = state.equipment.itemOf(type).nextUpgradeCost;
     state = state.upgradeEquipment(type);
-    _persistSave();
+    _append(CuratorEventType.equipmentUpgraded, {
+      'equipment': type.name,
+      'cost': cost ?? 0,
+    });
   }
 
   /// 抽取測試樣本素材 (支援 Random 種子注入，遵循 CC-3 決定性重播)
@@ -201,22 +206,16 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
       throw StateError('尚無結算報告可供接受');
     }
     state = state.completeReview(report);
-    _completedRuns++;
-    _persistSave();
+    _append(CuratorEventType.runSettled, {
+      'earnedCoins': report.earnedCoins,
+      'clientType': report.clientType,
+      'satisfaction': report.satisfaction,
+    });
   }
 
   /// 返回微調行程 (在 Near Miss / Rejected 下退回 nightEditing，保留槽位與腰包)
   void tweakItinerary() {
     state = state.tweakItinerary();
-  }
-
-  /// 開啟全新行前準備局
-  void startNewBriefing({ClientSpec? client, Random? random}) {
-    state = CuratorRunState.createBriefing(
-      equipment: state.equipment,
-      client: client,
-      random: random,
-    );
   }
 
   /// 重新啟動新單局 (進入行前準備 philosophizing 階段，保留裝備與金幣)
@@ -238,37 +237,35 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
   }
 
   /// 最近一次存檔寫入失敗的原因 (null 表示未曾失敗)。
-  /// 寫入是背景進行的，失敗必須留下痕跡，否則玩家的金幣與等級會靜默消失。
+  /// 寫入是背景進行的，失敗必須留下痕跡，否則玩家的進度會靜默消失。
   Object? get lastPersistError => _lastPersistError;
   Object? _lastPersistError;
 
-  /// 背景存檔寫入的完成 Future (供測試等待；無待處理寫入時立即完成)
+  /// 背景事件寫入的完成 Future (供測試等待；無待處理寫入時立即完成)
   Future<void> get pendingPersist => _pendingPersist ?? Future<void>.value();
   Future<void>? _pendingPersist;
 
-  void _persistSave() {
-    _pendingPersist = _writeSave();
+  /// 追加一筆局外進度事件 (CC-3 append-only)。
+  /// 最終狀態由重播得出，此處不覆寫任何既有資料。
+  void _append(CuratorEventType type, Map<String, Object?> payload) {
+    final event = CuratorEvent(
+      eventId: _uuid.v4(),
+      seq: ++_lastMonotonicSeq,
+      type: type,
+      occurredAtUtc: _nowUtc(),
+      payload: payload,
+    );
+    _pendingPersist = _writeEvent(event);
   }
 
-  Future<void> _writeSave() async {
+  Future<void> _writeEvent(CuratorEvent event) async {
     final repo = _persistenceRepository;
-    if (repo != null) {
-      final saveData = CuratorSaveData(
-        profileId: _profileId ?? state.runId,
-        coins: state.equipment.coins,
-        sneakersLevel: state.equipment.sneakers.level,
-        cameraLevel: state.equipment.camera.level,
-        waistBagLevel: state.equipment.waistBag.level,
-        completedRuns: _completedRuns,
-        lastMonotonicSeq: ++_lastMonotonicSeq,
-        updatedAtUtc: DateTime.now().toUtc(),
-      );
-      try {
-        await repo.save(saveData);
-        _lastPersistError = null;
-      } catch (e) {
-        _lastPersistError = e;
-      }
+    if (repo == null) return;
+    try {
+      await repo.appendEvents([event]);
+      _lastPersistError = null;
+    } catch (e) {
+      _lastPersistError = e;
     }
   }
 }
