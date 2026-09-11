@@ -45,30 +45,45 @@ enum TravelPhilosophy {
   final List<String> preferredTags;
   final List<String> repelledTags;
 
-  /// 評估單項素材在該哲學下的主題分數貢獻
+  /// 評估單項素材在該哲學下的主題分數貢獻 (D2 係數分級)
   PhilosophyContribution evaluateMaterial(TravelMaterial material) {
     final hitsRepelled = repelledTags.any((tag) => material.hasTag(tag));
     if (hitsRepelled) {
-      // 排斥標籤優先懲罰：貢獻打五折，且額外扣除 5 點 Theme
+      // 排斥標籤優先懲罰：單卡貢獻為 -round(themeValue * 70 / 100)
       return PhilosophyContribution(
-        effectiveTheme: (material.themeValue * 0.5).round(),
-        flatThemePenalty: 5,
-      );
-    }
-
-    final hitsPreferred = preferredTags.any((tag) => material.hasTag(tag));
-    if (hitsPreferred) {
-      // 偏好標籤加成：一次性 +50% 加成
-      return PhilosophyContribution(
-        effectiveTheme: (material.themeValue * 1.5).round(),
+        effectiveTheme: -(material.themeValue * 70 / 100).round(),
         flatThemePenalty: 0,
+        isAligned: false,
       );
     }
 
-    // 中性素材：按原本數值計算
-    return PhilosophyContribution(
-      effectiveTheme: material.themeValue,
+    final preferredMatches =
+        preferredTags.where((tag) => material.hasTag(tag)).length;
+    if (preferredMatches >= 3) {
+      return PhilosophyContribution(
+        effectiveTheme: (material.themeValue * 92 / 100).round(),
+        flatThemePenalty: 0,
+        isAligned: true,
+      );
+    } else if (preferredMatches == 2) {
+      return PhilosophyContribution(
+        effectiveTheme: (material.themeValue * 90 / 100).round(),
+        flatThemePenalty: 0,
+        isAligned: true,
+      );
+    } else if (preferredMatches == 1) {
+      return PhilosophyContribution(
+        effectiveTheme: (material.themeValue * 40 / 100).round(),
+        flatThemePenalty: 0,
+        isAligned: true,
+      );
+    }
+
+    // 中性素材：貢獻 0
+    return const PhilosophyContribution(
+      effectiveTheme: 0,
       flatThemePenalty: 0,
+      isAligned: false,
     );
   }
 }
@@ -78,13 +93,17 @@ class PhilosophyContribution {
   const PhilosophyContribution({
     required this.effectiveTheme,
     required this.flatThemePenalty,
+    this.isAligned = false,
   });
 
-  /// 經加權後的實際主題分數
+  /// 經加權後的實際主題分數貢獻 (排斥為負，契合為正，中性為 0)
   final int effectiveTheme;
 
-  /// 額外扣減的固定 Theme 點數 (如排斥標籤罰 5 點)
+  /// 額外扣減的固定 Theme 點數 (保留相容性)
   final int flatThemePenalty;
+
+  /// 是否為哲學契合素材 (命中至少 1 個偏好標籤且未排斥)
+  final bool isAligned;
 
   @override
   bool operator ==(Object other) =>
@@ -92,8 +111,9 @@ class PhilosophyContribution {
       other is PhilosophyContribution &&
           runtimeType == other.runtimeType &&
           effectiveTheme == other.effectiveTheme &&
-          flatThemePenalty == other.flatThemePenalty;
+          flatThemePenalty == other.flatThemePenalty &&
+          isAligned == other.isAligned;
 
   @override
-  int get hashCode => Object.hash(effectiveTheme, flatThemePenalty);
+  int get hashCode => Object.hash(effectiveTheme, flatThemePenalty, isAligned);
 }

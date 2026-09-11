@@ -24,6 +24,10 @@ void main() {
       rhythmActivePairs: const {},
       fatiguePairs: fatiguePairs,
       slotThemeBonuses: const {},
+      spotlightCount: hasSpotlight ? 1 : 0,
+      themeBaseline: 50,
+      themeBeforeFatigue: theme,
+      purityActive: false,
       hasSpotlight: hasSpotlight,
     );
 

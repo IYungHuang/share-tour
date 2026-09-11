@@ -97,9 +97,12 @@ void main() {
       );
 
       expect(stats.fatiguePairs.length, 1);
-      expect(stats.fatiguePairs.contains(0), isTrue); // (0, 1) 相鄰對
-      // finalTheme = base(50) + materialThemes(m0:15, m1:15) - fatigue(10) = 70
-      expect(stats.finalTheme, 70);
+      // themeBaseline = 50 + ((4 + 4) / 2).round() = 54
+      // themeBeforeFatigue = 54
+      // finalTheme = 54 - fatigue(10) = 44
+      expect(stats.themeBaseline, 54);
+      expect(stats.themeBeforeFatigue, 54);
+      expect(stats.finalTheme, 44);
     });
 
     test(
@@ -230,6 +233,162 @@ void main() {
 
       // 拉車疲勞：(2, 3) 兩者 risk 皆為 3 -> 疲勞 1 次扣 10 點
       expect(stats.fatiguePairs, {2});
+    });
+
+    group('AC-A1-1 主題契合度分級、正規化與疲勞計算 (T2)', () {
+      test('AC-A1-1.1 四槽皆為中性素材時，契合度基準分等於 50', () {
+        final itinerary = TimelineItinerary(slots: [
+          createMaterial(id: 'n0', name: '中性0', tags: ['#日常'], risk: 1, theme: 20),
+          createMaterial(id: 'n1', name: '中性1', tags: ['#日常'], risk: 1, theme: 20),
+          createMaterial(id: 'n2', name: '中性2', tags: ['#日常'], risk: 1, theme: 20),
+          createMaterial(id: 'n3', name: '中性3', tags: ['#日常'], risk: 1, theme: 20),
+        ]);
+
+        for (final philosophy in TravelPhilosophy.values) {
+          final stats = itinerary.calculateStats(
+            philosophy: philosophy,
+            cameraMultiplier: 1.0,
+          );
+          expect(stats.themeBaseline, equals(50));
+          expect(stats.finalTheme, equals(50));
+        }
+      });
+
+      test('AC-A1-1.2 命中 >=2 偏好標籤基準分介於 88 與 92，僅命中 1 標籤基準分 <= 75', () {
+        // 2 標籤命中 (midnight: #深夜, #小酌)
+        final twoHit = TimelineItinerary(slots: [
+          createMaterial(id: 'm0', name: '雙中0', tags: ['#深夜', '#小酌'], risk: 1, theme: 45),
+          createMaterial(id: 'm1', name: '雙中1', tags: ['#深夜', '#小酌'], risk: 1, theme: 45),
+          createMaterial(id: 'm2', name: '雙中2', tags: ['#深夜', '#小酌'], risk: 1, theme: 45),
+          createMaterial(id: 'm3', name: '雙中3', tags: ['#深夜', '#小酌'], risk: 1, theme: 45),
+        ]);
+        final statsTwo = twoHit.calculateStats(
+          philosophy: TravelPhilosophy.midnight,
+          cameraMultiplier: 1.0,
+        );
+        expect(statsTwo.themeBaseline, inInclusiveRange(88, 92));
+
+        // 3 標籤命中 (gourmet: #美食, #銅板美食, #早餐)
+        final threeHit = TimelineItinerary(slots: [
+          createMaterial(id: 'g0', name: '三中0', tags: ['#美食', '#銅板美食', '#早餐'], risk: 1, theme: 45),
+          createMaterial(id: 'g1', name: '三中1', tags: ['#美食', '#銅板美食', '#早餐'], risk: 1, theme: 45),
+          createMaterial(id: 'g2', name: '三中2', tags: ['#美食', '#銅板美食', '#早餐'], risk: 1, theme: 45),
+          createMaterial(id: 'g3', name: '三中3', tags: ['#美食', '#銅板美食', '#早餐'], risk: 1, theme: 45),
+        ]);
+        final statsThree = threeHit.calculateStats(
+          philosophy: TravelPhilosophy.gourmet,
+          cameraMultiplier: 1.0,
+        );
+        expect(statsThree.themeBaseline, inInclusiveRange(88, 92));
+
+        // 1 標籤命中 (midnight: 僅 #深夜)
+        final oneHit = TimelineItinerary(slots: [
+          createMaterial(id: 'o0', name: '單中0', tags: ['#深夜'], risk: 1, theme: 45),
+          createMaterial(id: 'o1', name: '單中1', tags: ['#深夜'], risk: 1, theme: 45),
+          createMaterial(id: 'o2', name: '單中2', tags: ['#深夜'], risk: 1, theme: 45),
+          createMaterial(id: 'o3', name: '單中3', tags: ['#深夜'], risk: 1, theme: 45),
+        ]);
+        final statsOne = oneHit.calculateStats(
+          philosophy: TravelPhilosophy.midnight,
+          cameraMultiplier: 1.0,
+        );
+        expect(statsOne.themeBaseline, lessThanOrEqualTo(75));
+      });
+
+      test('AC-A1-1.3 對每一種旅行哲學，均存在四槽全排斥使基準分 <= 20', () {
+        for (final philosophy in TravelPhilosophy.values) {
+          final repelledTag = philosophy.repelledTags.first;
+          final allRepelled = TimelineItinerary(slots: [
+            createMaterial(id: 'r0', name: '排斥0', tags: [repelledTag], risk: 1, theme: 45),
+            createMaterial(id: 'r1', name: '排斥1', tags: [repelledTag], risk: 1, theme: 45),
+            createMaterial(id: 'r2', name: '排斥2', tags: [repelledTag], risk: 1, theme: 45),
+            createMaterial(id: 'r3', name: '排斥3', tags: [repelledTag], risk: 1, theme: 45),
+          ]);
+          final stats = allRepelled.calculateStats(
+            philosophy: philosophy,
+            cameraMultiplier: 1.0,
+          );
+          expect(
+            stats.themeBaseline,
+            lessThanOrEqualTo(20),
+            reason: '${philosophy.displayName} 全排斥組合基準分需 <= 20',
+          );
+        }
+      });
+
+      test('AC-A1-1.4 存在一組素材與兩種哲學，使其契合度基準分相差 >= 25', () {
+        // 同一組素材帶有 #深夜 與 #散步
+        // midnight 偏好 #深夜 (+40) -> baseline 90
+        // chaos 排斥 #散步 (-32) -> baseline 18
+        final itinerary = TimelineItinerary(slots: [
+          createMaterial(id: 'x0', name: '複合0', tags: ['#深夜', '#小酌', '#散步'], risk: 1, theme: 45),
+          createMaterial(id: 'x1', name: '複合1', tags: ['#深夜', '#小酌', '#散步'], risk: 1, theme: 45),
+          createMaterial(id: 'x2', name: '複合2', tags: ['#深夜', '#小酌', '#散步'], risk: 1, theme: 45),
+          createMaterial(id: 'x3', name: '複合3', tags: ['#深夜', '#小酌', '#散步'], risk: 1, theme: 45),
+        ]);
+
+        final statsMidnight = itinerary.calculateStats(
+          philosophy: TravelPhilosophy.midnight,
+          cameraMultiplier: 1.0,
+        );
+        final statsChaos = itinerary.calculateStats(
+          philosophy: TravelPhilosophy.chaos,
+          cameraMultiplier: 1.0,
+        );
+
+        final diff = (statsMidnight.themeBaseline - statsChaos.themeBaseline).abs();
+        expect(diff, greaterThanOrEqualTo(25));
+      });
+
+      test('AC-A1-1.5 對每一種旅行哲學，恰有 1 組相鄰高風險對且疲勞前 Theme 在 40~80 時，finalTheme 等於疲勞前 Theme - 10', () {
+        for (final philosophy in TravelPhilosophy.values) {
+          // 中性卡，基準 50，無時段加成
+          // 槽位 1 與 2 為高風險 (risk 3)，其餘 risk 1 -> 恰好 1 組疲勞 (1, 2)
+          final itinerary = TimelineItinerary(slots: [
+            createMaterial(id: 'f0', name: '低0', tags: ['#常規'], risk: 1, theme: 10),
+            createMaterial(id: 'f1', name: '高1', tags: ['#常規'], risk: 3, theme: 10),
+            createMaterial(id: 'f2', name: '高2', tags: ['#常規'], risk: 3, theme: 10),
+            createMaterial(id: 'f3', name: '低3', tags: ['#常規'], risk: 1, theme: 10),
+          ]);
+
+          final stats = itinerary.calculateStats(
+            philosophy: philosophy,
+            cameraMultiplier: 1.0,
+          );
+
+          expect(stats.fatiguePairs.length, equals(1));
+          expect(stats.themeBeforeFatigue, inInclusiveRange(40, 80));
+          expect(stats.finalTheme, equals(stats.themeBeforeFatigue - 10));
+        }
+      });
+
+      test('AC-A1-1.6 對每一種旅行哲學，強 Build (基準分>=88, 疲勞前 90~100) finalTheme 必須等於疲勞前 Theme - 10', () {
+        for (final philosophy in TravelPhilosophy.values) {
+          final prefTags = philosophy.preferredTags.take(2).toList();
+          // 槽位 0 與 1 為 risk 3 (恰一組疲勞 (0,1))，槽位 2 為 risk 2 (恰一組節奏 (1,2) +10)
+          // 槽位 3 為空 (D1 空槽不進分母，各槽位無時段加成干擾)
+          final strongBuild = TimelineItinerary(slots: [
+            createMaterial(id: 's0', name: '強0', tags: prefTags, risk: 3, theme: 43),
+            createMaterial(id: 's1', name: '強1', tags: prefTags, risk: 3, theme: 43),
+            createMaterial(id: 's2', name: '強2', tags: prefTags, risk: 2, theme: 43),
+            null,
+          ]);
+
+          final stats = strongBuild.calculateStats(
+            philosophy: philosophy,
+            cameraMultiplier: 1.0,
+          );
+
+          expect(stats.fatiguePairs.length, equals(1));
+          expect(stats.themeBaseline, greaterThanOrEqualTo(88));
+          expect(stats.themeBeforeFatigue, inInclusiveRange(90, 100));
+          expect(
+            stats.finalTheme,
+            equals(stats.themeBeforeFatigue - 10),
+            reason: '${philosophy.displayName} 強 Build 不得被 clamp 吃掉 -10 疲勞懲罰',
+          );
+        }
+      });
     });
   });
 }

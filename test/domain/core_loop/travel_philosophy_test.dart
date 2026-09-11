@@ -4,7 +4,7 @@ import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
 
 void main() {
   group('五大旅行哲學系統測試 (AC-ML-2)', () {
-    test('AC-ML-2.1 選定 midnight 哲學時，帶有 #深夜 標籤的素材 themeValue 獲得 +50% 加成', () {
+    test('AC-A1-1.2 選定 midnight 哲學時，帶有 1 個偏好標籤 (#深夜) 的素材獲得 40% 加成貢獻', () {
       const philosophy = TravelPhilosophy.midnight;
       const material = TravelMaterial(
         id: 'test_spot_1',
@@ -17,11 +17,11 @@ void main() {
       );
 
       final contribution = philosophy.evaluateMaterial(material);
-      expect(contribution.effectiveTheme, 15); // 10 * 1.5 = 15
+      expect(contribution.effectiveTheme, 4); // round(10 * 0.40) = 4
       expect(contribution.flatThemePenalty, 0);
     });
 
-    test('AC-ML-2.2 選定 antiTourism 哲學時，帶有 #大眾名店 標籤扣除 50% 且額外罰 5 點', () {
+    test('AC-A1-1.3 選定 antiTourism 哲學時，帶有 #大眾名店 標籤扣除 70% 負貢獻', () {
       const philosophy = TravelPhilosophy.antiTourism;
       const material = TravelMaterial(
         id: 'test_spot_2',
@@ -34,11 +34,11 @@ void main() {
       );
 
       final contribution = philosophy.evaluateMaterial(material);
-      expect(contribution.effectiveTheme, 10); // 20 * 0.5 = 10
-      expect(contribution.flatThemePenalty, 5); // 額外扣除 5 點 Theme
+      expect(contribution.effectiveTheme, -14); // -round(20 * 0.70) = -14
+      expect(contribution.flatThemePenalty, 0);
     });
 
-    test('AC-ML-2.3 中性素材按原始 themeValue 計算，不觸發額外獎懲', () {
+    test('AC-A1-1.1 中性素材主題貢獻為 0，由基準 50 承接', () {
       const philosophy = TravelPhilosophy.slow;
       const material = TravelMaterial(
         id: 'test_spot_3',
@@ -51,11 +51,11 @@ void main() {
       );
 
       final contribution = philosophy.evaluateMaterial(material);
-      expect(contribution.effectiveTheme, 12);
+      expect(contribution.effectiveTheme, 0);
       expect(contribution.flatThemePenalty, 0);
     });
 
-    test('多重標籤命中偏好標籤僅一次性獲得 +50% 加成（不重複累計）', () {
+    test('AC-A1-1.2 命中 2 個偏好標籤獲得 90% 加成貢獻', () {
       const philosophy = TravelPhilosophy.midnight; // 偏好 #深夜, #小酌
       const material = TravelMaterial(
         id: 'test_spot_4',
@@ -68,7 +68,7 @@ void main() {
       );
 
       final contribution = philosophy.evaluateMaterial(material);
-      expect(contribution.effectiveTheme, 15); // 仍為 +50%
+      expect(contribution.effectiveTheme, 9); // round(10 * 0.90) = 9
       expect(contribution.flatThemePenalty, 0);
     });
 
@@ -85,8 +85,8 @@ void main() {
       );
 
       final contribution = philosophy.evaluateMaterial(material);
-      expect(contribution.effectiveTheme, 10); // 依排斥打五折
-      expect(contribution.flatThemePenalty, 5); // 依排斥額外扣 5
+      expect(contribution.effectiveTheme, -14); // 依排斥扣 70%
+      expect(contribution.flatThemePenalty, 0);
     });
 
     test('五大旅行哲學偏好與排斥標籤符合 SPEC 附錄 A.1 詞彙表對齊方案', () {

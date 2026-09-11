@@ -15,8 +15,12 @@ class ItineraryStats {
     required this.rhythmActivePairs,
     required this.fatiguePairs,
     required this.slotThemeBonuses,
-    required this.hasSpotlight,
-  });
+    required this.spotlightCount,
+    required this.themeBaseline,
+    required this.themeBeforeFatigue,
+    required this.purityActive,
+    bool? hasSpotlight,
+  }) : hasSpotlight = hasSpotlight ?? (spotlightCount > 0);
 
   /// 總開銷
   final int totalCost;
@@ -48,7 +52,19 @@ class ItineraryStats {
   /// 各槽位獲得的專屬 Theme 額外加分 (如 {0: 5, 1: 5})
   final Map<int, int> slotThemeBonuses;
 
-  /// 行程中是否含有至少 1 個絕景素材
+  /// 行程中焦點絕景素材數量
+  final int spotlightCount;
+
+  /// 主題契合度基準分 (50 + 已填槽位契合貢獻平均)
+  final int themeBaseline;
+
+  /// 扣除拉車疲勞前之主題分數 (含時段、節奏與純度)
+  final int themeBeforeFatigue;
+
+  /// 是否達成純度加成 (全部已填槽位皆為契合素材)
+  final bool purityActive;
+
+  /// 行程中是否含有至少 1 個絕景素材 (衍生自 spotlightCount > 0)
   final bool hasSpotlight;
 
   @override
@@ -61,21 +77,29 @@ class ItineraryStats {
           finalTheme == other.finalTheme &&
           totalStory == other.totalStory &&
           canSubmit == other.canSubmit &&
+          spotlightCount == other.spotlightCount &&
+          themeBaseline == other.themeBaseline &&
+          themeBeforeFatigue == other.themeBeforeFatigue &&
+          purityActive == other.purityActive &&
           hasSpotlight == other.hasSpotlight;
 
   @override
   int get hashCode => Object.hash(
-    totalCost,
-    totalHype,
-    finalTheme,
-    totalStory,
-    canSubmit,
-    hasSpotlight,
-  );
+        totalCost,
+        totalHype,
+        finalTheme,
+        totalStory,
+        canSubmit,
+        spotlightCount,
+        themeBaseline,
+        themeBeforeFatigue,
+        purityActive,
+        hasSpotlight,
+      );
 
   @override
   String toString() =>
-      'ItineraryStats(Cost: $totalCost, Hype: $totalHype, Theme: $finalTheme, Story: $totalStory, canSubmit: $canSubmit)';
+      'ItineraryStats(Cost: $totalCost, Hype: $totalHype, Theme: $finalTheme, Baseline: $themeBaseline, BeforeFatigue: $themeBeforeFatigue, Story: $totalStory, Spotlights: $spotlightCount, Purity: $purityActive, canSubmit: $canSubmit)';
 }
 
 /// 4 槽位時間線行程表 (支援草稿狀態與即時預覽)
@@ -119,9 +143,12 @@ class TimelineItinerary {
     int baseTheme = 50,
   }) {
     var totalCost = 0;
-    var rawThemeDelta = 0;
     var totalStory = 0;
-    var hasSpotlight = false;
+    var spotlightCount = 0;
+    var filledCount = 0;
+    var sumCardContribution = 0;
+    var slotBonusSum = 0;
+    var allFilledAligned = true;
 
     final slotEffectiveHypes = List<int>.filled(4, 0);
     final comboActiveSlots = <int>{};
@@ -134,10 +161,11 @@ class TimelineItinerary {
       final material = slots[i];
       if (material == null) continue;
 
+      filledCount++;
       totalCost += material.cost;
       totalStory += material.storyValue;
       if (material.isSpotlight) {
-        hasSpotlight = true;
+        spotlightCount++;
       }
 
       // 槽位專屬 Theme 加成
@@ -145,13 +173,16 @@ class TimelineItinerary {
       final bonus = slotType.evaluateSlotBonus(material);
       if (bonus > 0) {
         slotThemeBonuses[i] = bonus;
-        rawThemeDelta += bonus;
+        slotBonusSum += bonus;
       }
 
-      // 旅行哲學契合度計算
+      // 旅行哲學契合度計算 (D1/D2)
       final philContribution = philosophy.evaluateMaterial(material);
-      rawThemeDelta += philContribution.effectiveTheme;
-      rawThemeDelta -= philContribution.flatThemePenalty;
+      sumCardContribution +=
+          philContribution.effectiveTheme - philContribution.flatThemePenalty;
+      if (!philContribution.isAligned) {
+        allFilledAligned = false;
+      }
 
       // 槽位 Hype 基礎倍率 (黃昏槽位 Slot 2 享有相機倍率)
       final baseHype = (i == 2)
@@ -162,6 +193,7 @@ class TimelineItinerary {
     }
 
     // 2. 相鄰槽位關係判定 (0,1), (1,2), (2,3)
+    var rhythmBonusSum = 0;
     for (var i = 1; i < 4; i++) {
       final prev = slots[i - 1];
       final curr = slots[i];
@@ -183,18 +215,34 @@ class TimelineItinerary {
       final isCurrHigh = curr.riskLevel >= 3;
       if (isPrevHigh != isCurrHigh) {
         rhythmActivePairs.add(pairIndex);
-        rawThemeDelta += 10;
+        rhythmBonusSum += 10;
       }
 
       // 2.3 拉車疲勞 (兩者皆為高風險 >=3) -> -10 Theme
       if (isPrevHigh && isCurrHigh) {
         fatiguePairs.add(pairIndex);
-        rawThemeDelta -= 10;
       }
     }
 
     final totalHype = slotEffectiveHypes.fold<int>(0, (sum, h) => sum + h);
-    final finalTheme = (baseTheme + rawThemeDelta).clamp(0, 100);
+
+    // 3. 兩階段 Theme 計算 (D1/D2)
+    // 3.1 契合度基準分：50 + round(sum(cardContribution) / filledCount)，空槽不進分母
+    final themeBaseline = filledCount == 0
+        ? baseTheme
+        : baseTheme + (sumCardContribution / filledCount).round();
+
+    // 3.2 純度判定：所有已填素材皆為契合素材
+    final purityActive = filledCount > 0 && allFilledAligned;
+    const purityBonus = 0; // T2 基準為 0，T4 聯立求解 D6 正式數值
+
+    // 3.3 扣除疲勞前 Theme (含基準、時段、節奏與純度)
+    final themeBeforeFatigue =
+        themeBaseline + slotBonusSum + rhythmBonusSum + (purityActive ? purityBonus : 0);
+
+    // 3.4 最終 Theme：最後扣減疲勞再進行 0~100 clamp
+    final fatiguePenalty = fatiguePairs.length * 10;
+    final finalTheme = (themeBeforeFatigue - fatiguePenalty).clamp(0, 100);
 
     return ItineraryStats(
       totalCost: totalCost,
@@ -207,7 +255,11 @@ class TimelineItinerary {
       rhythmActivePairs: Set.unmodifiable(rhythmActivePairs),
       fatiguePairs: Set.unmodifiable(fatiguePairs),
       slotThemeBonuses: Map.unmodifiable(slotThemeBonuses),
-      hasSpotlight: hasSpotlight,
+      spotlightCount: spotlightCount,
+      themeBaseline: themeBaseline,
+      themeBeforeFatigue: themeBeforeFatigue,
+      purityActive: purityActive,
+      hasSpotlight: spotlightCount > 0,
     );
   }
 
