@@ -1,21 +1,27 @@
 import '../models/review_outcome.dart';
 import '../models/timeline_itinerary.dart';
+import '../models/travel_philosophy.dart';
 import 'client_spec.dart';
 
 /// 雙客戶 100 分制審查與結算引擎 (純領域無副作用純函式)
 class ClientReviewEngine {
+  /// 焦點絕景階梯乘數 (D5: 0, 1, 2, 3, 4 張)
+  static const List<double> spotlightLadder = [0.70, 0.75, 0.80, 0.85, 1.00];
+
   /// 執行客戶滿意度審查並輸出結算報告
   static ReviewReport evaluate({
     required ClientSpec client,
     required ItineraryStats stats,
+    required TravelPhilosophy philosophy,
   }) {
     switch (client.type) {
       case ClientType.budgetWorker:
         return _evaluateBudgetWorker(client, stats);
       case ClientType.hypeInfluencer:
-        return _evaluateHypeInfluencer(client, stats);
+        return _evaluateHypeInfluencer(client, stats, philosophy);
     }
   }
+
 
   /// 客戶 A：極限窮遊社畜審查邏輯
   static ReviewReport _evaluateBudgetWorker(
@@ -96,19 +102,30 @@ class ClientReviewEngine {
   static ReviewReport _evaluateHypeInfluencer(
     ClientSpec client,
     ItineraryStats stats,
+    TravelPhilosophy philosophy,
   ) {
-    // 1. 疲勞脫妝懲罰: 每次拉車疲勞扣 15 Hype
-    final fatiguePenaltyHype = stats.fatiguePairs.length * 15;
-    final netHype = (stats.totalHype - fatiguePenaltyHype).clamp(0, 999999);
+    // 1. 疲勞脫妝懲罰 / 冒險連段 (D4 + REQ-A1-14)
+    // 每組相鄰高風險疲勞扣除/加成 targetHype 的 14% (21 Hype)
+    final fatigueDeltaHype =
+        (client.targetHype * 14 / 100).round() * stats.fatiguePairs.length;
+    final int netHype;
+    if (philosophy.turnsAdjacentHighRiskIntoHypeCombo) {
+      // 混亂冒險：相鄰高風險轉為冒險連段加成
+      netHype = stats.totalHype + fatigueDeltaHype;
+    } else {
+      netHype = (stats.totalHype - fatigueDeltaHype).clamp(0, 999999);
+    }
 
-    // 2. 絕景打五折: 無 isSpotlight 乘 0.5
-    final spotlightMultiplier = stats.hasSpotlight ? 1.0 : 0.5;
+    // 2. 絕景階梯係數 (D5: 0..4 階梯)
+    final ladderIndex = stats.spotlightCount.clamp(0, 4);
+    final spotlightMultiplier = spotlightLadder[ladderIndex];
     final effectiveHype = (netHype * spotlightMultiplier).round();
 
     // 3. 主題加權係數: (floor + (100 - floor) * (Theme / 100)) / 100
     final floor = client.themeFloor;
     final themeFactor =
         (floor + (100 - floor) * (stats.finalTheme / 100.0)) / 100.0;
+
 
     // 4. 滿意度計算
     final rawScore = (effectiveHype / client.targetHype) * 100.0 * themeFactor;
@@ -149,7 +166,7 @@ class ClientReviewEngine {
       feedbackQuote: quote,
       subscores: {
         'netHype': netHype,
-        'fatiguePenaltyHype': fatiguePenaltyHype,
+        'fatigueDeltaHype': fatigueDeltaHype,
         'effectiveHype': effectiveHype,
         'spotlightMultiplier': spotlightMultiplier,
         'themeFactor': themeFactor,

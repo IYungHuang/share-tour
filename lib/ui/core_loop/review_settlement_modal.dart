@@ -60,6 +60,7 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
       _report = ClientReviewEngine.evaluate(
         client: clientSpec,
         stats: state.currentStats,
+        philosophy: state.philosophy,
       );
     });
   }
@@ -76,6 +77,7 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
     return ClientReviewEngine.evaluate(
       client: assigned,
       stats: state.currentStats,
+      philosophy: state.philosophy,
     );
   }
 
@@ -92,8 +94,10 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
     return ClientReviewEngine.evaluate(
       client: clientSpec,
       stats: state.currentStats,
+      philosophy: state.philosophy,
     );
   }
+
 
   @override
   Widget build(BuildContext context) {

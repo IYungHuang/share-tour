@@ -105,5 +105,14 @@ void main() {
       expect(TravelPhilosophy.chaos.preferredTags, ['#高風險', '#拉車']);
       expect(TravelPhilosophy.chaos.repelledTags, ['#散步']);
     });
+
+    test('AC-A1-6.6 turnsAdjacentHighRiskIntoHypeCombo 具名旗標唯一性 (僅混亂冒險為 true)', () {
+      expect(TravelPhilosophy.chaos.turnsAdjacentHighRiskIntoHypeCombo, isTrue);
+      for (final phil in TravelPhilosophy.values) {
+        if (phil != TravelPhilosophy.chaos) {
+          expect(phil.turnsAdjacentHighRiskIntoHypeCombo, isFalse);
+        }
+      }
+    });
   });
 }

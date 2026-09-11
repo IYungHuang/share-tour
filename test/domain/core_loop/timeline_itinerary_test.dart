@@ -98,11 +98,11 @@ void main() {
 
       expect(stats.fatiguePairs.length, 1);
       // themeBaseline = 50 + ((4 + 4) / 2).round() = 54
-      // themeBeforeFatigue = 54
-      // finalTheme = 54 - fatigue(10) = 44
+      // themeBeforeFatigue = 54 + purity(1) = 55
+      // finalTheme = 55 - fatigue(10) = 45
       expect(stats.themeBaseline, 54);
-      expect(stats.themeBeforeFatigue, 54);
-      expect(stats.finalTheme, 44);
+      expect(stats.themeBeforeFatigue, 55);
+      expect(stats.finalTheme, 45);
     });
 
     test(
@@ -123,7 +123,7 @@ void main() {
           cameraMultiplier: 1.5,
         );
         expect(statsValid.slotThemeBonuses[0], 5);
-        expect(statsValid.finalTheme, 55); // 50 + 5
+        expect(statsValid.finalTheme, 56); // 50 + 5 (slot) + 1 (purity)
 
         final riskyMorning = TimelineItinerary.empty().setSlot(
           0,
@@ -140,9 +140,10 @@ void main() {
           cameraMultiplier: 1.5,
         );
         expect(statsRisky.slotThemeBonuses.containsKey(0), isFalse);
-        expect(statsRisky.finalTheme, 50); // 無額外 5 分
+        expect(statsRisky.finalTheme, 51); // 50 + 0 (slot) + 1 (purity)
       },
     );
+
 
     test('AC-ML-4.6 Slot 1 放入帶有 #美食 且 risk <= 2 素材，Theme 獲得額外 5 點午後中繼加分', () {
       final validNoon = TimelineItinerary.empty().setSlot(
@@ -388,6 +389,46 @@ void main() {
             reason: '${philosophy.displayName} 強 Build 不得被 clamp 吃掉 -10 疲勞懲罰',
           );
         }
+      });
+
+      test('AC-A1-6.6 Theme 側對五種旅行哲學 (含混亂冒險) 固定每對相鄰高風險扣除 10 點', () {
+        final fatigueItinerary = TimelineItinerary(slots: [
+          createMaterial(id: 'f0', name: '高危0', tags: ['#拉車'], risk: 3, theme: 20),
+          createMaterial(id: 'f1', name: '高危1', tags: ['#拉車'], risk: 4, theme: 20),
+          null,
+          null,
+        ]);
+
+        for (final philosophy in TravelPhilosophy.values) {
+          final stats = fatigueItinerary.calculateStats(
+            philosophy: philosophy,
+            cameraMultiplier: 1.0,
+          );
+
+          expect(stats.fatiguePairs.length, equals(1));
+          expect(
+            stats.finalTheme,
+            equals((stats.themeBeforeFatigue - 10).clamp(0, 100)),
+            reason: '${philosophy.displayName} Theme 側必須扣除 10 點疲勞',
+          );
+        }
+      });
+
+      test('D6 純度 Theme 獎勵：所有已填槽位皆為契合素材時，享有 1 點純度加分', () {
+        final pureItinerary = TimelineItinerary(slots: [
+          createMaterial(id: 'p0', name: '純0', tags: ['#深夜', '#小酌'], risk: 1, theme: 20),
+          createMaterial(id: 'p1', name: '純1', tags: ['#深夜', '#小酌'], risk: 1, theme: 20),
+          null,
+          null,
+        ]);
+
+        final statsPure = pureItinerary.calculateStats(
+          philosophy: TravelPhilosophy.midnight,
+          cameraMultiplier: 1.0,
+        );
+
+        expect(statsPure.purityActive, isTrue);
+        expect(statsPure.themeBeforeFatigue, equals(statsPure.themeBaseline + 1));
       });
     });
   });

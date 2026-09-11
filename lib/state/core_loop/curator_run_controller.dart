@@ -188,6 +188,7 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     final report = ClientReviewEngine.evaluate(
       client: clientSpec,
       stats: stats,
+      philosophy: state.philosophy,
     );
 
     state = state.copyWith(

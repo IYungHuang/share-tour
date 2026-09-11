@@ -234,7 +234,7 @@ class TimelineItinerary {
 
     // 3.2 純度判定：所有已填素材皆為契合素材
     final purityActive = filledCount > 0 && allFilledAligned;
-    const purityBonus = 0; // T2 基準為 0，T4 聯立求解 D6 正式數值
+    const purityBonus = 1; // D6 確定性勝者為 1
 
     // 3.3 扣除疲勞前 Theme (含基準、時段、節奏與純度)
     final themeBeforeFatigue =

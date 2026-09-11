@@ -1,6 +1,9 @@
 // ignore_for_file: avoid_print
 
 import 'package:share_tour/data/core_loop/kyoto_night_catalog.dart';
+import 'package:share_tour/domain/core_loop/models/travel_material.dart';
+import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
+
 
 typedef D2Candidate = ({
   int oneTagCoeff,
@@ -13,6 +16,30 @@ typedef D3Candidate = ({
   int themeWeight,
   int floor,
 });
+
+typedef D4D5D6Candidate = ({
+  int d4FatigueRatio,
+  List<int> d5Ladder,
+  int d6PurityBonus,
+});
+
+class ItineraryFeature {
+  final int hype;
+  final int fatiguePairs;
+  final int spotlightCount;
+  final int themeBeforePurity;
+  final bool isPure;
+  final int slotCount;
+
+  const ItineraryFeature({
+    required this.hype,
+    required this.fatiguePairs,
+    required this.spotlightCount,
+    required this.themeBeforePurity,
+    required this.isPure,
+    required this.slotCount,
+  });
+}
 
 void main() {
   print('=== Share Tour MVP Amendment 01 Balance Search Tool ===');
@@ -110,17 +137,14 @@ void main() {
 
   // 先取兩客戶 Theme 90 參考分最接近 90，再取 Theme 30 降幅最接近 25，再依 (themeWeight, floor) 排序
   feasibleD3.sort((a, b) {
-    // 1. 兩客戶 Theme 90 參考分最接近 90
     final diff90A = _diffFrom90(a);
     final diff90B = _diffFrom90(b);
     if (diff90A != diff90B) return diff90A.compareTo(diff90B);
 
-    // 2. Theme 30 降幅最接近 25
     final dropDiffA = _dropDiffFrom25(a);
     final dropDiffB = _dropDiffFrom25(b);
     if (dropDiffA != dropDiffB) return dropDiffA.compareTo(dropDiffB);
 
-    // 3. (themeWeight, floor) 字典序
     final cmpTw = a.themeWeight.compareTo(b.themeWeight);
     if (cmpTw != 0) return cmpTw;
     return a.floor.compareTo(b.floor);
@@ -135,12 +159,523 @@ void main() {
   for (final c in feasibleD3.take(5)) {
     print('  $c (diff90: ${_diffFrom90(c)}, dropDiff: ${_dropDiffFrom25(c)})');
   }
+
+  // 4. D4 + D5 + D6 聯立搜尋與 D10 外層
+  print('\n--- Searching D4+D5+D6 Jointly with D10 Outer Loop ---');
+  print('D10 Domain: cameraMultiplier=100..150 (step 5)');
+  print('D4 Domain: fatigueRatio=14..100 (step 1)');
+  print('D5 Domain: ladder discrete scale [70, L1, L2, L3, 100] from {75,80,85,90,95}, adjDiff<=15');
+  print('D6 Domain: purityBonus=1..2 (step 1)');
+
+  final d5Ladders = _generateD5Ladders();
+  print('Total valid D5 ladders: ${d5Ladders.length}');
+
+  final materials = kyotoNightMaterials;
+  final highRiskMaterials = materials.where((m) => m.riskLevel >= 3).toList();
+
+  // 評估當前生產相機倍率 D10 = 150 (1.5x)
+  final d10Baseline = 150;
+  final cameraMultiplierBaseline = d10Baseline / 100.0;
+  print('\nEvaluating production baseline D10 = $d10Baseline (1.5x)...');
+
+  final frontiers = <TravelPhilosophy, List<ItineraryFeature>>{};
+  final maxHype4ChaosItineraries = <ItineraryFeature>[];
+  var maxHype4Chaos = -1;
+
+  final highRisk3Features = <TravelPhilosophy, List<ItineraryFeature>>{};
+  final highRisk4Features = <TravelPhilosophy, List<ItineraryFeature>>{};
+
+  for (final phil in TravelPhilosophy.values) {
+    final allFeatures = _extractItineraryFeatures(materials, phil, cameraMultiplierBaseline);
+    frontiers[phil] = _pruneFrontier(allFeatures);
+
+    if (phil == TravelPhilosophy.chaos) {
+      for (final f in allFeatures) {
+        if (f.slotCount == 4) {
+          if (f.hype > maxHype4Chaos) {
+            maxHype4Chaos = f.hype;
+            maxHype4ChaosItineraries.clear();
+            maxHype4ChaosItineraries.add(f);
+          } else if (f.hype == maxHype4Chaos) {
+            maxHype4ChaosItineraries.add(f);
+          }
+        }
+      }
+    }
+
+    final hr3 = _extract3SlotFeatures(highRiskMaterials, phil, cameraMultiplierBaseline);
+    final hr4 = _extract4SlotFeatures(highRiskMaterials, phil, cameraMultiplierBaseline);
+    highRisk3Features[phil] = _pruneFrontier(hr3);
+    highRisk4Features[phil] = _pruneFrontier(hr4);
+  }
+
+  print('Legal itineraries per philosophy: 922,560 (Total: 4,612,800)');
+  print('Chaos maxHype4 = $maxHype4Chaos (tied 4-slot itineraries: ${maxHype4ChaosItineraries.length})');
+
+  var totalTestedD456 = 0;
+  final feasibleD456 = <D4D5D6Candidate>[];
+
+  for (var d4 = 14; d4 <= 100; d4++) {
+    final fHype = (150 * d4 / 100).round();
+    if (fHype < 20) continue; // AC-A1-6.3a
+
+    for (final d5 in d5Ladders) {
+      // AC-A1-6.3b: 新增一組疲勞損失不得小於 totalHype +20 之增益
+      if (!_satisfiesAC63b(d4, d5)) continue;
+
+      for (var d6 = 1; d6 <= 2; d6++) {
+        totalTestedD456++;
+        final cand = (d4FatigueRatio: d4, d5Ladder: d5, d6PurityBonus: d6);
+
+        // AC-A1-6.7: 混亂冒險最高 Hype 4 槽平手行程在網紅下均達 Pass (>= 70)
+        var pass67 = true;
+        for (final it in maxHype4ChaosItineraries) {
+          final sat = _evaluateHypeSatisfaction(
+            feature: it,
+            philosophy: TravelPhilosophy.chaos,
+            d4FatigueRatio: d4,
+            d5Ladder: d5,
+            d6PurityBonus: d6,
+          );
+          if (sat < 70) {
+            pass67 = false;
+            break;
+          }
+        }
+        if (!pass67) continue;
+
+        // AC-A1-3.6: 高風險素材 3 槽最佳滿意度不得高於 4 槽最佳滿意度
+        var pass36 = true;
+        for (final phil in TravelPhilosophy.values) {
+          var max3 = -1;
+          for (final f in highRisk3Features[phil]!) {
+            final s = _evaluateHypeSatisfaction(feature: f, philosophy: phil, d4FatigueRatio: d4, d5Ladder: d5, d6PurityBonus: d6);
+            if (s > max3) max3 = s;
+          }
+          var max4 = -1;
+          for (final f in highRisk4Features[phil]!) {
+            final s = _evaluateHypeSatisfaction(feature: f, philosophy: phil, d4FatigueRatio: d4, d5Ladder: d5, d6PurityBonus: d6);
+            if (s > max4) max4 = s;
+          }
+          if (max3 > max4) {
+            pass36 = false;
+            break;
+          }
+        }
+        if (!pass36) continue;
+
+        // AC-A1-6.8a: 五哲學最佳滿意度相差 <= 15 分，且至少 2 種達 Perfect (>= 90)
+        final bestSats = <int>[];
+        for (final phil in TravelPhilosophy.values) {
+          var maxS = -1;
+          for (final f in frontiers[phil]!) {
+            final s = _evaluateHypeSatisfaction(feature: f, philosophy: phil, d4FatigueRatio: d4, d5Ladder: d5, d6PurityBonus: d6);
+            if (s > maxS) maxS = s;
+          }
+          bestSats.add(maxS);
+        }
+
+        final minSat = bestSats.reduce((a, b) => a < b ? a : b);
+        final maxSat = bestSats.reduce((a, b) => a > b ? a : b);
+        if (maxSat - minSat > 15) continue;
+        final perfectCount = bestSats.where((s) => s >= 90).length;
+        if (perfectCount < 2) continue;
+
+        feasibleD456.add(cand);
+      }
+    }
+  }
+
+  print('Total (D4,D5,D6) candidates tested: $totalTestedD456');
+  print('Feasible (D4,D5,D6) count for D10=150: ${feasibleD456.length}');
+
+  if (feasibleD456.isEmpty) {
+    print('ERROR: No feasible D4/D5/D6 candidates found! STOPPING per PLAN specification.');
+    return;
+  }
+
+  // 依 (D4, D5 ladder, D6) 字典序取確定性勝者
+  feasibleD456.sort((a, b) {
+    final cmpD4 = a.d4FatigueRatio.compareTo(b.d4FatigueRatio);
+    if (cmpD4 != 0) return cmpD4;
+
+    for (var i = 0; i < 5; i++) {
+      final cmpLadder = a.d5Ladder[i].compareTo(b.d5Ladder[i]);
+      if (cmpLadder != 0) return cmpLadder;
+    }
+
+    return a.d6PurityBonus.compareTo(b.d6PurityBonus);
+  });
+
+  final winnerD456 = feasibleD456.first;
+  print('\nSelected (D4, D5, D6) Winner for D10=150:');
+  print('  D4 (fatigueRatio): ${winnerD456.d4FatigueRatio}% (deducts ${(150 * winnerD456.d4FatigueRatio / 100).round()} Hype per pair)');
+  print('  D5 (spotlightLadder): ${winnerD456.d5Ladder.map((x) => '$x%').toList()}');
+  print('  D6 (purityBonus): +${winnerD456.d6PurityBonus} Theme');
+
+  print('\nFeasible sample (first 5):');
+  for (final c in feasibleD456.take(5)) {
+    print('  d4=${c.d4FatigueRatio}%, d5=${c.d5Ladder}, d6=+${c.d6PurityBonus}');
+  }
+}
+
+List<List<int>> _generateD5Ladders() {
+  final ladders = <List<int>>[];
+  final intermediate = [75, 80, 85, 90, 95];
+  for (var i = 0; i < intermediate.length; i++) {
+    for (var j = i + 1; j < intermediate.length; j++) {
+      for (var k = j + 1; k < intermediate.length; k++) {
+        final l1 = intermediate[i];
+        final l2 = intermediate[j];
+        final l3 = intermediate[k];
+        if (l1 - 70 <= 15 && l2 - l1 <= 15 && l3 - l2 <= 15 && 100 - l3 <= 15) {
+          ladders.add([70, l1, l2, l3, 100]);
+        }
+      }
+    }
+  }
+  return ladders;
+}
+
+bool _satisfiesAC63b(int d4, List<int> d5) {
+  for (final baseH in [100, 120, 150]) {
+    for (final baseT in [50, 70, 90]) {
+      for (final sc in [0, 1, 2]) {
+        final featBase = ItineraryFeature(hype: baseH, fatiguePairs: 0, spotlightCount: sc, themeBeforePurity: baseT, isPure: false, slotCount: 4);
+        final featPlus20 = ItineraryFeature(hype: baseH + 20, fatiguePairs: 0, spotlightCount: sc, themeBeforePurity: baseT, isPure: false, slotCount: 4);
+        final featFatigue = ItineraryFeature(hype: baseH, fatiguePairs: 1, spotlightCount: sc, themeBeforePurity: baseT, isPure: false, slotCount: 4);
+
+        final satBase = _evaluateHypeSatisfaction(feature: featBase, philosophy: TravelPhilosophy.midnight, d4FatigueRatio: d4, d5Ladder: d5, d6PurityBonus: 1);
+        final satPlus20 = _evaluateHypeSatisfaction(feature: featPlus20, philosophy: TravelPhilosophy.midnight, d4FatigueRatio: d4, d5Ladder: d5, d6PurityBonus: 1);
+        final satFatigue = _evaluateHypeSatisfaction(feature: featFatigue, philosophy: TravelPhilosophy.midnight, d4FatigueRatio: d4, d5Ladder: d5, d6PurityBonus: 1);
+
+        final gain = satPlus20 - satBase;
+        final loss = satBase - satFatigue;
+        if (loss < gain) return false;
+      }
+    }
+  }
+  return true;
+}
+
+int _evaluateHypeSatisfaction({
+  required ItineraryFeature feature,
+  required TravelPhilosophy philosophy,
+  required int d4FatigueRatio,
+  required List<int> d5Ladder,
+  required int d6PurityBonus,
+}) {
+  final fatigueHypePerPair = (150 * d4FatigueRatio / 100).round();
+  final int netHype;
+  if (philosophy.turnsAdjacentHighRiskIntoHypeCombo) {
+    netHype = feature.hype + feature.fatiguePairs * fatigueHypePerPair;
+  } else {
+    netHype = (feature.hype - feature.fatiguePairs * fatigueHypePerPair).clamp(0, 999999);
+  }
+
+  final spotlightMultiplier = d5Ladder[feature.spotlightCount.clamp(0, 4)] / 100.0;
+  final effectiveHype = (netHype * spotlightMultiplier).round();
+
+  final themeBeforeFatigue = feature.themeBeforePurity + (feature.isPure ? d6PurityBonus : 0);
+  final finalTheme = (themeBeforeFatigue - feature.fatiguePairs * 10).clamp(0, 100);
+
+  const floor = 44;
+  final themeFactor = (floor + (100 - floor) * (finalTheme / 100.0)) / 100.0;
+
+  final rawScore = (effectiveHype / 150.0) * 100.0 * themeFactor;
+  return rawScore.round().clamp(0, 100);
+}
+
+List<ItineraryFeature> _extractItineraryFeatures(
+  List<TravelMaterial> materials,
+  TravelPhilosophy phil,
+  double cameraMultiplier,
+) {
+  final features = <ItineraryFeature>[];
+  final n = materials.length;
+
+  // 4 slots
+  for (var i = 0; i < n; i++) {
+    final m0 = materials[i];
+    for (var j = 0; j < n; j++) {
+      if (j == i) continue;
+      final m1 = materials[j];
+      for (var k = 0; k < n; k++) {
+        if (k == i || k == j) continue;
+        final m2 = materials[k];
+        for (var l = 0; l < n; l++) {
+          if (l == i || l == j || l == k) continue;
+          final m3 = materials[l];
+
+          var spotlights = 0;
+          if (m0.isSpotlight) spotlights++;
+          if (m1.isSpotlight) spotlights++;
+          if (m2.isSpotlight) spotlights++;
+          if (m3.isSpotlight) spotlights++;
+
+          var slotBonus = 0;
+          if (m0.hasTag('#散步') && m0.riskLevel <= 2) slotBonus += 5;
+          if (m1.hasTag('#美食') && m1.riskLevel <= 2) slotBonus += 5;
+
+          final c0 = phil.evaluateMaterial(m0);
+          final c1 = phil.evaluateMaterial(m1);
+          final c2 = phil.evaluateMaterial(m2);
+          final c3 = phil.evaluateMaterial(m3);
+          final sumContrib = (c0.effectiveTheme - c0.flatThemePenalty) +
+              (c1.effectiveTheme - c1.flatThemePenalty) +
+              (c2.effectiveTheme - c2.flatThemePenalty) +
+              (c3.effectiveTheme - c3.flatThemePenalty);
+          final isPure = c0.isAligned && c1.isAligned && c2.isAligned && c3.isAligned;
+
+          var h0 = m0.hypeValue;
+          var h1 = m1.hypeValue;
+          if (m1.sharesTagWith(m0)) h1 = (h1 * 1.2).round();
+          var h2 = (m2.hypeValue * cameraMultiplier).round();
+          if (m2.sharesTagWith(m1)) h2 = (m2.hypeValue * cameraMultiplier * 1.2).round();
+          var h3 = m3.hypeValue;
+          if (m3.sharesTagWith(m2)) h3 = (h3 * 1.2).round();
+          final totalHype = h0 + h1 + h2 + h3;
+
+          var rhythm = 0;
+          var fatigue = 0;
+          final r0High = m0.riskLevel >= 3;
+          final r1High = m1.riskLevel >= 3;
+          final r2High = m2.riskLevel >= 3;
+          final r3High = m3.riskLevel >= 3;
+
+          if (r0High != r1High) rhythm += 10;
+          if (r0High && r1High) fatigue++;
+          if (r1High != r2High) rhythm += 10;
+          if (r1High && r2High) fatigue++;
+          if (r2High != r3High) rhythm += 10;
+          if (r2High && r3High) fatigue++;
+
+          final baseline = 50 + (sumContrib / 4.0).round();
+          features.add(ItineraryFeature(
+            hype: totalHype,
+            fatiguePairs: fatigue,
+            spotlightCount: spotlights,
+            themeBeforePurity: baseline + slotBonus + rhythm,
+            isPure: isPure,
+            slotCount: 4,
+          ));
+        }
+      }
+    }
+  }
+
+  // 3 slots
+  features.addAll(_extract3SlotFeatures(materials, phil, cameraMultiplier));
+
+  return features;
+}
+
+List<ItineraryFeature> _extract3SlotFeatures(
+  List<TravelMaterial> materials,
+  TravelPhilosophy phil,
+  double cameraMultiplier,
+) {
+  final features = <ItineraryFeature>[];
+  final n = materials.length;
+
+  for (var i = 0; i < n; i++) {
+    final m0 = materials[i];
+    for (var j = 0; j < n; j++) {
+      if (j == i) continue;
+      final m1 = materials[j];
+      for (var k = 0; k < n; k++) {
+        if (k == i || k == j) continue;
+        final m2 = materials[k];
+
+        var spotlights = 0;
+        if (m0.isSpotlight) spotlights++;
+        if (m1.isSpotlight) spotlights++;
+        if (m2.isSpotlight) spotlights++;
+
+        final c0 = phil.evaluateMaterial(m0);
+        final c1 = phil.evaluateMaterial(m1);
+        final c2 = phil.evaluateMaterial(m2);
+        final sumContrib = (c0.effectiveTheme - c0.flatThemePenalty) +
+            (c1.effectiveTheme - c1.flatThemePenalty) +
+            (c2.effectiveTheme - c2.flatThemePenalty);
+        final isPure = c0.isAligned && c1.isAligned && c2.isAligned;
+        final baseline = 50 + (sumContrib / 3.0).round();
+
+        // [0, 1, 2, null]
+        {
+          var slotBonus = 0;
+          if (m0.hasTag('#散步') && m0.riskLevel <= 2) slotBonus += 5;
+          if (m1.hasTag('#美食') && m1.riskLevel <= 2) slotBonus += 5;
+
+          var h0 = m0.hypeValue;
+          var h1 = m1.hypeValue;
+          if (m1.sharesTagWith(m0)) h1 = (h1 * 1.2).round();
+          var h2 = (m2.hypeValue * cameraMultiplier).round();
+          if (m2.sharesTagWith(m1)) h2 = (m2.hypeValue * cameraMultiplier * 1.2).round();
+
+          var rhythm = 0;
+          var fatigue = 0;
+          final r0 = m0.riskLevel >= 3;
+          final r1 = m1.riskLevel >= 3;
+          final r2 = m2.riskLevel >= 3;
+          if (r0 != r1) rhythm += 10;
+          if (r0 && r1) fatigue++;
+          if (r1 != r2) rhythm += 10;
+          if (r1 && r2) fatigue++;
+
+          features.add(ItineraryFeature(
+            hype: h0 + h1 + h2,
+            fatiguePairs: fatigue,
+            spotlightCount: spotlights,
+            themeBeforePurity: baseline + slotBonus + rhythm,
+            isPure: isPure,
+            slotCount: 3,
+          ));
+        }
+
+        // [null, 0, 1, 2] -> slots[1]=m0, slots[2]=m1, slots[3]=m2
+        {
+          var slotBonus = 0;
+          if (m0.hasTag('#美食') && m0.riskLevel <= 2) slotBonus += 5; // slot 1
+
+          var h0 = m0.hypeValue;
+          var h1 = (m1.hypeValue * cameraMultiplier).round(); // slot 2
+          if (m1.sharesTagWith(m0)) h1 = (m1.hypeValue * cameraMultiplier * 1.2).round();
+          var h2 = m2.hypeValue;
+          if (m2.sharesTagWith(m1)) h2 = (h2 * 1.2).round();
+
+          var rhythm = 0;
+          var fatigue = 0;
+          final r0 = m0.riskLevel >= 3;
+          final r1 = m1.riskLevel >= 3;
+          final r2 = m2.riskLevel >= 3;
+          if (r0 != r1) rhythm += 10;
+          if (r0 && r1) fatigue++;
+          if (r1 != r2) rhythm += 10;
+          if (r1 && r2) fatigue++;
+
+          features.add(ItineraryFeature(
+            hype: h0 + h1 + h2,
+            fatiguePairs: fatigue,
+            spotlightCount: spotlights,
+            themeBeforePurity: baseline + slotBonus + rhythm,
+            isPure: isPure,
+            slotCount: 3,
+          ));
+        }
+      }
+    }
+  }
+
+  return features;
+}
+
+List<ItineraryFeature> _extract4SlotFeatures(
+  List<TravelMaterial> materials,
+  TravelPhilosophy phil,
+  double cameraMultiplier,
+) {
+  final features = <ItineraryFeature>[];
+  final n = materials.length;
+
+  for (var i = 0; i < n; i++) {
+    final m0 = materials[i];
+    for (var j = 0; j < n; j++) {
+      if (j == i) continue;
+      final m1 = materials[j];
+      for (var k = 0; k < n; k++) {
+        if (k == i || k == j) continue;
+        final m2 = materials[k];
+        for (var l = 0; l < n; l++) {
+          if (l == i || l == j || l == k) continue;
+          final m3 = materials[l];
+
+          var spotlights = 0;
+          if (m0.isSpotlight) spotlights++;
+          if (m1.isSpotlight) spotlights++;
+          if (m2.isSpotlight) spotlights++;
+          if (m3.isSpotlight) spotlights++;
+
+          var slotBonus = 0;
+          if (m0.hasTag('#散步') && m0.riskLevel <= 2) slotBonus += 5;
+          if (m1.hasTag('#美食') && m1.riskLevel <= 2) slotBonus += 5;
+
+          final c0 = phil.evaluateMaterial(m0);
+          final c1 = phil.evaluateMaterial(m1);
+          final c2 = phil.evaluateMaterial(m2);
+          final c3 = phil.evaluateMaterial(m3);
+          final sumContrib = (c0.effectiveTheme - c0.flatThemePenalty) +
+              (c1.effectiveTheme - c1.flatThemePenalty) +
+              (c2.effectiveTheme - c2.flatThemePenalty) +
+              (c3.effectiveTheme - c3.flatThemePenalty);
+          final isPure = c0.isAligned && c1.isAligned && c2.isAligned && c3.isAligned;
+
+          var h0 = m0.hypeValue;
+          var h1 = m1.hypeValue;
+          if (m1.sharesTagWith(m0)) h1 = (h1 * 1.2).round();
+          var h2 = (m2.hypeValue * cameraMultiplier).round();
+          if (m2.sharesTagWith(m1)) h2 = (m2.hypeValue * cameraMultiplier * 1.2).round();
+          var h3 = m3.hypeValue;
+          if (m3.sharesTagWith(m2)) h3 = (h3 * 1.2).round();
+
+          var rhythm = 0;
+          var fatigue = 0;
+          final r0 = m0.riskLevel >= 3;
+          final r1 = m1.riskLevel >= 3;
+          final r2 = m2.riskLevel >= 3;
+          final r3 = m3.riskLevel >= 3;
+          if (r0 != r1) rhythm += 10;
+          if (r0 && r1) fatigue++;
+          if (r1 != r2) rhythm += 10;
+          if (r1 && r2) fatigue++;
+          if (r2 != r3) rhythm += 10;
+          if (r2 && r3) fatigue++;
+
+          final baseline = 50 + (sumContrib / 4.0).round();
+          features.add(ItineraryFeature(
+            hype: h0 + h1 + h2 + h3,
+            fatiguePairs: fatigue,
+            spotlightCount: spotlights,
+            themeBeforePurity: baseline + slotBonus + rhythm,
+            isPure: isPure,
+            slotCount: 4,
+          ));
+        }
+      }
+    }
+  }
+
+  return features;
+}
+
+List<ItineraryFeature> _pruneFrontier(List<ItineraryFeature> features) {
+  final groups = <int, List<ItineraryFeature>>{};
+  for (final f in features) {
+    final key = (f.fatiguePairs << 4) | (f.spotlightCount << 1) | (f.isPure ? 1 : 0);
+    (groups[key] ??= []).add(f);
+  }
+
+  final result = <ItineraryFeature>[];
+  for (final list in groups.values) {
+    list.sort((a, b) {
+      final cmpHype = b.hype.compareTo(a.hype);
+      if (cmpHype != 0) return cmpHype;
+      return b.themeBeforePurity.compareTo(a.themeBeforePurity);
+    });
+
+    var maxThemeSeen = -1;
+    for (final f in list) {
+      if (f.themeBeforePurity > maxThemeSeen) {
+        result.add(f);
+        maxThemeSeen = f.themeBeforePurity;
+      }
+    }
+  }
+  return result;
 }
 
 int _diffFrom90(D3Candidate c) {
-  // 社畜：sat90 = (100 - tw) + round(tw * 90 / 100)
   final sat90Bw = (100 - c.themeWeight) + (c.themeWeight * 90 / 100).round();
-  // 網紅：sat90 = round(100.0 * (fl + (100 - fl) * 0.90) / 100)
   final sat90Hi = (100.0 * (c.floor + (100 - c.floor) * 90 / 100) / 100).round();
   return (sat90Bw - 90).abs() + (sat90Hi - 90).abs();
 }
@@ -158,13 +693,11 @@ int _dropDiffFrom25(D3Candidate c) {
 }
 
 bool _satisfiesD3Constraints(D3Candidate c) {
-  // AC-A1-1.7 社畜:
   final sat90Bw = (100 - c.themeWeight) + (c.themeWeight * 90 / 100).round();
   if (sat90Bw < 85 || sat90Bw > 95) return false;
   final sat30Bw = (100 - c.themeWeight) + (c.themeWeight * 30 / 100).round();
   if (sat90Bw - sat30Bw < 20) return false;
 
-  // AC-A1-1.7 網紅:
   final sat90Hi = (100.0 * (c.floor + (100 - c.floor) * 90 / 100) / 100).round();
   if (sat90Hi < 85 || sat90Hi > 95) return false;
   final sat30Hi = (100.0 * (c.floor + (100 - c.floor) * 30 / 100) / 100).round();

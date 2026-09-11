@@ -108,6 +108,7 @@ List<TimelineItinerary> bestBySatisfaction(
     final report = ClientReviewEngine.evaluate(
       client: client,
       stats: stats,
+      philosophy: philosophy,
     );
     if (report.satisfaction > maxSatisfaction) {
       maxSatisfaction = report.satisfaction;

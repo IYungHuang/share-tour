@@ -31,6 +31,7 @@ enum TravelPhilosophy {
     quote: '最好的旅行通常從計畫失敗開始。',
     preferredTags: ['#高風險', '#拉車'],
     repelledTags: ['#散步'],
+    turnsAdjacentHighRiskIntoHypeCombo: true,
   );
 
   const TravelPhilosophy({
@@ -38,12 +39,19 @@ enum TravelPhilosophy {
     required this.quote,
     required this.preferredTags,
     required this.repelledTags,
+    this.turnsAdjacentHighRiskIntoHypeCombo = false,
   });
 
   final String displayName;
   final String quote;
   final List<String> preferredTags;
   final List<String> repelledTags;
+
+  /// 是否將相鄰高風險在 Hype 側由拉車疲勞反轉為冒險連段 (REQ-A1-14 / AC-A1-6.6)
+  ///
+  /// 全系統唯有混亂冒險為 true；Theme 側疲勞則一律固定扣除 10 點。
+  final bool turnsAdjacentHighRiskIntoHypeCombo;
+
 
   /// 評估單項素材在該哲學下的主題分數貢獻 (D2 係數分級)
   PhilosophyContribution evaluateMaterial(TravelMaterial material) {
