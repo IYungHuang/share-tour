@@ -14,13 +14,13 @@ void main() {
       final upgraded = state.upgrade(EquipmentType.sneakers);
 
       expect(upgraded.sneakers.level, 2);
-      expect(upgraded.coins, 700); // 1000 - 300
+      expect(upgraded.coins, 500); // 1000 - 500
       expect(upgraded.sneakers.maxHp, 125);
     });
 
     test('AC-ML-6.2 佣金不足時升級拋出異常，金額與等級不變', () {
       final state = EquipmentInventory(
-        coins: 200, // 不足 300
+        coins: 400, // 不足 500
         sneakers: EquipmentItem(type: EquipmentType.sneakers, level: 1),
         camera: EquipmentItem(type: EquipmentType.camera, level: 1),
         waistBag: EquipmentItem(type: EquipmentType.waistBag, level: 1),
@@ -30,7 +30,7 @@ void main() {
         () => state.upgrade(EquipmentType.sneakers),
         throwsA(isA<InsufficientCoinsException>()),
       );
-      expect(state.coins, 200);
+      expect(state.coins, 400);
       expect(state.sneakers.level, 1);
     });
 

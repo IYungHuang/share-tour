@@ -132,5 +132,52 @@ void main() {
       expect(prefs.getString(LocalPersistenceRepository.eventLogKey), isNull);
       expect(await repo.loadEvents(), isEmpty);
     });
+
+    test('舊版日誌 JSON fixture 載入與重啟驗證：無 corrupted backup、重播正確且可追加新事件', () async {
+      const historicalJson = '''[
+        {"eventId":"h1","seq":1,"type":"profileCreated","occurredAtUtc":"2026-09-10T12:00:00.000Z","payload":{"profileId":"hist-p1"}},
+        {"eventId":"h2","seq":2,"type":"runSettled","occurredAtUtc":"2026-09-10T12:30:00.000Z","payload":{"earnedCoins":2000}},
+        {"eventId":"h3","seq":3,"type":"equipmentUpgraded","occurredAtUtc":"2026-09-10T12:35:00.000Z","payload":{"equipment":"sneakers","cost":300}}
+      ]''';
+
+      await freshRepo({
+        LocalPersistenceRepository.eventLogKey: historicalJson,
+      });
+
+      // 載入舊日誌存檔
+      final save1 = await repo.loadSave();
+      expect(save1.profileId, 'hist-p1');
+      expect(save1.coins, 1700); // 2000 - 300
+      expect(save1.sneakersLevel, 2);
+      expect(save1.completedRuns, 1);
+      expect(save1.lastMonotonicSeq, 3);
+
+      // 驗證未產生損毀備份
+      expect(
+        prefs.getKeys().any((k) => k.startsWith('event_log_corrupted_')),
+        isFalse,
+      );
+
+      // 重開 repo，確認舊日誌未被覆蓋或修改
+      final repo2 = LocalPersistenceRepository(prefs: prefs);
+      final rawBefore = prefs.getString(LocalPersistenceRepository.eventLogKey);
+      final save2 = await repo2.loadSave();
+      expect(save2, save1);
+      expect(prefs.getString(LocalPersistenceRepository.eventLogKey), rawBefore);
+
+      // 載入後新增一筆新價格事件 (500)
+      final appended = await repo2.appendEvents([
+        draft(4, CuratorEventType.equipmentUpgraded, {
+          'equipment': 'sneakers',
+          'cost': 500,
+        }),
+      ]);
+      expect(appended.single.seq, 4);
+
+      final save3 = await repo2.loadSave();
+      expect(save3.coins, 1200); // 1700 - 500
+      expect(save3.sneakersLevel, 3);
+      expect(save3.lastMonotonicSeq, 4);
+    });
   });
 }

@@ -61,11 +61,11 @@ class EquipmentItem {
     };
   }
 
-  /// 升級下一級所需花費 (Lv.1 -> Lv.2: 300, Lv.2 -> Lv.3: 1200)
+  /// 升級下一級所需花費 (Lv.1 -> Lv.2: 500, Lv.2 -> Lv.3: 2000) (D9)
   int? get nextUpgradeCost {
     return switch (level) {
-      1 => 300,
-      2 => 1200,
+      1 => 500,
+      2 => 2000,
       _ => null,
     };
   }

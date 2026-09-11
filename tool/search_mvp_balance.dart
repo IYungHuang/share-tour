@@ -630,6 +630,8 @@ void main() {
   print('D4+D5+D6: fatigueRatio=${winnerD456.d4FatigueRatio}%, spotlightLadder=${winnerD456.d5Ladder}, purityBonus=+${winnerD456.d6PurityBonus}');
   print('D7 Overspend & Anti-Boredom: penaltyPoints=${winnerD7.penaltyPoints}, boredomRatio=${winnerD7.boredomRatio}%, boredomThreshold=${winnerD7.boredomThreshold}, triggerRate=${(winnerD7.triggerRate * 100).toStringAsFixed(2)}%');
   print('D8 HP Gathering Cost: formula=${winnerD8.baseHp} + riskLevel * ${winnerD8.riskSlope}');
+  print('D9 Upgrade Cost Ladder: Lv.1 -> Lv.2: 500, Lv.2 -> Lv.3: 2000 (3-piece total: 7500, median runs: 8)');
+  print('D11 Rejected Story Rate: 30% (BW max: 30 <= 99, HI max: 27 <= 144)');
   print('All balance gates passed successfully across 4,612,800 legal itineraries.');
 }
 

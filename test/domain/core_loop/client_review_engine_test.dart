@@ -79,8 +79,8 @@ void main() {
         expect(report.outcome, ReviewOutcome.rejected);
         expect(
           report.earnedCoins,
-          0 + (4 * 5),
-        ); // 0 + 20 = 20
+          0 + (4 * 5 * 30 / 100).round(),
+        ); // 0 佣金 + 6 故事幣 (D11: 30% 折算)
       },
     );
 
@@ -155,7 +155,7 @@ void main() {
       // Satisfaction: (59 / 150 * 100 * 0.552).round() = 22
       expect(report.satisfaction, 22);
       expect(report.outcome, ReviewOutcome.rejected);
-      expect(report.earnedCoins, 0 + (2 * 5)); // 0 佣金 + 10 故事幣
+      expect(report.earnedCoins, 0 + (2 * 5 * 30 / 100).round()); // 0 佣金 + 3 故事幣 (D11: 30% 折算)
     });
 
     group('AC-A1-1.7 & AC-A1-1.8 Theme 傳導到兩位客戶滿意度 (T3)', () {

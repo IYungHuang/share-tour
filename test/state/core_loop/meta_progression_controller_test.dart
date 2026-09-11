@@ -143,7 +143,7 @@ void main() {
     test('AC-M4-2.1 & 3.1: 透過 Controller 升級裝備，即時扣幣、升級並寫入存檔', () async {
       final initialSave = CuratorSaveData(
         profileId: 'player-upgrade-test',
-        coins: 500,
+        coins: 1000,
         sneakersLevel: 1,
         cameraLevel: 1,
         waistBagLevel: 1,
@@ -169,12 +169,12 @@ void main() {
 
       final stateAfter = customContainer.read(curatorRunControllerProvider);
       expect(stateAfter.equipment.sneakers.level, 2);
-      expect(stateAfter.equipment.coins, 200); // 500 - 300 = 200
+      expect(stateAfter.equipment.coins, 500); // 1000 - 500 = 500
       await controller.pendingPersist;
       expect(fakeRepo.appendCount, 1);
       expect(fakeRepo.events.last.type, CuratorEventType.equipmentUpgraded);
       expect(fakeRepo.events.last.payload['equipment'], 'sneakers');
-      expect(fakeRepo.events.last.payload['cost'], 300);
+      expect(fakeRepo.events.last.payload['cost'], 500);
     });
 
     test('AC-M4-3.1: 審查結算後 acceptReview() 自動累加佣金至局外資產並持久化儲存', () async {

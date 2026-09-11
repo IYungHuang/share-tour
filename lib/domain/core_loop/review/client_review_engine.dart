@@ -8,6 +8,9 @@ class ClientReviewEngine {
   /// 焦點絕景階梯乘數 (D5: 0, 1, 2, 3, 4 張)
   static const List<double> spotlightLadder = [0.70, 0.75, 0.80, 0.85, 1.00];
 
+  /// 退件故事金幣折算率 (D11: 30%)
+  static const int rejectedStoryRatePercent = 30;
+
   /// 執行客戶滿意度審查並輸出結算報告
   static ReviewReport evaluate({
     required ClientSpec client,
@@ -80,9 +83,11 @@ class ClientReviewEngine {
       }
     }
 
+    final storyBonus = outcome == ReviewOutcome.rejected
+        ? (stats.totalStory * 5 * rejectedStoryRatePercent / 100).round()
+        : stats.totalStory * 5;
     final earnedCoins =
-        (client.baseCommission * outcome.commissionRate).round() +
-        (stats.totalStory * 5);
+        (client.baseCommission * outcome.commissionRate).round() + storyBonus;
 
     return ReviewReport(
       clientType: client.type.name,
@@ -156,9 +161,11 @@ class ClientReviewEngine {
       quote = '退件！發出去根本沒人按讚，甚至被粉絲問是不是去踩雷！阿導你認真的嗎？！';
     }
 
+    final storyBonus = outcome == ReviewOutcome.rejected
+        ? (stats.totalStory * 5 * rejectedStoryRatePercent / 100).round()
+        : stats.totalStory * 5;
     final earnedCoins =
-        (client.baseCommission * outcome.commissionRate).round() +
-        (stats.totalStory * 5);
+        (client.baseCommission * outcome.commissionRate).round() + storyBonus;
 
     return ReviewReport(
       clientType: client.type.name,

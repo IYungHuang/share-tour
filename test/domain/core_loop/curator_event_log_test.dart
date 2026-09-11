@@ -87,5 +87,66 @@ void main() {
       expect(equipment.sneakers.level, 2);
       expect(equipment.camera.level, 1);
     });
+
+    test('歷史舊版事件 JSON fixture (舊 300/1200 cost 與三裝備 enum) 重播驗證精確金額與等級', () {
+      const historicalJsonList = [
+        {
+          'eventId': 'hist-001',
+          'seq': 1,
+          'type': 'profileCreated',
+          'occurredAtUtc': '2026-09-10T12:00:00.000Z',
+          'payload': {'profileId': 'historical-curator-uuid'},
+        },
+        {
+          'eventId': 'hist-002',
+          'seq': 2,
+          'type': 'runSettled',
+          'occurredAtUtc': '2026-09-10T12:30:00.000Z',
+          'payload': {'earnedCoins': 2500},
+        },
+        {
+          'eventId': 'hist-003',
+          'seq': 3,
+          'type': 'equipmentUpgraded',
+          'occurredAtUtc': '2026-09-10T12:35:00.000Z',
+          'payload': {'equipment': 'sneakers', 'cost': 300},
+        },
+        {
+          'eventId': 'hist-004',
+          'seq': 4,
+          'type': 'equipmentUpgraded',
+          'occurredAtUtc': '2026-09-10T12:36:00.000Z',
+          'payload': {'equipment': 'waistBag', 'cost': 300},
+        },
+        {
+          'eventId': 'hist-005',
+          'seq': 5,
+          'type': 'equipmentUpgraded',
+          'occurredAtUtc': '2026-09-10T12:37:00.000Z',
+          'payload': {'equipment': 'camera', 'cost': 1200},
+        },
+        {
+          'eventId': 'hist-006',
+          'seq': 6,
+          'type': 'philosophyRerolled',
+          'occurredAtUtc': '2026-09-10T12:40:00.000Z',
+          'payload': {'cost': 100},
+        },
+      ];
+
+      final events =
+          historicalJsonList.map((m) => CuratorEvent.fromJson(m)).toList();
+      final save = replayCuratorEvents(events);
+
+      expect(save.profileId, 'historical-curator-uuid');
+      // 2500 - 300 - 300 - 1200 - 100 = 600
+      expect(save.coins, 600);
+      expect(save.sneakersLevel, 2);
+      expect(save.waistBagLevel, 2);
+      expect(save.cameraLevel, 2);
+      expect(save.completedRuns, 1);
+      expect(save.lastMonotonicSeq, 6);
+      expect(save.updatedAtUtc, DateTime.parse('2026-09-10T12:40:00.000Z'));
+    });
   });
 }
