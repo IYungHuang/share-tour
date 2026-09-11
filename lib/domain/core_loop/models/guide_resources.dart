@@ -43,8 +43,14 @@ class GuideResources {
   /// 體力是否透支 (強制回辦公室)
   bool get isExhausted => hp <= 0;
 
+  /// 當前 HP 別名
+  int get currentHp => hp;
+
   /// 是否處於預算赤字狀態
   bool get isDeficit => budget < 0;
+
+  /// 當前 Budget 別名
+  int get currentBudget => budget;
 
   /// 消耗體力
   GuideResources consumeHp(int amount) {

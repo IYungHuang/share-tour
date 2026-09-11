@@ -20,6 +20,9 @@ class MaterialInventory {
   /// 已持有的旅行素材清單 (不可變清單)
   final List<TravelMaterial> materials;
 
+  /// 已持有旅行素材清單別名
+  List<TravelMaterial> get items => materials;
+
   /// 當前素材數量
   int get count => materials.length;
 

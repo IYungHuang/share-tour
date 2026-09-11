@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'data/core_loop/kyoto_night_catalog.dart';
+import 'data/core_loop/taiwan_attraction_materials.dart';
 import 'domain/location/camera/camera_follow.dart';
 import 'domain/location/models/district_attraction.dart';
 import 'domain/location/models/geo_fix.dart';
@@ -12,6 +13,9 @@ import 'game/universal_overworld_game.dart';
 import 'state/core_loop/curator_run_providers.dart';
 import 'state/location/location_providers.dart';
 import 'ui/core_loop/curator_studio_modal.dart';
+import 'ui/core_loop/field/attraction_detail_card.dart';
+import 'ui/core_loop/field/curator_field_hud.dart';
+import 'ui/core_loop/field/gathering_floating_feedback_overlay.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +28,9 @@ void main() async {
       overrides: [
         mapManifestProvider.overrideWithValue(manifest),
         curatorMaterialPoolProvider.overrideWithValue(kyotoNightMaterials),
+        poiMaterialResolverProvider.overrideWithValue(
+          const TaiwanPoiMaterialResolver(),
+        ),
       ],
       child: const MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -48,6 +55,31 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
   );
   final ValueNotifier<(AdministrativeDistrict?, int)> _focusedDistrict =
       ValueNotifier((null, 0));
+  final GatheringFloatingFeedbackController _gatheringFeedbackController =
+      GatheringFloatingFeedbackController();
+  bool _isStudioModalOpen = false;
+
+  Future<void> _openCuratorStudioSafely() async {
+    if (_isStudioModalOpen || !mounted) return;
+    _isStudioModalOpen = true;
+    _selectedAttraction.value = null;
+    _game.attractionLayer.selectAttraction(null);
+    _game.pauseEngine();
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => const CuratorStudioModal(),
+      );
+    } finally {
+      _isStudioModalOpen = false;
+      if (mounted && _game.isAttached) {
+        _game.resumeEngine();
+      }
+    }
+  }
 
   /// 前後景事件只有 widget 樹拿得到，所以由這裡轉發給定位層。
   /// 取消訂閱與否的判斷不在這裡——那是 LocationSubscriptionManager 的職責，
@@ -72,6 +104,7 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
     WidgetsBinding.instance.removeObserver(this);
     _selectedAttraction.dispose();
     _focusedDistrict.dispose();
+    _gatheringFeedbackController.dispose();
     super.dispose();
   }
 
@@ -95,25 +128,66 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
 
   @override
   Widget build(BuildContext context) {
+    // 體力透支自動返程 (AC-M3-6.2)
+    ref.listen(curatorRunControllerProvider, (previous, next) {
+      if (next.isExhausted && (previous == null || !previous.isExhausted)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _openCuratorStudioSafely();
+          }
+        });
+      }
+    });
+
     return Scaffold(
       body: GameWidget<UniversalOverworldGame>.controlled(
         gameFactory: () => _game,
         overlayBuilderMap: {
+          'CuratorHUD': (context, game) => const SafeArea(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: CuratorFieldHud(),
+            ),
+          ),
           'RetroHUD': (context, game) =>
               _RetroHudOverlay(focusedDistrict: _focusedDistrict),
           'DistrictDiscovery': (context, game) =>
               _DistrictDiscoveryBanner(focusedDistrict: _focusedDistrict),
-          'AttractionDetail': (context, game) => _AttractionDetailCard(
+          'AttractionDetail': (context, game) => AttractionDetailCard(
             selectedAttraction: _selectedAttraction,
-            game: game,
+            onFocusCamera: () {
+              final attraction = _selectedAttraction.value;
+              if (attraction != null) {
+                game.cameraFollow.onPan(
+                  (game.cameraComponent.viewfinder.position -
+                          attraction.pixel) *
+                      -1,
+                );
+              }
+            },
+            onGathered: (material, hpSpent) {
+              _gatheringFeedbackController.showGatherFeedback(
+                material: material,
+                hpSpent: hpSpent,
+              );
+            },
           ),
+          'FloatingFeedback': (context, game) =>
+              GatheringFloatingFeedbackOverlay(
+                controller: _gatheringFeedbackController,
+              ),
           'DPad': (context, game) => _DPadOverlay(game: game),
-          'ModeToggle': (context, game) => _ModeToggle(game: game),
+          'ModeToggle': (context, game) => _ModeToggle(
+            game: game,
+            onOpenStudio: _openCuratorStudioSafely,
+          ),
         },
         initialActiveOverlays: const [
+          'CuratorHUD',
           'RetroHUD',
           'DistrictDiscovery',
           'AttractionDetail',
+          'FloatingFeedback',
           'DPad',
           'ModeToggle',
         ],
@@ -132,7 +206,7 @@ class _RetroHudOverlay extends ConsumerWidget {
     final priority = hudPriorityOf(s.status);
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.fromLTRB(12, 46, 12, 8),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -257,20 +331,28 @@ class _DPadOverlay extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(locationControllerProvider.notifier);
+    final canExplore = ref.watch(canExploreProvider);
 
-    Widget arrow(IconData icon, double dx, double dy) => Listener(
-      onPointerDown: (_) => notifier.setDirection(dx, dy),
-      onPointerUp: (_) => notifier.stopMoving(),
-      onPointerCancel: (_) => notifier.stopMoving(),
-      child: Container(
-        width: 48,
-        height: 48,
-        margin: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          color: const Color(0xFFC0834B),
-          border: Border.all(color: Colors.black, width: 3),
+    Widget arrow(IconData icon, double dx, double dy) => Opacity(
+      opacity: canExplore ? 1.0 : 0.4,
+      child: Listener(
+        onPointerDown: (_) {
+          if (canExplore) {
+            notifier.setDirection(dx, dy);
+          }
+        },
+        onPointerUp: (_) => notifier.stopMoving(),
+        onPointerCancel: (_) => notifier.stopMoving(),
+        child: Container(
+          width: 48,
+          height: 48,
+          margin: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: const Color(0xFFC0834B),
+            border: Border.all(color: Colors.black, width: 3),
+          ),
+          child: Icon(icon, size: 22, color: Colors.black),
         ),
-        child: Icon(icon, size: 22, color: Colors.black),
       ),
     );
 
@@ -319,8 +401,12 @@ class _DPadOverlay extends ConsumerWidget {
 /// 模式切換。權限對話框在玩家按下 GPS 時才出現——開場就跳，玩家還不知道
 /// 這是什麼遊戲就被要求定位。
 class _ModeToggle extends ConsumerWidget {
-  const _ModeToggle({required this.game});
+  const _ModeToggle({
+    required this.game,
+    required this.onOpenStudio,
+  });
   final UniversalOverworldGame game;
+  final VoidCallback onOpenStudio;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -341,22 +427,7 @@ class _ModeToggle extends ConsumerWidget {
               // 策展工作台入口按鈕 (開啟時掛起 Flame 引擎以防穿透與降溫省電)
               GestureDetector(
                 key: const Key('curator_studio_launcher_button'),
-                onTap: () async {
-                  game.pauseEngine();
-                  try {
-                    await showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      useSafeArea: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (ctx) => const CuratorStudioModal(),
-                    );
-                  } finally {
-                    if (game.isAttached) {
-                      game.resumeEngine();
-                    }
-                  }
-                },
+                onTap: onOpenStudio,
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.symmetric(
@@ -460,7 +531,7 @@ class _DistrictDiscoveryBanner extends StatelessWidget {
           child: Align(
             alignment: Alignment.topCenter,
             child: Container(
-              margin: const EdgeInsets.only(top: 8),
+              margin: const EdgeInsets.only(top: 175),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
@@ -482,187 +553,6 @@ class _DistrictDiscoveryBanner extends StatelessWidget {
                       color: Colors.white,
                       letterSpacing: 0.3,
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// 點選景點時在畫面底部彈出的 JRPG 像素風格詳細資訊卡
-class _AttractionDetailCard extends ConsumerWidget {
-  const _AttractionDetailCard({
-    required this.selectedAttraction,
-    required this.game,
-  });
-
-  final ValueNotifier<DistrictAttraction?> selectedAttraction;
-  final UniversalOverworldGame game;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final manifest = ref.watch(mapManifestProvider);
-    final playerPixel = ref.watch(locationControllerProvider).renderedPixel;
-
-    return ValueListenableBuilder<DistrictAttraction?>(
-      valueListenable: selectedAttraction,
-      builder: (context, attraction, _) {
-        if (attraction == null) return const SizedBox.shrink();
-
-        final distPx = (attraction.pixel - playerPixel).length;
-        final distM = distPx * manifest.metersPerPixelAt(playerPixel);
-        final distText = distM >= 1000
-            ? '${(distM / 1000).toStringAsFixed(1)} km'
-            : '${distM.toStringAsFixed(0)} m';
-
-        return SafeArea(
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 84, left: 16, right: 16),
-              constraints: const BoxConstraints(maxWidth: 420),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.black, width: 3),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black, offset: Offset(4, 4)),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          attraction.title,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: Colors.black,
-                          ),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          selectedAttraction.value = null;
-                          game.attractionLayer.selectAttraction(null);
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.black, width: 1.5),
-                            color: Colors.grey.shade200,
-                          ),
-                          child: const Icon(Icons.close, size: 16),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFC0834B),
-                          border: Border.all(color: Colors.black, width: 1),
-                        ),
-                        child: Text(
-                          attraction.districtName,
-                          style: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Icon(
-                        Icons.star,
-                        size: 14,
-                        color: Color(0xFFF59E0B),
-                      ),
-                      Text(
-                        '${attraction.rating.toStringAsFixed(1)} ',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        '(${attraction.reviewCount}+ 則 Google Maps 評價)',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    attraction.description,
-                    style: const TextStyle(fontSize: 11, color: Colors.black87),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.directions_walk,
-                            size: 14,
-                            color: Colors.black87,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            '距玩家: $distText',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          game.cameraFollow.onPan(
-                            (game.cameraComponent.viewfinder.position -
-                                    attraction.pixel) *
-                                -1,
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF48BB78),
-                            border: Border.all(color: Colors.black, width: 2),
-                          ),
-                          child: const Text(
-                            '視野聚焦',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),

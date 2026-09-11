@@ -1,0 +1,244 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:share_tour/domain/core_loop/models/poi_material_resolver.dart';
+import 'package:share_tour/domain/core_loop/models/travel_material.dart';
+import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
+import 'package:share_tour/domain/location/models/district_attraction.dart';
+import 'package:share_tour/domain/location/projection/map_manifest.dart';
+import 'package:share_tour/state/core_loop/curator_run_controller.dart';
+import 'package:share_tour/state/core_loop/curator_run_providers.dart';
+import 'package:share_tour/state/location/location_controller.dart';
+import 'package:share_tour/domain/location/models/location_status.dart';
+import 'package:share_tour/state/location/location_providers.dart';
+import 'package:share_tour/ui/core_loop/field/attraction_detail_card.dart';
+import 'package:vector_math/vector_math.dart';
+
+import '../../fakes/fake_wakelock_control.dart';
+
+class FakePoiResolver implements PoiMaterialResolver {
+  final Map<String, TravelMaterial> map;
+  FakePoiResolver(this.map);
+  @override
+  TravelMaterial? resolveMaterialFor(String poiId) => map[poiId];
+}
+
+class FakeSimpleManifest implements OverworldMapManifest {
+  @override
+  double metersPerPixelAt(Vector2 pixel) => 1.0;
+  @override
+  String get mapId => 'fake_map';
+  @override
+  String get assetPath => '';
+  @override
+  Vector2 get mapDimensions => Vector2(1000, 1000);
+  @override
+  int get oceanColorArgb => 0;
+  @override
+  Vector2 get defaultSpawnPixel => Vector2(100, 100);
+  @override
+  double get dpadSpeedPixelsPerSecond => 50;
+  @override
+  List<PoiMarker> get poiNodes => const [];
+  @override
+  List<DistrictAttraction> get districtAttractions => const [];
+  @override
+  List<AdministrativeDistrict> get administrativeDistricts => const [];
+  @override
+  bool containsGeo(double lat, double lng) => true;
+  @override
+  Vector2 projectToPixel(double lat, double lng) => Vector2(lat, lng);
+  @override
+  GeoPoint unprojectToGeo(Vector2 pixel) => GeoPoint(pixel.x, pixel.y);
+}
+
+class FakeLocationNotifier extends LocationNotifier {
+  FakeLocationNotifier(this.pixel);
+  final Vector2 pixel;
+
+  @override
+  LocationControllerState build() {
+    return LocationControllerState(
+      status: LocationStatus.initial,
+      diagnostics: const LocationDiagnostics(
+        activeSubscriptionCount: 0,
+        powerMode: PowerMode.active,
+        acceptedFixCount: 0,
+        rejectedFixCount: 0,
+        rejectionsByReason: {},
+        currentAccuracyMeters: 1.0,
+        realDistanceMeters: 0,
+        virtualDistanceMeters: 0,
+        secondsSinceLastSignificantMove: 0,
+        accuracyGatedFixCount: 0,
+        keepAwakeActive: false,
+      ),
+      renderedPixel: pixel,
+      targetPixel: pixel,
+      realDistanceMeters: 0,
+      virtualDistanceMeters: 0,
+    );
+  }
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  group('AttractionDetailCard UI 測試 (G4, AC-M3-2, AC-M3-4)', () {
+    const sampleMaterial = TravelMaterial(
+      id: 'mat_101',
+      name: '台北101天際線',
+      tags: ['#地標', '#夜景'],
+      themeValue: 30,
+      hypeValue: 80,
+      cost: 600,
+      riskLevel: 2, // 14 HP
+    );
+
+    final attractionReady = DistrictAttraction(
+      id: 'poi_101',
+      title: '台北101觀景台',
+      districtCode: 'taipei',
+      districtName: '台北市',
+      geo: const GeoPoint(25.0339, 121.5645),
+      pixel: Vector2(100, 130), // 30m <= 50m
+      rating: 4.8,
+      reviewCount: 90000,
+      category: AttractionCategory.landmark,
+      triggerRadiusMeters: 50.0,
+    );
+
+    final attractionFar = DistrictAttraction(
+      id: 'poi_far',
+      title: '遠方景點',
+      districtCode: 'taipei',
+      districtName: '台北市',
+      geo: const GeoPoint(25.0, 121.0),
+      pixel: Vector2(100, 200), // 100m > 50m
+      rating: 4.5,
+      reviewCount: 100,
+      category: AttractionCategory.nature,
+      triggerRadiusMeters: 50.0,
+    );
+
+    late FakePoiResolver fakeResolver;
+
+    setUp(() {
+      fakeResolver = FakePoiResolver({
+        'poi_101': sampleMaterial,
+        'poi_far': sampleMaterial,
+      });
+    });
+
+    Widget buildTestWidget({
+      required ValueNotifier<DistrictAttraction?> selected,
+      CuratorRunState? state,
+      void Function(TravelMaterial, int)? onGathered,
+    }) {
+      return ProviderScope(
+        overrides: [
+          mapManifestProvider.overrideWithValue(FakeSimpleManifest()),
+          locationControllerProvider.overrideWith(() => FakeLocationNotifier(Vector2(100, 100))),
+          curatorMaterialPoolProvider.overrideWithValue([sampleMaterial]),
+          poiMaterialResolverProvider.overrideWithValue(fakeResolver),
+          wakelockControlProvider.overrideWithValue(FakeWakelockControl()),
+          if (state != null)
+            curatorRunControllerProvider.overrideWith((ref) {
+              return CuratorRunController(
+                materialPool: [sampleMaterial],
+                resolver: fakeResolver,
+                initialState: state,
+              );
+            }),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: AttractionDetailCard(
+              selectedAttraction: selected,
+              onGathered: onGathered,
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('AC-M3-2.1: 範圍內景點顯示「📸 踩線取材」並預覽代價 -14 HP 與 ¥600', (tester) async {
+      final selected = ValueNotifier<DistrictAttraction?>(attractionReady);
+      final state = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);
+
+      await tester.pumpWidget(buildTestWidget(selected: selected, state: state));
+
+      expect(find.text('台北101觀景台'), findsOneWidget);
+      expect(find.textContaining('-14 HP'), findsOneWidget);
+      expect(find.textContaining('¥600'), findsOneWidget);
+      expect(find.text('📸 踩線取材'), findsOneWidget);
+    });
+
+    testWidgets('AC-M3-2.2: 超距景點顯示「太遠 (需<50m)」且禁用', (tester) async {
+      final selected = ValueNotifier<DistrictAttraction?>(attractionFar);
+      final state = CuratorRunState.initial();
+
+      await tester.pumpWidget(buildTestWidget(selected: selected, state: state));
+
+      expect(find.text('太遠 (需<50m)'), findsOneWidget);
+    });
+
+    testWidgets('AC-M3-3.1: 點擊「📸 踩線取材」觸發取材回調', (tester) async {
+      final selected = ValueNotifier<DistrictAttraction?>(attractionReady);
+      final state = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);
+      TravelMaterial? gatheredItem;
+      int? hpCost;
+
+      await tester.pumpWidget(buildTestWidget(
+        selected: selected,
+        state: state,
+        onGathered: (m, hp) {
+          gatheredItem = m;
+          hpCost = hp;
+        },
+      ));
+
+      await tester.tap(find.text('📸 踩線取材'));
+      await tester.pumpAndSettle();
+
+      expect(gatheredItem, isNotNull);
+      expect(gatheredItem!.id, 'mat_101');
+      expect(hpCost, 14);
+
+      // 踩線後按鈕變為「✅ 本日已踩線」
+      expect(find.text('✅ 本日已踩線'), findsOneWidget);
+    });
+
+    testWidgets('AC-M3-4.1 & 4.3: 腰包滿額時顯示「👝 踩線換牌」，點擊彈出換牌抽屜', (tester) async {
+      final selected = ValueNotifier<DistrictAttraction?>(attractionReady);
+      var state = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);
+      // 填滿 6 張素材
+      for (int i = 0; i < 6; i++) {
+        state = state.copyWith(
+          inventory: state.inventory.add(
+            sampleMaterial.copyWith(id: 'mat_old_$i', name: '舊卡 $i'),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(buildTestWidget(selected: selected, state: state));
+
+      expect(find.text('👝 踩線換牌'), findsOneWidget);
+
+      await tester.tap(find.text('👝 踩線換牌'));
+      await tester.pumpAndSettle();
+
+      // 驗證彈出換牌抽屜
+      expect(find.text('👝 腰包客滿！選擇一張舊卡替換'), findsOneWidget);
+      expect(find.text('舊卡 0'), findsOneWidget);
+      expect(find.text('捨棄此卡'), findsNWidgets(6));
+
+      // 點擊第一張舊卡的捨棄
+      await tester.tap(find.text('捨棄此卡').first);
+      await tester.pumpAndSettle();
+
+      // 換牌完成，抽屜關閉，景點標記為已踩線
+      expect(find.text('✅ 本日已踩線'), findsOneWidget);
+    });
+  });
+}

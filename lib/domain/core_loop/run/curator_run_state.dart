@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 
+import '../models/core_loop_exceptions.dart';
 import '../models/guide_resources.dart';
 import '../models/material_inventory.dart';
 import '../models/meta_equipment.dart';
@@ -21,36 +22,47 @@ class CuratorRunState {
     required this.inventory,
     required this.itinerary,
     required this.equipment,
+    this.gatheredPoiIds = const {},
     this.latestReport,
   });
 
   /// 建立全新單局初始狀態 (預設 philosophizing 階段，UUID 遵循 CC-1)
   factory CuratorRunState.initial({
+    CuratorRunPhase? phase,
     ClientSpec? client,
     TravelPhilosophy? philosophy,
+    TravelPhilosophy? targetPhilosophy,
     EquipmentInventory? equipment,
     String? runId,
+    int? initialBudget,
+    int? initialHp,
   }) {
     final effectiveClient = client ?? ClientSpec.budgetWorker;
-    final effectivePhilosophy = philosophy ?? TravelPhilosophy.midnight;
+    final effectivePhilosophy =
+        targetPhilosophy ?? philosophy ?? TravelPhilosophy.midnight;
     final effectiveEquipment = equipment ?? EquipmentInventory.initial();
     final effectiveId = runId ?? const Uuid().v4();
-    final resources = GuideResources.initial(
-      startingBudget: effectiveClient.targetBudget,
+    var resources = GuideResources.initial(
+      startingBudget: initialBudget ?? effectiveClient.targetBudget,
       equipment: effectiveEquipment,
     );
-    final inventory = MaterialInventory(capacity: effectiveEquipment.waistBag.capacity);
+    if (initialHp != null && initialHp < resources.currentHp) {
+      resources = resources.consumeHp(resources.currentHp - initialHp);
+    }
+    final inventory =
+        MaterialInventory(capacity: effectiveEquipment.waistBag.capacity);
     final itinerary = TimelineItinerary.empty();
 
     return CuratorRunState(
       runId: effectiveId,
-      phase: CuratorRunPhase.philosophizing,
+      phase: phase ?? CuratorRunPhase.philosophizing,
       client: effectiveClient,
       philosophy: effectivePhilosophy,
       resources: resources,
       inventory: inventory,
       itinerary: itinerary,
       equipment: effectiveEquipment,
+      gatheredPoiIds: const {},
     );
   }
 
@@ -60,12 +72,17 @@ class CuratorRunState {
     required TravelPhilosophy philosophy,
     required EquipmentInventory equipment,
     String? runId,
+    int? initialBudget,
+    int? initialHp,
   }) {
     final effectiveId = runId ?? const Uuid().v4();
-    final resources = GuideResources.initial(
-      startingBudget: client.targetBudget,
+    var resources = GuideResources.initial(
+      startingBudget: initialBudget ?? client.targetBudget,
       equipment: equipment,
     );
+    if (initialHp != null && initialHp < resources.currentHp) {
+      resources = resources.consumeHp(resources.currentHp - initialHp);
+    }
     final inventory = MaterialInventory(capacity: equipment.waistBag.capacity);
     final itinerary = TimelineItinerary.empty();
 
@@ -78,6 +95,7 @@ class CuratorRunState {
       inventory: inventory,
       itinerary: itinerary,
       equipment: equipment,
+      gatheredPoiIds: const {},
     );
   }
 
@@ -105,10 +123,84 @@ class CuratorRunState {
   /// 局外裝備庫存 (球鞋、相機、腰包與佣金幣)
   final EquipmentInventory equipment;
 
+  /// 單局內已踩線採集之 POI ID 集合 (防止原地無腦洗牌)
+  final Set<String> gatheredPoiIds;
+
   /// 最近一次客戶審查結算報告
   final ReviewReport? latestReport;
 
-  /// 踩線拾取素材
+  /// 踩線取材原子轉移 (REQ-M3-03, AC-M3-3)
+  CuratorRunState gatherPoiMaterial({
+    required String poiId,
+    required TravelMaterial material,
+  }) {
+    if (gatheredPoiIds.contains(poiId)) {
+      throw PoiAlreadyGatheredException(poiId);
+    }
+    if (resources.isExhausted || resources.currentHp <= 0) {
+      throw const CuratorExhaustedException();
+    }
+    if (inventory.isFull) {
+      throw InventoryFullException(inventory.capacity);
+    }
+
+    final deltaHp = 10 + (material.riskLevel * 2);
+    final nextHp = resources.currentHp - deltaHp;
+    final bool isNowExhausted = nextHp <= 0;
+    final consumedHp = isNowExhausted ? resources.currentHp : deltaHp;
+
+    var nextResources = resources.consumeHp(consumedHp);
+    nextResources = nextResources.spendBudget(material.cost);
+
+    final nextInventory = inventory.add(material);
+    final nextGathered = Set<String>.unmodifiable({...gatheredPoiIds, poiId});
+    final nextPhase = isNowExhausted ? CuratorRunPhase.nightEditing : phase;
+
+    return copyWith(
+      resources: nextResources,
+      inventory: nextInventory,
+      gatheredPoiIds: nextGathered,
+      phase: nextPhase,
+    );
+  }
+
+  /// 腰包滿額現場換牌原子轉移 (REQ-M3-03, AC-M3-4)
+  CuratorRunState replaceGatheredMaterial({
+    required String poiId,
+    required int dropIndex,
+    required TravelMaterial newMaterial,
+  }) {
+    if (gatheredPoiIds.contains(poiId)) {
+      throw PoiAlreadyGatheredException(poiId);
+    }
+    if (resources.isExhausted || resources.currentHp <= 0) {
+      throw const CuratorExhaustedException();
+    }
+
+    final deltaHp = 10 + (newMaterial.riskLevel * 2);
+    final nextHp = resources.currentHp - deltaHp;
+    final bool isNowExhausted = nextHp <= 0;
+    final consumedHp = isNowExhausted ? resources.currentHp : deltaHp;
+
+    var nextResources = resources.consumeHp(consumedHp);
+    nextResources = nextResources.spendBudget(newMaterial.cost);
+
+    final nextInventory = inventory.replace(
+      dropIndex: dropIndex,
+      newItem: newMaterial,
+    );
+    final nextGathered = Set<String>.unmodifiable({...gatheredPoiIds, poiId});
+    final nextPhase = isNowExhausted ? CuratorRunPhase.nightEditing : phase;
+
+    return copyWith(
+      resources: nextResources,
+      inventory: nextInventory,
+      gatheredPoiIds: nextGathered,
+      phase: nextPhase,
+    );
+  }
+
+  /// 踩線拾取素材 (向後相容)
   CuratorRunState addMaterial(TravelMaterial material) {
     final nextInventory = inventory.add(material);
     return copyWith(inventory: nextInventory);
@@ -148,6 +240,10 @@ class CuratorRunState {
     return copyWith(equipment: nextEquipment);
   }
 
+  /// 體力是否透支或強制進入夜晚排程 (REQ-M3-04)
+  bool get isExhausted =>
+      resources.isExhausted || phase == CuratorRunPhase.nightEditing;
+
   /// 4 槽位是否已全部填滿可呈送審查
   bool get canSubmit => itinerary.canSubmit;
 
@@ -168,13 +264,14 @@ class CuratorRunState {
 
   /// 觸發「再來一局 (Restart Run)」(AC-ML-7)
   CuratorRunState restartRun({
-    required ClientSpec nextClient,
-    required TravelPhilosophy nextPhilosophy,
+    ClientSpec? nextClient,
+    TravelPhilosophy? nextPhilosophy,
+    TravelPhilosophy? targetPhilosophy,
   }) {
-    // 繼承既有裝備與佣金，重新生成 UUID，重置局內所有數值
+    // 繼承既有裝備與佣金，重新生成 UUID，重置局內所有數值與已採集 POI
     return CuratorRunState.create(
-      client: nextClient,
-      philosophy: nextPhilosophy,
+      client: nextClient ?? client,
+      philosophy: nextPhilosophy ?? targetPhilosophy ?? philosophy,
       equipment: equipment,
     );
   }
@@ -188,6 +285,7 @@ class CuratorRunState {
     MaterialInventory? inventory,
     TimelineItinerary? itinerary,
     EquipmentInventory? equipment,
+    Set<String>? gatheredPoiIds,
     ReviewReport? latestReport,
   }) => CuratorRunState(
     runId: runId ?? this.runId,
@@ -198,6 +296,7 @@ class CuratorRunState {
     inventory: inventory ?? this.inventory,
     itinerary: itinerary ?? this.itinerary,
     equipment: equipment ?? this.equipment,
+    gatheredPoiIds: gatheredPoiIds ?? this.gatheredPoiIds,
     latestReport: latestReport ?? this.latestReport,
   );
 
@@ -213,7 +312,8 @@ class CuratorRunState {
           resources == other.resources &&
           inventory == other.inventory &&
           itinerary == other.itinerary &&
-          equipment == other.equipment;
+          equipment == other.equipment &&
+          _setsEqual(gatheredPoiIds, other.gatheredPoiIds);
 
   @override
   int get hashCode => Object.hash(
@@ -225,5 +325,9 @@ class CuratorRunState {
     inventory,
     itinerary,
     equipment,
+    Object.hashAll(gatheredPoiIds),
   );
+
+  static bool _setsEqual(Set<String> a, Set<String> b) =>
+      a.length == b.length && a.containsAll(b);
 }

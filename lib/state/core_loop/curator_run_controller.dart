@@ -1,6 +1,8 @@
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_tour/domain/core_loop/models/core_loop_exceptions.dart';
+import 'package:share_tour/domain/core_loop/models/poi_material_resolver.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
 import 'package:share_tour/domain/core_loop/review/client_review_engine.dart';
@@ -12,11 +14,54 @@ import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 class CuratorRunController extends StateNotifier<CuratorRunState> {
   CuratorRunController({
     required List<TravelMaterial> materialPool,
+    PoiMaterialResolver? resolver,
     CuratorRunState? initialState,
   }) : _materialPool = materialPool,
+       _resolver = resolver,
        super(initialState ?? CuratorRunState.initial());
 
   final List<TravelMaterial> _materialPool;
+  PoiMaterialResolver? _resolver;
+
+  /// 設定景點素材解析器
+  void setResolver(PoiMaterialResolver resolver) {
+    _resolver = resolver;
+  }
+
+  /// 開始踩線取材階段 (推進至 fieldTrip)
+  void startFieldTrip() {
+    state = state.copyWith(phase: CuratorRunPhase.fieldTrip);
+  }
+
+  /// 踩線取材發動 (REQ-M3-03, AC-M3-3)
+  void gatherPoi(String poiId) {
+    final resolver = _resolver;
+    if (resolver == null) {
+      throw StateError('PoiMaterialResolver 尚未注入');
+    }
+    final material = resolver.resolveMaterialFor(poiId);
+    if (material == null) {
+      throw PoiUnavailableException(poiId);
+    }
+    state = state.gatherPoiMaterial(poiId: poiId, material: material);
+  }
+
+  /// 腰包滿額現場換牌發動 (REQ-M3-03, AC-M3-4)
+  void replaceGatheredPoi({required String poiId, required int dropIndex}) {
+    final resolver = _resolver;
+    if (resolver == null) {
+      throw StateError('PoiMaterialResolver 尚未注入');
+    }
+    final material = resolver.resolveMaterialFor(poiId);
+    if (material == null) {
+      throw PoiUnavailableException(poiId);
+    }
+    state = state.replaceGatheredMaterial(
+      poiId: poiId,
+      dropIndex: dropIndex,
+      newMaterial: material,
+    );
+  }
 
   /// 選定當局旅行哲學 (推進至 nightEditing)
   void selectPhilosophy(TravelPhilosophy philosophy) {

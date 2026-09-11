@@ -77,6 +77,16 @@ class DistrictAttraction {
         pixel: pixel.clone(),
         triggerRadiusMeters: triggerRadiusMeters,
       );
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DistrictAttraction &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 /// 地理行政區模型
@@ -152,6 +162,6 @@ class AttractionFilter {
     if (minDistance <= maxFocusDistancePixels) {
       return closest;
     }
-    return closest;
+    return null;
   }
 }
