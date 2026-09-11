@@ -310,5 +310,50 @@ void main() {
       expect(onGatheredCalled, isFalse);
       expect(find.text('👝 踩線換牌'), findsOneWidget);
     });
+
+    testWidgets('T9b 像素模式：顯示 px 資格與距離提示，公尺模式保留 m 與既有門檻', (tester) async {
+      final pixelAttraction = DistrictAttraction(
+        id: 'poi_pixel',
+        title: '京都像素景點',
+        districtCode: 'kyoto',
+        districtName: '京都',
+        geo: const GeoPoint(35.0, 135.7),
+        pixel: Vector2(100, 130), // 30 px <= 35 px
+        rating: 4.8,
+        reviewCount: 500,
+        category: AttractionCategory.landmark,
+        triggerRadiusPixels: 35.0,
+      );
+      fakeResolver.map['poi_pixel'] = sampleMaterial;
+
+      final selected = ValueNotifier<DistrictAttraction?>(pixelAttraction);
+      await tester.pumpWidget(buildTestWidget(selected: selected));
+      await tester.pumpAndSettle();
+
+      // 像素模式距離徽章顯示 px
+      expect(find.text('距玩家: 30 px'), findsOneWidget);
+      // 範圍內顯示踩線取材
+      expect(find.text('📸 踩線取材'), findsOneWidget);
+
+      // 超距測試：距離 40 px > 35 px
+      final pixelFar = DistrictAttraction(
+        id: 'poi_pixel_far',
+        title: '京都超距景點',
+        districtCode: 'kyoto',
+        districtName: '京都',
+        geo: const GeoPoint(35.0, 135.7),
+        pixel: Vector2(100, 140), // 40 px
+        rating: 4.8,
+        reviewCount: 500,
+        category: AttractionCategory.landmark,
+        triggerRadiusPixels: 35.0,
+      );
+      fakeResolver.map['poi_pixel_far'] = sampleMaterial;
+      selected.value = pixelFar;
+      await tester.pumpAndSettle();
+
+      expect(find.text('距玩家: 40 px'), findsOneWidget);
+      expect(find.text('太遠 (需<35px)'), findsOneWidget);
+    });
   });
 }

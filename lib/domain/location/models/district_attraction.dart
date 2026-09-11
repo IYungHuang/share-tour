@@ -26,6 +26,7 @@ class DistrictAttraction {
     this.description = '',
     this.minZoom = 1.2,
     this.triggerRadiusMeters = 50.0,
+    this.triggerRadiusPixels,
   });
 
   /// 景點唯一代碼
@@ -67,6 +68,9 @@ class DistrictAttraction {
 
   /// 遭遇/打卡觸發半徑（公尺）
   final double triggerRadiusMeters;
+
+  /// 遭遇/打卡觸發半徑（像素，京都街區專用；非 null 時採集資格直接以像素判定，不呼叫 mpp）
+  final double? triggerRadiusPixels;
 
   /// 計算與某像素座標的平面距離
   double distancePixelsTo(Vector2 targetPixel) => pixel.distanceTo(targetPixel);

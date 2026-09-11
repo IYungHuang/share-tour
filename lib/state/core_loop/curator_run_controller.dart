@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import 'package:share_tour/domain/core_loop/events/curator_event.dart';
 import 'package:share_tour/domain/core_loop/models/core_loop_exceptions.dart';
 import 'package:share_tour/domain/core_loop/models/curator_save_data.dart';
+import 'package:share_tour/domain/core_loop/models/gathering_eligibility.dart';
 import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/persistence_repository.dart';
 import 'package:share_tour/domain/core_loop/models/poi_material_resolver.dart';
@@ -17,6 +18,9 @@ import 'package:share_tour/domain/core_loop/review/client_review_engine.dart';
 import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
+import 'package:share_tour/domain/location/models/district_attraction.dart';
+import 'package:share_tour/domain/location/projection/map_manifest.dart';
+import 'package:vector_math/vector_math.dart';
 
 /// 策展單局控制器 (Riverpod StateNotifier，管理單局完整狀態機與存檔持久化)
 class CuratorRunController extends StateNotifier<CuratorRunState> {
@@ -55,43 +59,144 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     _resolver = resolver;
   }
 
-  /// 踩線取材發動 (REQ-M3-03, AC-M3-3, AC-A1-5.5)
-  ({TravelMaterial material, int hpSpent}) gatherPoi(String poiId) {
-    final resolver = _resolver;
-    if (resolver == null) {
-      throw StateError('PoiMaterialResolver 尚未注入');
-    }
-    final material = resolver.resolveMaterialFor(poiId);
-    if (material == null) {
-      throw PoiUnavailableException(poiId);
-    }
-    final hpBefore = state.resources.currentHp;
-    state = state.gatherPoiMaterial(poiId: poiId, material: material);
-    final hpAfter = state.resources.currentHp;
-    return (material: material, hpSpent: hpBefore - hpAfter);
-  }
-
-  /// 腰包滿額現場換牌發動 (REQ-M3-03, AC-M3-4, AC-A1-5.5)
-  ({TravelMaterial material, int hpSpent}) replaceGatheredPoi({
-    required String poiId,
-    required int dropIndex,
+  /// 踩線取材發動 (REQ-M3-03, AC-M3-3, AC-A1-4.3, AC-A1-5.5)
+  ///
+  /// 若提供 manifest 與 playerPixel，會重新計算當下最近且可取材之 POI；
+  /// 若無提供（既有測試相容路徑），則直接以 poiId 進行解析與取材。
+  ({DistrictAttraction attraction, TravelMaterial material, int hpSpent}) gatherPoi(
+    String poiId, {
+    OverworldMapManifest? manifest,
+    Vector2? playerPixel,
   }) {
     final resolver = _resolver;
     if (resolver == null) {
       throw StateError('PoiMaterialResolver 尚未注入');
     }
-    final material = resolver.resolveMaterialFor(poiId);
-    if (material == null) {
-      throw PoiUnavailableException(poiId);
+
+    DistrictAttraction? targetAttraction;
+    TravelMaterial? targetMaterial;
+
+    if (manifest != null && playerPixel != null && manifest.districtAttractions.isNotEmpty) {
+      final nearest = nearestGatherablePoi(
+        attractions: manifest.districtAttractions,
+        run: state,
+        playerPixel: playerPixel,
+        manifest: manifest,
+        resolver: resolver,
+      );
+      if (nearest != null) {
+        targetAttraction = nearest.attraction;
+        targetMaterial = nearest.material;
+      }
     }
+
+    if (targetAttraction == null || targetMaterial == null) {
+      targetMaterial = resolver.resolveMaterialFor(poiId);
+      if (targetMaterial == null) {
+        throw PoiUnavailableException(poiId);
+      }
+      targetAttraction = manifest?.districtAttractions
+              .where((a) => a.id == poiId)
+              .firstOrNull ??
+          DistrictAttraction(
+            id: poiId,
+            title: targetMaterial.name,
+            districtCode: '',
+            districtName: '',
+            geo: const GeoPoint(0, 0),
+            pixel: Vector2.zero(),
+            rating: 5.0,
+            reviewCount: 0,
+            category: AttractionCategory.sightseeing,
+          );
+    }
+
     final hpBefore = state.resources.currentHp;
-    state = state.replaceGatheredMaterial(
-      poiId: poiId,
-      dropIndex: dropIndex,
-      newMaterial: material,
+    state = state.gatherPoiMaterial(
+      poiId: targetAttraction.id,
+      material: targetMaterial,
     );
     final hpAfter = state.resources.currentHp;
-    return (material: material, hpSpent: hpBefore - hpAfter);
+    return (
+      attraction: targetAttraction,
+      material: targetMaterial,
+      hpSpent: hpBefore - hpAfter,
+    );
+  }
+
+  /// 腰包滿額現場換牌發動 (REQ-M3-03, AC-M3-4, AC-A1-4.3, AC-A1-5.5)
+  ///
+  /// 接受 expectedPoiId 防止底抽屜等待期間候選改變。
+  /// 命令重新求最近點，若 expectedPoiId 失配或無最近點，保持零副作用並回傳 null。
+  ({DistrictAttraction attraction, TravelMaterial material, int hpSpent})? replaceGatheredPoi({
+    required String poiId,
+    required int dropIndex,
+    OverworldMapManifest? manifest,
+    Vector2? playerPixel,
+    String? expectedPoiId,
+  }) {
+    final resolver = _resolver;
+    if (resolver == null) {
+      throw StateError('PoiMaterialResolver 尚未注入');
+    }
+
+    DistrictAttraction? targetAttraction;
+    TravelMaterial? targetMaterial;
+
+    if (manifest != null &&
+        playerPixel != null &&
+        manifest.districtAttractions.isNotEmpty) {
+      final nearest = nearestGatherablePoi(
+        attractions: manifest.districtAttractions,
+        run: state,
+        playerPixel: playerPixel,
+        manifest: manifest,
+        resolver: resolver,
+      );
+      if (nearest == null) {
+        return null;
+      }
+      if (expectedPoiId != null && nearest.attraction.id != expectedPoiId) {
+        return null;
+      }
+      targetAttraction = nearest.attraction;
+      targetMaterial = nearest.material;
+    } else {
+      if (expectedPoiId != null && poiId != expectedPoiId) {
+        return null;
+      }
+      targetMaterial = resolver.resolveMaterialFor(poiId);
+      if (targetMaterial == null) {
+        throw PoiUnavailableException(poiId);
+      }
+      targetAttraction = manifest?.districtAttractions
+              .where((a) => a.id == poiId)
+              .firstOrNull ??
+          DistrictAttraction(
+            id: poiId,
+            title: targetMaterial.name,
+            districtCode: '',
+            districtName: '',
+            geo: const GeoPoint(0, 0),
+            pixel: Vector2.zero(),
+            rating: 5.0,
+            reviewCount: 0,
+            category: AttractionCategory.sightseeing,
+          );
+    }
+
+    final hpBefore = state.resources.currentHp;
+    state = state.replaceGatheredMaterial(
+      poiId: targetAttraction.id,
+      dropIndex: dropIndex,
+      newMaterial: targetMaterial,
+    );
+    final hpAfter = state.resources.currentHp;
+    return (
+      attraction: targetAttraction,
+      material: targetMaterial,
+      hpSpent: hpBefore - hpAfter,
+    );
   }
 
   /// 行前選定旅行哲學

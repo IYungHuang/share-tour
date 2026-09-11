@@ -20,6 +20,10 @@ class FakePoiMaterialResolver implements PoiMaterialResolver {
 }
 
 class FakeSimpleManifest implements OverworldMapManifest {
+  FakeSimpleManifest([this._attractions = const []]);
+
+  final List<DistrictAttraction> _attractions;
+
   @override
   double metersPerPixelAt(Vector2 pixel) => 1.0; // 1 像素 = 1 公尺
 
@@ -38,7 +42,7 @@ class FakeSimpleManifest implements OverworldMapManifest {
   @override
   List<PoiMarker> get poiNodes => const [];
   @override
-  List<DistrictAttraction> get districtAttractions => const [];
+  List<DistrictAttraction> get districtAttractions => _attractions;
   @override
   List<AdministrativeDistrict> get administrativeDistricts => const [];
   @override
@@ -187,7 +191,7 @@ void main() {
       }
 
       final result = controller.replaceGatheredPoi(poiId: 'poi_101', dropIndex: 1);
-      expect(result.material.id, 'mat_101');
+      expect(result!.material.id, 'mat_101');
       expect(result.hpSpent, 12);
 
       final runState = container.read(curatorRunControllerProvider);
@@ -257,6 +261,89 @@ void main() {
       expect(r2.hpSpent, 5);
       expect(container.read(curatorRunControllerProvider).resources.hp, 0);
       expect(container.read(curatorRunControllerProvider).phase, CuratorRunPhase.nightEditing);
+    });
+
+    test('AC-A1-4.3 重疊窗口按一次只加 1 ID、1 卡，只扣 1 次 HP/Budget；等距 ID 穩定；換牌 expected ID 失配時零副作用', () {
+      final controller = container.read(curatorRunControllerProvider.notifier);
+
+      final mat1 = sampleMaterial.copyWith(id: 'mat_1', cost: 100, riskLevel: 1); // 6 HP
+      final mat2 = sampleMaterial.copyWith(id: 'mat_2', cost: 200, riskLevel: 2); // 12 HP
+      fakeResolver.mapping['poi_near'] = mat1;
+      fakeResolver.mapping['poi_overlap_far'] = mat2;
+
+      final poiNear = DistrictAttraction(
+        id: 'poi_near',
+        title: '近景點',
+        districtCode: 'kyoto',
+        districtName: '京都',
+        geo: const GeoPoint(35.0, 135.7),
+        pixel: Vector2(100, 110), // dist = 10 px
+        rating: 4.5,
+        reviewCount: 100,
+        category: AttractionCategory.sightseeing,
+        triggerRadiusPixels: 35.0,
+      );
+
+      final poiFar = DistrictAttraction(
+        id: 'poi_overlap_far',
+        title: '重疊遠景點',
+        districtCode: 'kyoto',
+        districtName: '京都',
+        geo: const GeoPoint(35.0, 135.7),
+        pixel: Vector2(100, 120), // dist = 20 px
+        rating: 4.5,
+        reviewCount: 100,
+        category: AttractionCategory.sightseeing,
+        triggerRadiusPixels: 35.0,
+      );
+
+      final manifest = FakeSimpleManifest([poiNear, poiFar]);
+      final playerPixel = Vector2(100, 100);
+
+      final initialHp = container.read(curatorRunControllerProvider).resources.hp;
+      final initialBudget = container.read(curatorRunControllerProvider).resources.budget;
+
+      // 玩家站在 (100, 100)，兩景點皆在 35px 觸發窗口內 (重疊處)
+      // 透過正式採集入口發動取材：命令重新求最近點，成功只轉移一次
+      final result = controller.gatherPoi(
+        'poi_overlap_far',
+        manifest: manifest,
+        playerPixel: playerPixel,
+      );
+
+      // 只能新增最近 POI 的 1 個 gatheredPoiId、1 張素材，並只扣 1 次 HP 與 Budget
+      expect(result.attraction.id, 'poi_near');
+      expect(result.material.id, 'mat_1');
+      expect(result.hpSpent, 6);
+
+      final runStateAfter = container.read(curatorRunControllerProvider);
+      expect(runStateAfter.gatheredPoiIds, equals({'poi_near'}));
+      expect(runStateAfter.inventory.count, equals(1));
+      expect(runStateAfter.inventory.materials.first.id, equals('mat_1'));
+      expect(runStateAfter.resources.hp, equals(initialHp - 6));
+      expect(runStateAfter.resources.budget, equals(initialBudget - 100));
+
+      // 換牌 expected ID 失配測試
+      // 填滿腰包以達換牌狀態
+      for (int i = 0; i < 5; i++) {
+        controller.drawSampleMaterial();
+      }
+      expect(container.read(curatorRunControllerProvider).inventory.isFull, isTrue);
+
+      final hpBeforeMismatch = container.read(curatorRunControllerProvider).resources.hp;
+      final countBeforeMismatch = container.read(curatorRunControllerProvider).inventory.count;
+
+      // 傳入 expectedPoiId = 'wrong_poi_id'，失配時回傳 null 且狀態零變更
+      final replaceMismatch = controller.replaceGatheredPoi(
+        poiId: 'poi_mismatch',
+        dropIndex: 0,
+        manifest: manifest,
+        playerPixel: playerPixel,
+        expectedPoiId: 'wrong_poi_id',
+      );
+      expect(replaceMismatch, isNull);
+      expect(container.read(curatorRunControllerProvider).resources.hp, equals(hpBeforeMismatch));
+      expect(container.read(curatorRunControllerProvider).inventory.count, equals(countBeforeMismatch));
     });
   });
 }

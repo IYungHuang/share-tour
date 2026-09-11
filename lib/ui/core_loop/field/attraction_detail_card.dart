@@ -248,12 +248,16 @@ class _AttractionDistanceBadge extends ConsumerWidget {
       locationControllerProvider.select((s) => s.renderedPixel),
     );
     final manifest = ref.watch(mapManifestProvider);
-
     final distPx = (attraction.pixel - playerPixel).length;
-    final distM = distPx * manifest.metersPerPixelAt(playerPixel);
-    final distText = distM >= 1000
-        ? '${(distM / 1000).toStringAsFixed(1)} km'
-        : '${distM.toStringAsFixed(0)} m';
+    final String distText;
+    if (attraction.triggerRadiusPixels != null) {
+      distText = '${distPx.toStringAsFixed(0)} px';
+    } else {
+      final distM = distPx * manifest.metersPerPixelAt(playerPixel);
+      distText = distM >= 1000
+          ? '${(distM / 1000).toStringAsFixed(1)} km'
+          : '${distM.toStringAsFixed(0)} m';
+    }
 
     return Row(
       children: [
@@ -285,11 +289,15 @@ class _AttractionGatherActionButton extends ConsumerWidget {
     final eligibility = ref.watch(attractionEligibilityProvider(attraction));
     final controller = ref.read(curatorRunControllerProvider.notifier);
 
+    final outOfRangeLabel = attraction.triggerRadiusPixels != null
+        ? '太遠 (需<${attraction.triggerRadiusPixels!.toStringAsFixed(0)}px)'
+        : '太遠 (需<${attraction.triggerRadiusMeters.toStringAsFixed(0)}m)';
+
     final (label, bgColor, isClickable) = switch (eligibility) {
       GatheringEligibility.ready => ('📸 踩線取材', const Color(0xFF48BB78), true),
       GatheringEligibility.inventoryFull => ('👝 踩線換牌', const Color(0xFFED8936), true),
       GatheringEligibility.alreadyGathered => ('✅ 本日已踩線', Colors.grey.shade400, false),
-      GatheringEligibility.outOfRange => ('太遠 (需<50m)', Colors.grey.shade300, false),
+      GatheringEligibility.outOfRange => (outOfRangeLabel, Colors.grey.shade300, false),
       GatheringEligibility.exhausted => ('💤 體力透支', Colors.grey.shade400, false),
       GatheringEligibility.unavailable => ('無可用素材', Colors.grey.shade300, false),
     };
@@ -298,27 +306,53 @@ class _AttractionGatherActionButton extends ConsumerWidget {
       onTap: !isClickable
           ? null
           : () async {
+              final playerPixel = ref.read(
+                locationControllerProvider.select((s) => s.renderedPixel),
+              );
+              final manifest = ref.read(mapManifestProvider);
+              final resolver = ref.read(poiMaterialResolverProvider);
+              final runState = ref.read(curatorRunControllerProvider);
+              final nearest = nearestGatherablePoi(
+                attractions: manifest.districtAttractions,
+                run: runState,
+                playerPixel: playerPixel,
+                manifest: manifest,
+                resolver: resolver,
+              );
+
+              final effectiveAttraction = nearest?.attraction ?? attraction;
+              final effectiveMaterial = nearest?.material ?? material;
+
               if (eligibility == GatheringEligibility.ready) {
-                if (material != null) {
-                  final result = controller.gatherPoi(attraction.id);
+                if (effectiveMaterial != null) {
+                  final result = controller.gatherPoi(
+                    effectiveAttraction.id,
+                    manifest: manifest,
+                    playerPixel: playerPixel,
+                  );
                   onGathered?.call(result.material, result.hpSpent);
                 }
               } else if (eligibility == GatheringEligibility.inventoryFull) {
-                if (material != null) {
+                if (effectiveMaterial != null) {
                   final currentMaterials = ref.read(
                     curatorRunControllerProvider.select((s) => s.inventory.materials),
                   );
                   final dropIndex = await GatheringReplaceBottomSheet.show(
                     context: context,
-                    newMaterial: material!,
+                    newMaterial: effectiveMaterial,
                     currentMaterials: currentMaterials,
                   );
                   if (dropIndex != null && context.mounted) {
                     final result = controller.replaceGatheredPoi(
-                      poiId: attraction.id,
+                      poiId: effectiveAttraction.id,
                       dropIndex: dropIndex,
+                      manifest: manifest,
+                      playerPixel: playerPixel,
+                      expectedPoiId: effectiveAttraction.id,
                     );
-                    onGathered?.call(result.material, result.hpSpent);
+                    if (result != null) {
+                      onGathered?.call(result.material, result.hpSpent);
+                    }
                   }
                 }
               }

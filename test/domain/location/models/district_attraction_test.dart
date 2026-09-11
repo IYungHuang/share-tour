@@ -29,6 +29,29 @@ void main() {
       expect(attraction.category, AttractionCategory.landmark);
       expect(attraction.minZoom, 1.2);
       expect(attraction.triggerRadiusMeters, 50.0);
+      expect(attraction.triggerRadiusPixels, isNull);
+    });
+
+    test('支援 optional triggerRadiusPixels，toPoiMarker 仍保有公尺幾何語意', () {
+      final attraction = DistrictAttraction(
+        id: 'spot_px',
+        title: '京都街區景點',
+        districtCode: 'kyoto',
+        districtName: '京都',
+        geo: const GeoPoint(35.0, 135.7),
+        pixel: Vector2(100, 200),
+        rating: 4.8,
+        reviewCount: 1000,
+        category: AttractionCategory.landmark,
+        triggerRadiusPixels: 35.0,
+      );
+
+      expect(attraction.triggerRadiusPixels, 35.0);
+      expect(attraction.triggerRadiusMeters, 50.0);
+
+      final marker = attraction.toPoiMarker();
+      expect(marker.triggerRadiusMeters, 50.0);
+      expect(marker.id, 'spot_px');
     });
 
     test('景點與目標像素的距離計算', () {
