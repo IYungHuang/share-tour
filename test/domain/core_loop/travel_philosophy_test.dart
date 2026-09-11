@@ -56,11 +56,11 @@ void main() {
     });
 
     test('多重標籤命中偏好標籤僅一次性獲得 +50% 加成（不重複累計）', () {
-      const philosophy = TravelPhilosophy.midnight; // 偏好 #深夜, #怪談, #孤獨
+      const philosophy = TravelPhilosophy.midnight; // 偏好 #深夜, #小酌
       const material = TravelMaterial(
         id: 'test_spot_4',
-        name: '深夜幽靈廢墟',
-        tags: ['#深夜', '#怪談', '#孤獨'],
+        name: '深夜小酌食堂',
+        tags: ['#深夜', '#小酌'],
         themeValue: 10,
         hypeValue: 30,
         cost: 0,
@@ -87,6 +87,23 @@ void main() {
       final contribution = philosophy.evaluateMaterial(material);
       expect(contribution.effectiveTheme, 10); // 依排斥打五折
       expect(contribution.flatThemePenalty, 5); // 依排斥額外扣 5
+    });
+
+    test('五大旅行哲學偏好與排斥標籤符合 SPEC 附錄 A.1 詞彙表對齊方案', () {
+      expect(TravelPhilosophy.midnight.preferredTags, ['#深夜', '#小酌']);
+      expect(TravelPhilosophy.midnight.repelledTags, ['#拉車']);
+
+      expect(TravelPhilosophy.slow.preferredTags, ['#散步', '#古蹟']);
+      expect(TravelPhilosophy.slow.repelledTags, ['#高風險']);
+
+      expect(TravelPhilosophy.gourmet.preferredTags, ['#美食', '#銅板美食', '#早餐']);
+      expect(TravelPhilosophy.gourmet.repelledTags, ['#高風險']);
+
+      expect(TravelPhilosophy.antiTourism.preferredTags, ['#巷弄秘境', '#怪談']);
+      expect(TravelPhilosophy.antiTourism.repelledTags, ['#大眾名店']);
+
+      expect(TravelPhilosophy.chaos.preferredTags, ['#高風險', '#拉車']);
+      expect(TravelPhilosophy.chaos.repelledTags, ['#散步']);
     });
   });
 }

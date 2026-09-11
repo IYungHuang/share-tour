@@ -5,32 +5,32 @@ enum TravelPhilosophy {
   midnight(
     displayName: '午夜探索',
     quote: '凌晨的城市，才會說真話。',
-    preferredTags: ['#深夜', '#怪談', '#孤獨'],
-    repelledTags: [],
+    preferredTags: ['#深夜', '#小酌'],
+    repelledTags: ['#拉車'],
   ),
   slow(
     displayName: '慢旅行',
     quote: '真正的旅行，是留時間給偶然。',
-    preferredTags: ['#放空', '#老街', '#偶然'],
-    repelledTags: [],
+    preferredTags: ['#散步', '#古蹟'],
+    repelledTags: ['#高風險'],
   ),
   gourmet(
     displayName: '美食朝聖',
     quote: '一座城市的靈魂藏在它的深夜食堂。',
-    preferredTags: ['#深夜食堂', '#地道', '#銅板美食'],
-    repelledTags: [],
+    preferredTags: ['#美食', '#銅板美食', '#早餐'],
+    repelledTags: ['#高風險'],
   ),
   antiTourism(
     displayName: '反觀光',
     quote: '真正的生活藏在觀光客看不到的地方。',
-    preferredTags: ['#巷弄秘境', '#無人', '#廢墟'],
+    preferredTags: ['#巷弄秘境', '#怪談'],
     repelledTags: ['#大眾名店'],
   ),
   chaos(
     displayName: '混亂冒險',
     quote: '最好的旅行通常從計畫失敗開始。',
-    preferredTags: ['#高風險', '#突發', '#奇葩'],
-    repelledTags: [],
+    preferredTags: ['#高風險', '#拉車'],
+    repelledTags: ['#散步'],
   );
 
   const TravelPhilosophy({

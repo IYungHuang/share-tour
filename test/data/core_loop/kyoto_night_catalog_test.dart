@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:share_tour/data/core_loop/kyoto_night_catalog.dart';
+import 'package:share_tour/domain/core_loop/material_catalog_audit.dart';
+import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
 
 void main() {
   group('京都夜間 30 處特色旅行素材庫測試 (Data DLC)', () {
@@ -63,6 +65,31 @@ void main() {
           .where((m) => m.isSpotlight && m.cost == 0 && m.riskLevel <= 2)
           .toList();
       expect(freeLowRiskSpotlights.length, lessThanOrEqualTo(1));
+    });
+
+    test('AC-A1-0.1 ~ 0.4 京都夜間素材庫符合五大旅行哲學標籤審計契約', () {
+      final violations = auditMaterialCatalog(
+        materials: kyotoNightMaterials,
+        philosophies: TravelPhilosophy.values,
+      );
+      expect(violations, isEmpty, reason: '京都素材庫審計發現違規項目: $violations');
+    });
+
+    test('AC-A1-6.5 五哲學各至少保有 1 張 cost<=500 的契合絕景', () {
+      for (final philosophy in TravelPhilosophy.values) {
+        final alignedAffordableSpotlights = kyotoNightMaterials.where((m) {
+          if (!m.isSpotlight || m.cost > 500) return false;
+          final hitsPreferred = philosophy.preferredTags.any((t) => m.hasTag(t));
+          final hitsRepelled = philosophy.repelledTags.any((t) => m.hasTag(t));
+          return hitsPreferred && !hitsRepelled;
+        }).toList();
+
+        expect(
+          alignedAffordableSpotlights,
+          isNotEmpty,
+          reason: '${philosophy.displayName} 至少需保有 1 張 cost<=500 的契合絕景',
+        );
+      }
     });
   });
 }
