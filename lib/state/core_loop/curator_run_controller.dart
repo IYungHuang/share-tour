@@ -241,6 +241,10 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
   Object? get lastPersistError => _lastPersistError;
   Object? _lastPersistError;
 
+  /// 累計寫入失敗次數。一旦大於 0，玩家的局外進度就已經與日誌脫節。
+  int get persistFailureCount => _persistFailureCount;
+  int _persistFailureCount = 0;
+
   /// 背景事件寫入的完成 Future (供測試等待；無待處理寫入時立即完成)
   Future<void> get pendingPersist => _pendingPersist ?? Future<void>.value();
   Future<void>? _pendingPersist;
@@ -255,7 +259,9 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
       occurredAtUtc: _nowUtc(),
       payload: payload,
     );
-    _pendingPersist = _writeEvent(event);
+    // 串在前一筆之後：覆寫會讓 pendingPersist 只等到最後一筆，
+    // 也會讓先前失敗的那筆無人觀察。
+    _pendingPersist = pendingPersist.then((_) => _writeEvent(event));
   }
 
   Future<void> _writeEvent(CuratorEvent event) async {
@@ -263,9 +269,10 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     if (repo == null) return;
     try {
       await repo.appendEvents([event]);
-      _lastPersistError = null;
     } catch (e) {
+      // 只累積、不清除：一筆成功不代表先前丟失的進度回來了。
       _lastPersistError = e;
+      _persistFailureCount++;
     }
   }
 }

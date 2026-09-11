@@ -1,3 +1,4 @@
+import 'package:share_tour/domain/core_loop/models/core_loop_exceptions.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/review_outcome.dart';
@@ -9,6 +10,27 @@ import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 
 void main() {
   group('單局生命週期與再來一局重置測試 (AC-ML-7)', () {
+    test('AC-FIX-6.1: completeReview 拒絕非本局指派客戶的報告', () {
+      final state = CuratorRunState.create(
+        client: ClientSpec.budgetWorker,
+        philosophy: TravelPhilosophy.midnight,
+        equipment: EquipmentInventory.initial(),
+      );
+      const foreignReport = ReviewReport(
+        clientType: 'hypeInfluencer',
+        outcome: ReviewOutcome.perfect,
+        satisfaction: 100,
+        earnedCoins: 9999,
+        feedbackQuote: '別人家的好評',
+        subscores: {},
+      );
+
+      expect(
+        () => state.completeReview(foreignReport),
+        throwsA(isA<PreconditionFailedException>()),
+      );
+    });
+
     test(
       'AC-ML-7.1 Restart Run 後新局 HP 依球鞋等級回滿，Budget 重置，Theme 為 50，腰包與 4 槽位清空',
       () {

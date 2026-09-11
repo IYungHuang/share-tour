@@ -3,9 +3,6 @@ enum CuratorEventType {
   /// 首次建立玩家檔案，payload: {profileId}
   profileCreated,
 
-  /// 單局開始，payload: {runId, clientType, philosophySeed}
-  runStarted,
-
   /// 靈感重擲，payload: {cost}
   philosophyRerolled,
 

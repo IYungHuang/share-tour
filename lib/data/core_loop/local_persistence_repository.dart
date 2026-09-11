@@ -20,6 +20,11 @@ class LocalPersistenceRepository implements PersistenceRepository {
   SharedPreferences? _prefs;
   final Uuid _uuid;
 
+  /// 寫入串接鏈。SharedPreferences 沒有真正的 append API，追加只能「讀出整份 →
+  /// 合併 → 整份寫回」。兩筆並行追加會讀到同一份舊資料，後寫的蓋掉前一筆，
+  /// 事件就此消失。把寫入串成一條鏈，讓追加彼此互斥。
+  Future<void> _writeChain = Future<void>.value();
+
   /// 事件日誌鍵值
   static const String eventLogKey = 'curator_event_log_v1';
 
@@ -51,10 +56,26 @@ class LocalPersistenceRepository implements PersistenceRepository {
   }
 
   @override
-  Future<void> appendEvents(List<CuratorEvent> events) async {
-    if (events.isEmpty) return;
+  Future<void> appendEvents(List<CuratorEvent> events) {
+    if (events.isEmpty) return Future<void>.value();
+    final queued = _writeChain.then((_) => _doAppend(events));
+    // 一筆失敗不得讓後續追加全部連坐失敗，但錯誤仍要回傳給呼叫端。
+    _writeChain = queued.catchError((Object _) {});
+    return queued;
+  }
+
+  Future<void> _doAppend(List<CuratorEvent> events) async {
     final prefs = await _getPrefs();
     final existing = await loadEvents();
+    final lastSeq = existing.isEmpty ? 0 : existing.last.seq;
+    for (final event in events) {
+      if (event.seq <= lastSeq) {
+        throw StateError(
+          '事件 seq ${event.seq} 未大於日誌現有的 $lastSeq；'
+          '重複或倒退的 seq 會讓重播排序未定義',
+        );
+      }
+    }
     final merged = [...existing, ...events];
     await prefs.setString(
       eventLogKey,
@@ -65,19 +86,31 @@ class LocalPersistenceRepository implements PersistenceRepository {
   @override
   Future<CuratorSaveData> loadSave() async {
     final events = await loadEvents();
-    if (events.isEmpty) {
-      // 首次啟動：落地一筆身分事件，讓日誌自始即可重播。
-      final genesis = CuratorEvent(
-        eventId: _uuid.v4(),
-        seq: 1,
-        type: CuratorEventType.profileCreated,
-        occurredAtUtc: DateTime.now().toUtc(),
-        payload: {'profileId': _uuid.v4()},
-      );
-      await appendEvents([genesis]);
-      return replayCuratorEvents([genesis]);
+    if (events.isNotEmpty) {
+      try {
+        return replayCuratorEvents(events);
+      } catch (e) {
+        // 語法合法但語意壞掉的日誌 (缺身分事件、未知裝備種類) 會讓重播拋出。
+        // 若讓它冒到 main()，玩家看到的是黑屏且無法自救，所以比照解析失敗
+        // 備份後重建 —— 原文留在備份鍵裡，日後仍可人工救回。
+        final prefs = await _getPrefs();
+        final raw = prefs.getString(eventLogKey);
+        if (raw != null) {
+          await _backupCorrupted(prefs, raw, e);
+        }
+      }
     }
-    return replayCuratorEvents(events);
+
+    // 首次啟動或日誌已損毀：落地一筆身分事件，讓日誌自始即可重播。
+    final genesis = CuratorEvent(
+      eventId: _uuid.v4(),
+      seq: 1,
+      type: CuratorEventType.profileCreated,
+      occurredAtUtc: DateTime.now().toUtc(),
+      payload: {'profileId': _uuid.v4()},
+    );
+    await appendEvents([genesis]);
+    return replayCuratorEvents([genesis]);
   }
 
   @override
@@ -94,5 +127,7 @@ class LocalPersistenceRepository implements PersistenceRepository {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     await prefs.setString('event_log_corrupted_$timestamp.bak', rawJson);
     await prefs.setString('event_log_corrupted_${timestamp}_reason', '$error');
+    // 原鍵必須清掉，否則每次啟動都會再備份一次同一份壞資料，無限膨脹。
+    await prefs.remove(eventLogKey);
   }
 }

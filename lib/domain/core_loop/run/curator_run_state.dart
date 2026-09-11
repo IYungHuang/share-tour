@@ -348,6 +348,13 @@ class CuratorRunState {
 
   /// 完成審查並結算 (進入 settled 階段，累積佣金，遵循 CC-3 決定性重播)
   CuratorRunState completeReview(ReviewReport report) {
+    // 收下的報告必須出自本局指派的客戶。這條規則原本只擋在結算彈窗裡，
+    // 換一個呼叫端就能再破一次；反作弊規則屬於狀態機，留在 domain。
+    if (report.clientType != client.type.name) {
+      throw PreconditionFailedException(
+        '報告來自 ${report.clientType}，與本局指派客戶 ${client.type.name} 不符',
+      );
+    }
     final nextEquipment = equipment.addCoins(report.earnedCoins);
     return copyWith(
       phase: CuratorRunPhase.settled,

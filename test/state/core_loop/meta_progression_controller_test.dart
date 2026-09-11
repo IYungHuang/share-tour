@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:share_tour/domain/core_loop/events/curator_event.dart';
+import 'package:share_tour/domain/core_loop/events/curator_event_replay.dart';
 import 'package:share_tour/domain/core_loop/models/curator_save_data.dart';
 import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
@@ -26,6 +27,59 @@ void main() {
     });
 
     tearDown(() => container.dispose());
+
+    test('AC-CC-3.15: 事件日誌重播回來的狀態必須等於控制器當下狀態', () async {
+      final initialSave = CuratorSaveData(
+        profileId: 'round-trip',
+        coins: 2000,
+        sneakersLevel: 1,
+        cameraLevel: 1,
+        waistBagLevel: 1,
+        completedRuns: 0,
+        lastMonotonicSeq: 1, // genesis 已佔用 seq 1
+        updatedAtUtc: DateTime.utc(2026, 9, 11),
+      );
+      final customContainer = ProviderContainer(
+        overrides: [
+          persistenceRepositoryProvider.overrideWithValue(fakeRepo),
+          initialSaveDataProvider.overrideWithValue(initialSave),
+        ],
+      );
+      addTearDown(customContainer.dispose);
+
+      final controller = customContainer.read(
+        curatorRunControllerProvider.notifier,
+      );
+
+      controller.rerollPhilosophies();
+      controller.upgradeEquipment(EquipmentType.sneakers);
+      controller.upgradeEquipment(EquipmentType.camera);
+      await controller.pendingPersist;
+
+      // 身分事件在真實環境由 repository 落地；此處補上以構成完整日誌
+      final log = [
+        CuratorEvent(
+          eventId: 'genesis',
+          seq: 1,
+          type: CuratorEventType.profileCreated,
+          occurredAtUtc: DateTime.utc(2026, 9, 11),
+          payload: const {'profileId': 'round-trip'},
+        ),
+        ...fakeRepo.events,
+      ];
+      final replayed = replayCuratorEvents(log);
+      final live = customContainer.read(curatorRunControllerProvider).equipment;
+
+      // 寫出去的東西重播回來，必須還是同一個局外狀態
+      expect(replayed.coins, live.coins - initialSave.coins);
+      expect(replayed.sneakersLevel, live.sneakers.level);
+      expect(replayed.cameraLevel, live.camera.level);
+      expect(
+        fakeRepo.events.map((e) => e.seq).toList(),
+        [2, 3, 4],
+        reason: 'seq 必須接在 genesis 之後嚴格遞增，不得撞號',
+      );
+    });
 
     test('AC-FIX-3.1: 存檔寫入失敗時必須被捕捉並可觀測，不得靜默丟失', () async {
       fakeRepo.simulateWriteFailure = true;

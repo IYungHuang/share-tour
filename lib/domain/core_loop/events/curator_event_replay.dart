@@ -7,7 +7,13 @@ import 'curator_event.dart';
 /// 不依賴任何外部狀態；相同的事件序列必定重播出全等的 [CuratorSaveData]。
 /// 事件依 `seq` 排序後套用，因此輸入順序不影響結果。
 CuratorSaveData replayCuratorEvents(Iterable<CuratorEvent> events) {
-  final ordered = events.toList()..sort((a, b) => a.seq.compareTo(b.seq));
+  // Dart 的 List.sort 不保證穩定，seq 撞號時 ordered.last 會是未定義的。
+  // 以 eventId 當第二鍵給出全序，重播結果才真的與輸入順序無關。
+  final ordered = events.toList()
+    ..sort((a, b) {
+      final bySeq = a.seq.compareTo(b.seq);
+      return bySeq != 0 ? bySeq : a.eventId.compareTo(b.eventId);
+    });
   if (ordered.isEmpty) {
     throw StateError('事件日誌為空，無法重播出玩家身分');
   }
@@ -23,9 +29,6 @@ CuratorSaveData replayCuratorEvents(Iterable<CuratorEvent> events) {
     switch (event.type) {
       case CuratorEventType.profileCreated:
         profileId = event.payload['profileId'] as String?;
-      case CuratorEventType.runStarted:
-        // 單局開端只作為敘事與稽核依據，不改變局外狀態。
-        break;
       case CuratorEventType.philosophyRerolled:
         coins -= (event.payload['cost'] as int?) ?? 0;
       case CuratorEventType.equipmentUpgraded:
