@@ -13,6 +13,7 @@ import 'package:share_tour/domain/location/projection/map_manifest.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 import 'package:share_tour/state/location/location_controller.dart';
 import 'package:share_tour/state/location/location_providers.dart';
+import 'package:share_tour/ui/core_loop/curator_modal_route.dart';
 import 'package:share_tour/ui/core_loop/curator_studio_modal.dart';
 import 'package:share_tour/ui/core_loop/field/curator_field_hud.dart';
 import 'package:vector_math/vector_math.dart';
@@ -168,19 +169,23 @@ void main() {
             home: Scaffold(
               body: Consumer(
                 builder: (context, ref, _) {
+                  // 與 main.dart 共用同一份路由判斷，不再自抄一份等價邏輯，
+                  // 否則改 main.dart 不會讓這條測試變紅。
                   ref.listen(curatorRunControllerProvider, (previous, next) {
-                    if (next.isExhausted && (previous == null || !previous.isExhausted)) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (!isStudioOpen) {
-                          isStudioOpen = true;
-                          showModalBottomSheet(
-                            context: context,
-                            isScrollControlled: true,
-                            builder: (_) => const CuratorStudioModal(),
-                          );
-                        }
-                      });
+                    if (resolveCuratorModalRoute(previous, next) !=
+                        CuratorModalRoute.studio) {
+                      return;
                     }
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!isStudioOpen) {
+                        isStudioOpen = true;
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          builder: (_) => const CuratorStudioModal(),
+                        );
+                      }
+                    });
                   });
 
                   return const Column(

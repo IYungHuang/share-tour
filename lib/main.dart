@@ -2,6 +2,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/engine_pause_coordinator.dart';
 import 'data/core_loop/kyoto_night_catalog.dart';
 import 'data/core_loop/local_persistence_repository.dart';
 import 'data/core_loop/taiwan_attraction_materials.dart';
@@ -16,6 +17,7 @@ import 'state/core_loop/curator_run_providers.dart';
 import 'state/core_loop/persistence_providers.dart';
 import 'state/location/location_providers.dart';
 import 'ui/core_loop/briefing/curator_briefing_modal.dart';
+import 'ui/core_loop/curator_modal_route.dart';
 import 'ui/core_loop/curator_studio_modal.dart';
 import 'ui/core_loop/field/attraction_detail_card.dart';
 import 'ui/core_loop/field/curator_field_hud.dart';
@@ -70,25 +72,27 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
   final GatheringFloatingFeedbackController _gatheringFeedbackController =
       GatheringFloatingFeedbackController();
 
-  // EnginePauseCoordinator: 引用計數暫停協調器 (防範多層彈窗競爭與洩漏, AC-M4-4.4)
-  int _enginePauseRefCount = 0;
+  // 引用計數暫停協調器 (防範多層彈窗競爭與洩漏, AC-M4-4.4)。
+  // 計數邏輯本身住在 core/，有獨立測試；此處只負責附著與載入的檢查。
+  late final EnginePauseCoordinator _enginePause = EnginePauseCoordinator(
+    onPause: () {
+      if (_game.isAttached && _game.isLoaded) {
+        _game.pauseEngine();
+      }
+    },
+    onResume: () {
+      if (mounted && _game.isAttached && _game.isLoaded) {
+        _game.resumeEngine();
+      }
+    },
+  );
   bool _isStudioModalOpen = false;
   bool _isBriefingModalOpen = false;
   bool _isGearShopModalOpen = false;
 
-  void _pauseEngine() {
-    _enginePauseRefCount++;
-    if (_enginePauseRefCount == 1 && _game.isAttached && _game.isLoaded) {
-      _game.pauseEngine();
-    }
-  }
+  void _pauseEngine() => _enginePause.acquire();
 
-  void _resumeEngine() {
-    _enginePauseRefCount = (_enginePauseRefCount - 1).clamp(0, 99999);
-    if (_enginePauseRefCount == 0 && mounted && _game.isAttached && _game.isLoaded) {
-      _game.resumeEngine();
-    }
-  }
+  void _resumeEngine() => _enginePause.release();
 
   Future<T?> _showModalSafely<T>(WidgetBuilder builder) async {
     _pauseEngine();
@@ -203,16 +207,19 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
   Widget build(BuildContext context) {
     // 狀態機事件監聽：行前準備與體力透支自動彈窗
     ref.listen(curatorRunControllerProvider, (previous, next) {
-      if (next.phase == CuratorRunPhase.philosophizing &&
-          previous?.phase != CuratorRunPhase.philosophizing) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _openBriefingModalSafely();
-        });
-      } else if (next.isExhausted && (previous == null || !previous.isExhausted)) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _openCuratorStudioSafely();
-        });
-      }
+      final route = resolveCuratorModalRoute(previous, next);
+      if (route == CuratorModalRoute.none) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        switch (route) {
+          case CuratorModalRoute.briefing:
+            _openBriefingModalSafely();
+          case CuratorModalRoute.studio:
+            _openCuratorStudioSafely();
+          case CuratorModalRoute.none:
+            break;
+        }
+      });
     });
 
     return Scaffold(
