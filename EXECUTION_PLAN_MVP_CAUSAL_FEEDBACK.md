@@ -2,32 +2,55 @@
 
 > **For agentic workers:** REQUIRED SUBSKILL: 以 `superpowers:executing-plans` 逐任務執行。動碼前用 `superpowers:using-git-worktrees`；每個行為變更用 `superpowers:test-driven-development`；每次宣告完成前用 `superpowers:verification-before-completion`。
 
-**狀態**：v2 待簽核；**前置閘門未清償前不得啟動 T1**
-**上位文件**：`SPEC_MVP_CAUSAL_FEEDBACK.md` (v3)、`PLAN_MVP_CAUSAL_FEEDBACK.md` (v3)
+**狀態**：v3 待簽核；**前置閘門未清償前不得啟動 T1**
+**上位文件**：`SPEC_MVP_CAUSAL_FEEDBACK.md` (v4)、`PLAN_MVP_CAUSAL_FEEDBACK.md` (v4)
 **工程約束**：`CLAUDE.md`、`CROSS_CUTTING_CONSTRAINTS.md`
 
-> **v2 修訂摘要（相對 v1）**
-> 1. 前置閘門改為可查核的事實（v1 宣稱「等 `feature/mvp-amendment-01` 合入」，但撰寫當下 HEAD 就在該分支上，等於自我違反）。
-> 2. `dart test` 全部改 `flutter test` —— 本倉庫**無** `package:test` 直接相依，該指令必失敗。
-> 3. 新增 T0（TIMELINE_UI 增修），否則 T4 一動就撞已簽核的 AC-UI-2.2 與 §2.2C。
-> 4. 雙客戶 → 單客戶；心態矩陣 → `ClientReviewEngine` 分桶；字串掃描 → 執行期斷言。
-> 5. `copyWith` 清空旗標、手寫 List 值相等 —— 兩者都是不寫就靜默失效的坑。
+> **v3 修訂摘要（相對 v2）**
+> 1. **T0 的既成事實誠實標記**：v2 把 T0 列為待執行的 Commit 01，但 `cd69d93` 已在三份文件仍為「待簽核」時將附錄提交 —— T0 自己滿足了 G5，閘門空轉。v3 標記為「已於簽核前執行，待追認」並改寫查核方式。
+> 2. **守門測試改端到端**並移出 `test/architecture/`。
+> 3. **`tweakItinerary` 示範碼修正**：v2 的範例會保留上一輪焦點，正踩了它自己宣告要擋的坑。
+> 4. **撞車檔案清單補齊**（v2 漏列 6 支，其中 `review_settlement_widget_test.dart` 與本案 T6 直接衝突）。
+> 5. T1 擴至 14 條 reasonCode；新增 T6 的結算數字修正。
 
 ---
 
 ## 0. 前置閘門與全程紅線
 
-### 0.1 施工前置（逐項查核，未過不得啟動）
+### 0.1 施工前置（逐項查核，未過不得啟動 T1）
 
 | # | 條件 | 查核方式 |
 |---|---|---|
-| G1 | `SPEC_MVP_CAUSAL_FEEDBACK.md` v3 經使用者簽核 | 文件狀態列改為「已覆核」 |
-| G2 | `PLAN_MVP_CAUSAL_FEEDBACK.md` v3 經使用者簽核 | 同上 |
-| G3 | 本執行計劃經使用者簽核 | 同上 |
-| G4 | `SPEC_MVP_AMENDMENT_01.md` 的數值修訂已完成並合入 `main` | `git log main --oneline` 可見其收尾提交；`git status` 乾淨 |
-| G5 | T0（`SPEC_MVP_TIMELINE_UI` 增修）完成並簽核 | 該檔含增修段，明載作廢條款 |
+| G1 | `SPEC_MVP_CAUSAL_FEEDBACK.md` v4 經使用者簽核 | 文件狀態列改為「已覆核」 |
+| G2 | `PLAN_MVP_CAUSAL_FEEDBACK.md` v4 經使用者簽核 | 同上 |
+| G3 | 本執行計劃 v3 經使用者簽核 | 同上 |
+| G4 | `SPEC_MVP_AMENDMENT_01.md` 的數值修訂已完成 | `EXECUTION_PLAN_MVP_AMENDMENT_01.md` 的最末 Commit 已提交且全套測試綠燈 |
+| G5 | T0 文件增修完成**並經追認** | 見下方「T0 的既成事實」 |
 
-> **撞車禁令**：本計劃與 `feature/mvp-amendment-01` 觸及同一批檔案（`timeline_itinerary.dart`、`curator_run_state.dart`、`client_review_engine.dart`、`live_preview_hud.dart`）。**兩者嚴禁並行施工。** 啟動前先確認該分支已合入且無其他 session 正在讀寫（CLAUDE.md §8）。
+> **T0 的既成事實（須追認或回退）**
+> commit `cd69d93` 已於 G1~G3 全部未清償時，將附錄寫進 `SPEC_MVP_TIMELINE_UI.md` 與 `SPEC_MVP_CORE_LOOP.md` 並提交，違反 `CLAUDE.md` §1「每一關都必須等使用者明確點頭」。此處不以「事實更正故可即刻生效」自我豁免 —— **判定某段修改是不是純事實更正，本身就是該被覆核的判斷**。使用者須明確選擇：追認該 commit，或 `git revert` 後重走。G5 在其中之一發生前不成立。
+
+> **撞車禁令**：本案與 `feature/mvp-amendment-01` 觸及以下共同檔案，**嚴禁並行施工**：
+>
+> | 檔案 | AMENDMENT 任務 | 本案任務 |
+> |---|---|---|
+> | `lib/domain/core_loop/models/timeline_itinerary.dart` | 多個 | T1 |
+> | `lib/domain/core_loop/models/review_outcome.dart` | T13 | T1（`ReviewOutcome` 分桶地基） |
+> | `lib/domain/core_loop/review/client_review_engine.dart` | 多個 | T1（唯讀） |
+> | `lib/domain/core_loop/run/curator_run_state.dart` | 多個 | T3 |
+> | `lib/state/core_loop/curator_run_providers.dart` | T13 | T3 |
+> | `lib/state/core_loop/curator_run_controller.dart` | 已完成 | T3 |
+> | `lib/ui/core_loop/review_settlement_modal.dart` | T13 | T6 |
+> | `lib/ui/core_loop/curator_studio_modal.dart` | 已完成 | T5 |
+> | `lib/ui/core_loop/components/live_preview_hud.dart` | 多個 | T4 |
+> | `lib/ui/core_loop/components/compact_slot_card.dart` | 已完成 | T4 |
+> | `lib/ui/core_loop/field/attraction_detail_card.dart` | 已完成 | T2 |
+> | `test/ui/core_loop/curator_studio_modal_test.dart` | T13 | T5/T7 |
+> | `test/ui/core_loop/review_settlement_widget_test.dart` | T13 | T6 |
+> | `test/ui/core_loop/timeline_rail_widget_test.dart` | 已完成 | T4 |
+> | `test/ui/core_loop/attraction_gathering_ui_test.dart` | 已完成 | T2 |
+>
+> **特別注意**：AMENDMENT 的 T13「Review 只呈現 domain 報告」會重構 `review_outcome.dart` 與整支結算彈窗，正是本案 T1（`ReviewOutcome` 分桶）與 T6（歸因）的地基。**T13 必須先落地。**
 
 ### 0.2 全程紅線
 
@@ -35,7 +58,10 @@
 - **零具名城市**：`lib/domain/`、`lib/state/` 不得出現 `taiwan`/`kyoto`（含註解與字面值），Codex 詞條一併適用。
 - **UI 零業務邏輯**：不得裸寫 `riskLevel >= 3`，一律 `material.hasFatigueRisk`；階梯一律讀 `CausalFact.intensity`。
 - **不改計分規則**：本計劃只投影既有計算。任何係數調整都屬 `SPEC_MVP_AMENDMENT_01` 範疇，發現需要調整就停下來回報。
-- **數字揭露邊界**：編排期清退 Theme／Hype 計分結果與 `+20% Combo`；**保留**牌面 `🔥hypeValue`／`🎯themeValue` 與相機倍率膠囊。
+- **數字揭露邊界**：編排期清退 Theme／Hype 計分結果、`+20% Combo`、`🎯themeValue`、絕景乘數；**保留** `🔥hypeValue`、相機倍率膠囊、成本／預算。
+  > `🎯` 必須拿掉的理由：它是未經哲學係數換算的 base 值（實際 40%/90%/92%/**−70%**，`travel_philosophy.dart:62,72,78,84`），保留一個會誤導的數字比不給更糟。`🔥` 的 base 值確實會進 `slotEffectiveHypes`，是誠實的比較基準，故保留。
+- **因果符號只從 facts 渲染**：編排期元件不得自行讀 `itineraryStatsProvider` 判斷因果（牌面屬性、成本、相機倍率除外）。不守這條，T7 的端到端守門永遠轉不綠。
+- **結算面板禁止硬編碼分母與係數**：一律取自 `report.subscores` 與 `ClientSpec`。
 - **決定性（CC-3）**：策略提示取樣支援注入 `Random?`。
 - **值相等**：`CausalFact` / `ItineraryCausalReport` 手寫 `operator ==` / `hashCode`，`facts` 逐項比對（`domain/` 不可用 `listEquals`）。
 
@@ -54,60 +80,62 @@
 
 ---
 
-## 1. Task 0 (Commit 01) — `SPEC_MVP_TIMELINE_UI` 增修（純文件）
+## 1. Task 0 — 前置文件增修（**部分已執行，待追認**）
 
-**對應**：SPEC v3 §6.1
+**對應**：SPEC v4 §6
 **目標**：解除新舊 SPEC 的正面衝突。**不動任何程式碼。**
 
-### Files
-- Modify: `SPEC_MVP_TIMELINE_UI.md`
+### 已執行部分（commit `cd69d93`，簽核前提交，待使用者追認或回退）
 
-### Steps
-1. `SPEC_MVP_TIMELINE_UI.md` 追加「增修 01：因果可視化對齊」段落，明載：
-   - **作廢 `AC-UI-2.2`**（光軌須含 `+20% Combo` 文本）→ 改為渲染定性符號 `[共鳴]`，不含百分比。
-   - **改寫 §2.2C 即時試算指標** → 僅保留「總開銷 / 預算上限」與超支警示；刪除「預估熱度」與「主題滿意」兩項。
-   - **刪除 §2.2C 客群視角切換器** → 客戶已於行前委託指派（`curator_studio_modal.dart:117` 以 `runState.client.type` 提交），切換器造成認知混淆。
-   - **明載 `AC-UI-2.3`（疲勞警示 Key）與 `AC-UI-2.4`（相機倍率）維持有效**。
-2. **校正同檔 §2.3 的過期結算數字**（與本 SPEC 無關，但該節現在描述的是一套已不存在的公式）：
+- `SPEC_MVP_TIMELINE_UI.md` 檔尾附錄：§2.3 數字對照表、AC-UI-2.2 等三條的作廢宣告。
+- `SPEC_MVP_CORE_LOOP.md` 檔尾：`ClientSpec.personaName` 增修註記。
 
-   | §2.3 原文 | 現行實作 |
-   |---|---|
-   | 社畜預算滿分 70、超支每 10 円扣 2 分 | 滿分 `100 - themeWeight` = **44**；超支扣 `round(超支比例 × overspendPenaltyPoints(100))`，clamp 至 `0~44` |
-   | 社畜主題得分 `Theme / 2`（最高 30） | `round(themeWeight(56) × finalTheme / 100)`，最高 **56** |
-   | 反無聊：`Hype < 30` 扣 25 | `totalHype < boredomThreshold`（`targetHype × boredomHypeRatio 560%` = **168**）扣 25 |
-   | 網紅疲勞每段扣 15 Hype | 每對 `round(targetHype × 14%)` = **21**；混亂冒險哲學下為 **+21**（`turnsAdjacentHighRiskIntoHypeCombo`） |
-   | 無絕景 `×50%` 折扣 | 絕景**階梯**乘數 `[0.70, 0.75, 0.80, 0.85, 1.00]`（0~4 張） |
-   | （未記載） | 主題係數 `(themeFloor(44) + 56 × finalTheme / 100) / 100`；佣金 `baseCommission × outcome.commissionRate + totalStory × 5` |
+### 尚未執行部分（覆核指出的缺口）
 
-   評等分界維持原文（社畜 Near Miss 60~69、網紅 50~69）—— 該處本來就是對的。
-3. `SPEC_MVP_CORE_LOOP.md` 補增修註記：`ClientSpec` 新增 `personaName`（`小林` / `安娜`），`displayName` 保留職稱語意，`operator ==` 仍只比對 `type`。
-4. **COMMIT**：
-   ```text
-   docs(spec): amend timeline UI spec and correct its stale settlement math
+1. **直接改寫 `SPEC_MVP_TIMELINE_UI.md` §2.3 正文**。目前只在檔尾另立對照表，`:104-111` 的舊數字原封不動 —— 同一份文件兩套矛盾數字並存，只讀正文的人會拿到錯的那套。
+2. **附錄重新分節**。原 A.1 宣告 `AC-UI-3.2`／`AC-UI-3.3`「整條前提不成立」並指定新測試作法 —— 作廢已簽核 AC 是規格變更，應歸 B 節（待簽核後生效），不是 A 節（即刻生效）。
+3. **`AC-UI-3.3` 的判定過頭，須更正**。實測現行引擎在 `finalTheme = 50` 時仍為 **67 分 / Near Miss**，與原文結論一致：
 
-   AC-CF-3.2 forbids exact score readouts during the editing phase, which
-   directly contradicts AC-UI-2.2 and the live preview HUD clause. Retire the
-   combo percentage text and the Theme/Hype readouts, drop the client
-   perspective switcher now that the client is pinned at briefing time, and
-   record that the camera multiplier and fatigue warning clauses stay in force.
+   | finalTheme | satisfaction | outcome |
+   |---|---|---|
+   | 40 | 62 | nearMiss |
+   | **50** | **67** | **nearMiss** |
+   | 60 | 72 | pass |
 
-   The settlement reveal in the same section still describes a scoring model
-   that no longer exists, down to the budget score cap and the spotlight
-   discount. Restate it from the current engine so nobody implements the
-   document instead of the code. Note the new persona name field on ClientSpec
-   in the core loop spec, since that class is governed there.
-   ```
+   失效的是**推導路徑**（×0.50 → ×0.70 階梯），不是結論。
+4. **補上同樣符合「事實更正」判準卻被遺漏的項目**：
+   - `AC-UI-1.4` / `AC-UI-2.5`「四槽才可提交」已被 `AC-A1-3.7/3.8` 取代（`SPEC_MVP_AMENDMENT_01.md:187,360`），現況 `live_preview_hud.dart:171-172` 已是「至少 3 個時段」與「素材需連續排列」。附錄隻字未提，B 節的「維持有效」清單也沒排除它們，讀者會誤以為仍然有效。
+   - §1.2 的「16ms / 120Hz」宣稱 —— PLAN v4 已自承 widget test 量不到幀率而刪除同款宣稱，本體卻留著。
+5. **指定 `AC-UI-3.2` / `AC-UI-3.3` 的承接者**。兩條被宣告失效，但 `SPEC_MVP_AMENDMENT_01` 只承接了 `AC-UI-1.4` 與 `AC-UI-2.5`，這兩條目前**無主** —— 被宣告失效卻沒有任何 SPEC 負責重寫。
+6. **§2.2B 卡面 `🎯35` 數值丸**作廢（改定性階梯），§2.3 結算頁客群頁籤**明載維持有效**。
+
+### COMMIT
+
+```text
+docs(spec): rewrite the timeline UI settlement section in place
+
+The appendix left the body untouched, so the document carried two contradictory
+sets of numbers and anyone reading only the body got the wrong one. Restate the
+body from the current engine and keep the appendix as the change record.
+
+Move the retirement of the two settlement acceptance criteria out of the
+immediate section: declaring a signed criterion void is a spec change, not a
+factual correction, and deciding which one a given edit is cannot be settled by
+the author alone. Name who inherits them, and retire the four slot submission
+clause and the frame rate claim that meet the same bar and were missed.
+```
 
 ---
 
 ## 2. Task 1 (Commit 02) — Domain 因果模型與導出流水線
 
-**對應 AC**：`AC-CF-1.1 ~ 1.9`（9 條）
+**對應 AC**：`AC-CF-1.1 ~ 1.13`（13 條）
 
 ### Files
 - Create: `lib/domain/core_loop/causal/causal_fact.dart`
 - Create: `lib/domain/core_loop/causal/causal_report_builder.dart`
 - Modify: `lib/domain/core_loop/models/travel_material.dart`
+- Modify: `lib/domain/core_loop/models/timeline_itinerary.dart`（補齊 `ItineraryStats.operator ==` 漏掉的五個擊穿欄位）
 - Create: `test/domain/core_loop/causal_feedback_test.dart`
 
 ### Interface Signatures
@@ -115,8 +143,8 @@
 // causal_fact.dart
 enum ImpactDirection { positive, negative }
 enum ImpactIntensity { minor, major }
-enum CausalDomain { fatigueAdjacency, philosophySynergy, budgetConstraint, ambient }
-enum ClientImpression { ecstatic, pleased, neutral, stressed, furious }
+enum CausalDomain { adjacency, philosophySynergy, budgetConstraint, spotlight, boredom, ambient }
+enum ClientImpression { ecstatic, pleased, neutral, stressed, furious, idle }
 
 class CausalFact {
   final CausalDomain domain;
@@ -175,28 +203,33 @@ bool get hasFatigueRisk => riskLevel >= 3;
 | reasonCode | 來源 |
 |---|---|
 | `fatigue_spike` | `stats.fatiguePairs`（Theme −10／對，所有哲學與客戶皆適用） |
-| `fatigue_hype_penalty` | `client.type == hypeInfluencer` 且 `!philosophy.turnsAdjacentHighRiskIntoHypeCombo` |
-| `chaotic_combo` | `client.type == hypeInfluencer` 且 `philosophy.turnsAdjacentHighRiskIntoHypeCombo` |
-| `philosophy_repelled` | `philosophy.evaluateMaterial(m).isAligned == false` 且命中 `repelledTags` |
+| `fatigue_hype_penalty` | `client.type == hypeInfluencer` 且 `!philosophy.turnsAdjacentHighRiskIntoHypeCombo`（`client_review_engine.dart:118`） |
+| `chaotic_combo` | `client.type == hypeInfluencer` 且 `philosophy.turnsAdjacentHighRiskIntoHypeCombo`（`:116`） |
+| `rhythm_complement` | `stats.rhythmActivePairs`（Theme +10／對）。與 `fatigue_spike` 同軸反面，同一對槽位互斥 |
+| `philosophy_repelled` | 命中 `repelledTags`（`travel_philosophy.dart:58` 短路，與 matched 互斥） |
 | `philosophy_matched_major` | 命中 `preferredTags` ≥ 2（係數 90~92%） |
 | `philosophy_matched_minor` | 命中 `preferredTags` == 1（係數 40%） |
 | `budget_overrun_minor` / `_major` | `(stats.totalCost - client.targetBudget) / client.targetBudget` 以 0.15 分界 |
-| `tag_synergy` | `stats.comboActiveSlots` |
+| `spotlight_shortfall` | `client.type == hypeInfluencer` 且 `stats.spotlightCount < 4`；`<= 1` 為 major |
+| `spotlight_full` | `client.type == hypeInfluencer` 且 `stats.spotlightCount >= 4` |
+| `boredom_risk` | `client.type == budgetWorker` 且 `stats.totalHype < client.boredomThreshold`（168） |
+| `tag_synergy` | `stats.comboActiveSlots`（intensity **major**） |
 | `ambient_slot_affinity` | `stats.slotThemeBonuses` 的每一個 key（涵蓋 Slot 0/1/3） |
-| `ambient_rhythm_flow` | `stats.rhythmActivePairs` |
+
+**`facts` 排序鍵**：`domain → slotIndex（null 排最後）→ reasonCode`。不得依賴 `Set`／`Map` 的插入序 —— 目前雖然是決定性的，但那是撿到的，`AC-CF-1.8/1.9` 不該隱性依賴實作細節。
 
 `clientImpression`：
 ```dart
 final report = ClientReviewEngine
     .evaluate(client: client, stats: stats, philosophy: philosophy);
-// canSubmit == false → neutral
+// canSubmit == false → idle（第六態，不可沿用 neutral）
 // 否則依 report.outcome：perfect→ecstatic / pass→pleased / nearMiss→neutral
 //   rejected → report.satisfaction >= 30 ? stressed : furious
 ```
 > 以 `outcome` 而非 `satisfaction` 分桶是硬性要求：社畜退件門檻 60、網紅 50（`client_review_engine.dart:58,138`），統一門檻會讓社畜 50~59 分顯示 Near Miss 表情而實際被退件 —— 那正是本 SPEC 要消滅的「畫面說謊」。
 
 ### Steps
-1. **RED**：`causal_feedback_test.dart` 覆蓋 AC-CF-1.1~1.9，測試名即 AC 編號。
+1. **RED**：`causal_feedback_test.dart` 覆蓋 AC-CF-1.1~1.13，測試名即 AC 編號。
 2. **GREEN**：實作三支檔案。
 3. **VERIFY**：`flutter test test/domain/core_loop/causal_feedback_test.dart`
 4. **COMMIT**：
@@ -208,7 +241,7 @@ final report = ClientReviewEngine
    defeat rebuild suppression. Derive every fact from an existing calculation in
    calculateStats or ClientReviewEngine so the visuals can never disagree with
    the score, and map client impression from the real satisfaction value rather
-   than a second threshold table. Satisfies AC-CF-1.1 through AC-CF-1.9.
+   than a second threshold table. Satisfies AC-CF-1.1 through AC-CF-1.13.
    ```
 
 ---
@@ -299,7 +332,12 @@ CuratorRunState copyWith({
 
 // curator_run_controller.dart
 void tweakItinerary({int? culpritSlot}) {
-  state = state.tweakItinerary().copyWith(focusedCulpritSlot: culpritSlot);
+  state = state.tweakItinerary().copyWith(
+    focusedCulpritSlot: culpritSlot,
+    // 必要：culpritSlot 為 null 時，`x ?? this.x` 會保留上一輪的舊焦點，
+    // 玩家會看到一個與本輪無關的琥珀光暈。
+    clearFocusedCulpritSlot: culpritSlot == null,
+  );
 }
 // placeMaterialInSlot / removeMaterialFromSlot / swapSlots 內：
 //   若 state.focusedCulpritSlot != null → copyWith(clearFocusedCulpritSlot: true)
@@ -307,8 +345,10 @@ void tweakItinerary({int? culpritSlot}) {
 // curator_run_providers.dart
 final itineraryCausalReportProvider = Provider<ItineraryCausalReport>((ref) {
   final s = ref.watch(curatorRunControllerProvider);
+  // 複用既有 memoized provider；s.currentStats 是 getter，每次重跑 calculateStats
+  final stats = ref.watch(itineraryStatsProvider);
   return CausalReportBuilder.build(
-    itinerary: s.itinerary, stats: s.currentStats,
+    itinerary: s.itinerary, stats: stats,
     philosophy: s.philosophy, client: s.client,
   );
 });
@@ -345,19 +385,23 @@ final itineraryCausalReportProvider = Provider<ItineraryCausalReport>((ref) {
 - Modify: `test/ui/core_loop/live_preview_and_drawer_test.dart`
 
 ### Key Implementations
+
+**硬約束（先寫這條，否則 T7 永遠轉不綠）**：編排期所有因果符號一律只從 `itineraryCausalReportProvider` 的 `facts` 渲染。`timeline_rail.dart:15` 與 `compact_slot_card.dart` 目前都是 `ref.watch(itineraryStatsProvider)` 驅動，符號是從 stats 現場算出來的 —— 只要保留這條路徑，T7 注入任何報告都不會讓符號出現。牌面屬性、成本、相機倍率不在此限。
+
 - `CausalBadge`：承載 `reasonCode`、`sourceSignifier`、`intensity`；可點擊（T5 接 Tooltip）。
 - `TimelineRail`：
-  - `💀 拉車疲勞`；客戶為網紅且哲學反轉時並排 `⚡ 驚險連段`。
-  - `[律動]` 淡藍流光（`ambient_rhythm_flow`）、`[共鳴]`（`tag_synergy`）。
-  - **移除** `'$i-$next +20% Combo'` 字樣（`timeline_rail.dart:98`），改渲染 `[共鳴]`。保留既有 `Key('combo_indicator_...')` / `Key('fatigue_warning_...')` 不變，以免既有測試大面積失效。
+  - 相鄰軸三態**同軌同階**：`💀 拉車疲勞`（負）／`🎵 節奏互補`（正）／`⚡ 驚險連段`（正，網紅 × 混亂冒險）。同尺寸、同層級，僅色彩與符號不同。
+  - **移除** `'$i-$next +20% Combo'`（`:98`），改渲染 `[共鳴]`。保留既有 `Key('combo_indicator_...')` / `Key('fatigue_warning_...')` 以免既有測試大面積失效。
 - `CompactSlotCard`：
-  - 階梯徽章 `★` / `★★` / `💢` / `⚠️` / `🚨`。
-  - `[時段契合]` 金色微光（`ambient_slot_affinity`，**Slot 0/1/3 三槽皆需**）。
+  - 階梯徽章 `★` / `★★` / `💢` / `⚠️` / `🚨`；`[時段契合]` 金色微光（**Slot 0/1/3 三槽皆需**）。
   - `focusedCulpritSlot == slotIndex` 時外圍 `Key('highlight_culprit_slot')` 琥珀呼吸光暈。
-  - **保留** `🔥${material.hypeValue}`、`🎯${material.themeValue}`（`:183,:191`）與 `📷 x` 膠囊（`:104`）—— 牌面屬性與裝備資訊不是取捨算術。
+  - **移除** `🎯${material.themeValue}`（`:191`），改以哲學定性階梯取代。
+  - **保留** `🔥${material.hypeValue}`（`:183`）與 `📷 x` 膠囊（`:104`）。
 - `LivePreviewHUD`：
   - **刪除** `🎯 ${stats.finalTheme} / 100`（`:133`）與 `🔥 ${stats.totalHype}`（`:111`）。
   - **刪除** 客群視角切換器（`_buildClientTab`，`:60,:65,:187`）。
+  - **`targetBudget` 改由 run state 取得**：`ref.watch(curatorRunControllerProvider.select((s) => s.client.targetBudget))`。原本 `:30-33` 的 `targetBudget` 完全由 `_selectedClientView` 決定，刪掉切換器後會沒有來源。該元件是 `ConsumerStatefulWidget`（`:8`），拿得到 `ref`。
+  - **新增** 絕景 4 格 pip（`spotlight_shortfall` / `spotlight_full`，不顯示乘數）與社畜 `boredom_risk` 定性警示。
   - **保留** 成本／預算上限與超支紅字、提交鈕。
 
 ### Steps
@@ -409,125 +453,173 @@ final itineraryCausalReportProvider = Provider<ItineraryCausalReport>((ref) {
 
 ---
 
-## 7. Task 6 (Commit 07) — 結算局域歸因與微調焦點繼承
+## 7. Task 6 (Commit 07) — 結算面板：修正說謊數字、局域歸因與微調繼承
 
-**對應 AC**：`AC-CF-4.1 ~ 4.3`
+**對應 AC**：`AC-CF-4.1 ~ 4.4`
 
 ### Files
 - Modify: `lib/ui/core_loop/review_settlement_modal.dart`
 - Create: `test/ui/core_loop/review_attribution_widget_test.dart`
+- **Modify: `test/ui/core_loop/review_settlement_widget_test.dart`**（`AC-UI-3.1~3.5` 全掛在這支，改結算彈窗必動它）
 
 ### Key Implementations
-- 歸因清單：超支時標「超支元兇：Slot X（¥金額）」；疲勞時標「拉車疲勞路段：Slot A – Slot B」。
-- 策略提示庫：依主要失分項取樣（超支→省錢、疲勞→節奏互補、低熱度→絕景），接受注入 `Random?`（CC-3）。
-- 「返回微調」：`controller.tweakItinerary(culpritSlot: report.primaryCulpritSlot)`。
-- **禁止**任何「把某卡換成某卡」的建議文案（AC-CF-4.3）。
+
+**1. 四處硬編碼改由資料取值**（本案立案原則是「畫面不得與計分分歧」，這是現役畫面上最直接的反例）：
+
+| 行 | 現行畫面 | 應改為 |
+|---|---|---|
+| `:525` | `'$budgetScore / 70'` | `/ ${100 - client.themeWeight}` → **44** |
+| `:526` | `'$themeScore / 30'` | `/ ${client.themeWeight}` → **56** |
+| `:529` | `'反無聊懲罰 (Hype<30)'` | `反無聊懲罰 (Hype<${client.boredomThreshold})` → **168** |
+| `:553` | `'絕景打折提醒　無絕景打五折'` | 依 `spotlightCount` 呈現階梯與缺口張數 |
+
+`:553` 尤其嚴重：`hasNoSpotlight = spotlightMultiplier < 1.0`（`:551`）在持有 1~3 張絕景時同樣成立，所以它會在**有**絕景時說「無絕景」，而且係數是 `×0.70` 不是五折。這條同時是網紅端最大的槓桿（mean |Δ| 17.44）。
+
+**2. 局域歸因**：超支元兇槽位與金額、疲勞時段對、絕景缺口張數。
+
+**3. 歸因限定指派客戶**：客群頁籤（`:154,:162`）**保留** —— 它會以 `ClientReviewEngine` 真的重算另一位客戶（`:83-98`），是免費的教學面，佣金發放受 `curator_run_state.dart:358` 守衛保護。但歸因與 `primaryCulpritSlot` 恆以指派客戶計算（超支判定用 `client.targetBudget`，兩位客戶差 4 倍）。切至非指派頁籤時隱藏歸因或標示「此為另一位客戶的試算」。
+
+**4. 策略提示庫**：依主要失分項取樣，接受注入 `Random?`（CC-3）。
+
+**5. 微調焦點**：`controller.tweakItinerary(culpritSlot: report.primaryCulpritSlot)`。
 
 ### Steps
-1. **RED**：`review_attribution_widget_test.dart` 驗歸因內容、微調傳參、無替換建議字樣。
+1. **RED**：驗四處分母取自資料、歸因內容、頁籤切換時歸因行為、微調傳參。
 2. **GREEN**：修改結算彈窗。
-3. **VERIFY**：`flutter test test/ui/core_loop/review_attribution_widget_test.dart`
+3. **VERIFY**：`flutter test test/ui/core_loop/`
 4. **COMMIT**：
    ```text
-   feat(ui): attribute the loss to a specific slot and carry it back
+   feat(ui): stop the settlement panel from misreporting its own math
 
-   Name where the points went instead of only how many were lost, and hand the
-   culprit slot to the studio so the player does not have to remember which card
-   was wrong. No global best swap is offered; finding it is the game.
+   Four labels were hardcoded against a scoring model that no longer exists: the
+   budget and theme denominators, the boredom threshold, and a spotlight notice
+   that fires while the player holds one to three spotlights and calls a 0.70
+   multiplier a half price cut. That last one covers the largest single lever in
+   the influencer review.
+
+   Attribution names the slot that cost the points and hands it back to the
+   studio. The client tabs stay, since recomputing the other client is free
+   teaching, but attribution follows the assigned client only, or the verdict
+   and the culprit would come from two different people.
    ```
 
 ---
 
-## 8. Task 7 (Commit 08) — 架構守門（執行期）與全系統驗收
+## 8. Task 7 (Commit 08) — 端到端接線守門與全系統驗收
 
-**對應 AC**：`AC-CF-2.1`、`AC-CF-2.3` + 全套 18 條
+**對應 AC**：`AC-CF-2.1`、`AC-CF-2.3` + 全套 24 條
 
 ### Files
-- Create: `test/architecture/causal_wiring_test.dart`
+- Create: `test/ui/core_loop/causal_wiring_test.dart`
+
+> **不放 `test/architecture/`**：該目錄現有五條全是 `dart:io` 靜態掃描（`:27,42,63,79,113`），放 `testWidgets` 是類別不一致。採端到端寫法後它本質上就是整合測試。
 
 ### Key Implementation
+
 ```dart
-// 執行期斷言：不掃原始碼。UI 消費的是 CausalFact 物件，
-// 原始碼裡不會出現 reasonCode 字面值，掃描必得假綠燈 —— 那正是本案要修的病灶。
-testWidgets('AC-CF-2.1: 每個因果代碼都必須在工作台上看得見', (tester) async {
-  const allCodes = [
-    'fatigue_spike', 'fatigue_hype_penalty', 'chaotic_combo',
-    'philosophy_repelled', 'philosophy_matched_minor', 'philosophy_matched_major',
-    'budget_overrun_minor', 'budget_overrun_major',
-    'tag_synergy', 'ambient_slot_affinity', 'ambient_rhythm_flow',
-  ];
+// 端到端：真實行程 → calculateStats → CausalReportBuilder → Widget
+// 禁止用人工建構的報告當唯一證據：那只證明「UI 會畫交到它手上的事實」，
+// 不證明 builder 會從 stats 產出該事實。漏產 rhythm_complement 時照樣綠燈 ——
+// 與 rhythmActivePairs 當年的病灶同型，而消滅它正是本案的立案理由。
+testWidgets('AC-CF-2.1: 每個因果代碼都必須由真實行程走到畫面上', (tester) async {
+  for (final scenario in _wiringScenarios) {   // 14 個，每個含 itinerary/philosophy/client
+    final container = ProviderContainer(overrides: [
+      curatorRunControllerProvider.overrideWith((_) => _stateOf(scenario)),
+    ]);
+    addTearDown(container.dispose);
 
-  for (final code in allCodes) {
-    final entry = CuratorCodex.lookup(code);
-    expect(entry, isNotNull, reason: 'Codex 缺少 $code');
-
-    final report = _reportWithSingleFact(code);   // 只含這一條事實
-    await tester.pumpWidget(_studioWith(report));
+    // 先證明 builder 真的產出了這條事實（鏈條中段）
+    final report = container.read(itineraryCausalReportProvider);
     expect(
-      find.text(_signifierOf(code)),
+      report.facts.map((f) => f.reasonCode),
+      contains(scenario.reasonCode),
+      reason: '${scenario.reasonCode}：builder 沒從 stats 產出這條事實',
+    );
+
+    // 再證明它抵達畫面（鏈條末段）
+    await tester.pumpWidget(_studioWith(container));
+    expect(
+      find.textContaining(scenario.signifier),
       findsWidgets,
-      reason: '$code 的符號在工作台上零可見 —— 這就是 rhythmActivePairs 式死碼',
+      reason: '${scenario.reasonCode} 在工作台零可見 —— 這就是死碼',
     );
   }
 });
 ```
 
-擊穿欄位 `rhythmActivePairs` / `comboActiveSlots` / `fatiguePairs` / `slotThemeBonuses` 分別由 `ambient_rhythm_flow` / `tag_synergy` / `fatigue_spike` / `ambient_slot_affinity` 覆蓋，隨上述迴圈一併驗收（AC-CF-2.3）。
+五個擊穿欄位的覆蓋（`AC-CF-2.3`）：
+
+| 欄位 | 由哪個情境證明 |
+|---|---|
+| `fatiguePairs` | `fatigue_spike` |
+| `rhythmActivePairs` | `rhythm_complement` |
+| `comboActiveSlots` | `tag_synergy` |
+| `slotThemeBonuses` | `ambient_slot_affinity`（Slot 0/1/3 各一） |
+| `spotlightCount` | `spotlight_shortfall` 與 `spotlight_full` |
 
 ### Steps
-1. `flutter test test/architecture/causal_wiring_test.dart`
+1. `flutter test test/ui/core_loop/causal_wiring_test.dart`
 2. `flutter test test/architecture/layer_boundaries_test.dart`（五條全綠）
-3. `flutter test`（全套）
+3. `flutter test`（全套；基線為 **462 passed**）
 4. `flutter analyze`（0 errors / 0 warnings）
 5. **COMMIT**：
    ```text
-   test(architecture): prove every causal code reaches the screen
+   test(ui): prove each causal code travels from the rules to the screen
 
-   Assert at runtime that each reason code renders its signifier in the studio.
-   A source scan would pass while the UI shows nothing, which is exactly how
-   rhythmActivePairs stayed invisible since it was implemented.
+   Drive every reason code from a real itinerary through calculateStats and the
+   report builder into the widget tree, asserting both that the builder emits it
+   and that its signifier is visible. Handing the widget a report built by the
+   test would pass while the builder silently stopped emitting, which is how
+   rhythmActivePairs stayed invisible from the day it was written.
    ```
 
 ---
 
 ## 9. 驗收清單（DoD）
 
-- [ ] **前置閘門 G1~G5 全數清償**
-- [ ] **18 條 AC 全綠**
-  - [ ] AC-CF-1.1 相鄰高風險產出 Theme 側疲勞事實
-  - [ ] AC-CF-1.2 網紅 × 混亂冒險：連段取代 Hype 側疲勞，Theme 側疲勞仍在
-  - [ ] AC-CF-1.3 社畜不存在 Hype 側疲勞或連段
-  - [ ] AC-CF-1.4 超支階梯依本局客戶預算動態判定
-  - [ ] AC-CF-1.5 表情由 `ReviewOutcome` 導出，含社畜 50~59 分案例
-  - [ ] AC-CF-1.6 未達提交門檻鎖 `neutral`
-  - [ ] AC-CF-1.7 `ambient_slot_affinity` 涵蓋 Slot 0/1/3
-  - [ ] AC-CF-1.8 `primaryCulpritSlot` 決定性
-  - [ ] AC-CF-1.9 報告值相等成立（`facts` 逐項）
-  - [ ] AC-CF-2.1 11 個代碼於 UI 執行期皆可見
-  - [ ] AC-CF-2.2 Codex 詞條完整且零具名城市
-  - [ ] AC-CF-2.3 四個擊穿欄位皆被消費
-  - [ ] AC-CF-3.1 單一客戶表情，畫面無第二位客戶
-  - [ ] AC-CF-3.2 編排期無計分結果數字
-  - [ ] AC-CF-3.3 徽章點擊出 Codex
-  - [ ] AC-CF-4.1 結算標明元兇槽位與疲勞時段
-  - [ ] AC-CF-4.2 光暈繼承與操作後消褪
-  - [ ] AC-CF-4.3 結算無替換建議
+- [ ] **前置閘門 G1~G5 全數清償**（含 T0 既成事實的追認或回退）
+- [ ] **24 條 AC 全綠**
+  - [ ] AC-CF-1.1~1.4　疲勞三態分離、動態預算階梯
+  - [ ] AC-CF-1.5　表情由 `ReviewOutcome` 導出，含社畜 50~59 分案例
+  - [ ] AC-CF-1.6　未達門檻為 `idle` 且不等於 `neutral`
+  - [ ] AC-CF-1.7　`ambient_slot_affinity` 涵蓋 Slot 0/1/3
+  - [ ] AC-CF-1.8　`primaryCulpritSlot` 五款優先序 + 平手取索引較小者
+  - [ ] AC-CF-1.9　報告值相等成立（`facts` 逐項）
+  - [ ] AC-CF-1.10　`rhythm_complement` 與 `fatigue_spike` 互斥
+  - [ ] AC-CF-1.11　絕景階梯三檔，社畜不產出
+  - [ ] AC-CF-1.12　`boredom_risk` 社畜限定
+  - [ ] AC-CF-1.13　排斥與契合互斥
+  - [ ] AC-CF-2.1　14 個代碼**端到端**皆可見
+  - [ ] AC-CF-2.2　Codex 詞條完整
+  - [ ] AC-CF-2.3　五個擊穿欄位各有端到端案例
+  - [ ] AC-CF-2.4　白天 `[💀 拉車隱患]`
+  - [ ] AC-CF-3.1　單一客戶表情
+  - [ ] AC-CF-3.2　編排期無計分結果數字（含 `🎯` 與絕景乘數）
+  - [ ] AC-CF-3.3　徽章點擊出 Codex
+  - [ ] AC-CF-3.4　相鄰軸三態同軌同階
+  - [ ] AC-CF-4.1　歸因標明時段對、元兇槽位、絕景缺口
+  - [ ] AC-CF-4.2　光暈繼承與消褪
+  - [ ] AC-CF-4.3　結算分母取自資料，四處說謊數字修正
+  - [ ] AC-CF-4.4　歸因限定指派客戶
 - [ ] `flutter analyze` 0 errors / 0 warnings
-- [ ] `lib/domain/` 零 Flutter/Flame 相依；Codex 零具名城市
+- [ ] `lib/domain/` 零 Flutter/Flame 相依
 - [ ] 未新增任何套件（CLAUDE.md §6）
-- [ ] 未修改任何計分係數
+- [ ] 未修改任何計分係數（T6 改的是顯示分母，不動引擎）
 
 ---
 
 ## 10. 未納入本計劃（回報後由使用者裁決）
 
-1. **`CLAUDE.md` §0 過期指令**：`dart test test/domain/` 一行不可用（無 `package:test` 直接相依），且「316 passed」已過期。建議另開 docs 提交修正。
-2. **`SPEC_MVP_TIMELINE_UI` §2.1 的四槽限定描述**：已由 `AC-A1-3.7/3.8` 取代，但原文仍在。屬 `SPEC_MVP_AMENDMENT_01` 的清償範圍，本計劃不碰。
+1. **網紅端 `budget_overrun_*` 近乎死碼**：實測觸發率 0.0%（n=20000）。依 Rule 35 建議兩級併一級。屬卡表數值範疇。
+2. **Rule 11 只在社畜端成立**：加第 4 張卡對網紅從不變差（0.0%）。屬 `SPEC_MVP_AMENDMENT_01`。
+3. **網紅端表情只用到三態**（`furious` 0.0%、`stressed` 1.9%）。要五態均衡須動評等門檻。
+4. **`CLAUDE.md` §0 過期**：`dart test` 不可用；「316 passed」實測 **462 passed**。
 
 ---
 
 ## 11. 已裁決（2026-09-12）
 
-1. **`purity_bonus` 保留規則，不做編排期徽章**。`purityBonus = 1` 是 D4+D5+D6 聯立求解的確定性勝者（`PLAN_MVP_AMENDMENT_01.md:77`），刪除會使 `AC-A1-3.2` 失去機制並迫使三維聯立重跑。其回饋歸屬結算文案，由既有 `AC-A1-3.5` 承接。
+1. **`purity_bonus` 保留規則、不做任何表現**。保留的理由是 `AC-A1-3.4/3.5` 需要該狀態存在 —— **不是** v2 宣稱的「刪除會使 AC-A1-3.2 失去機制」，那點已被窮舉反證（`purityBonus = 0` 時仍有 4792 個見證組，`AC-A1-3.6` 五哲學結果一字不變）。
 2. **客戶具名採用**：`ClientSpec.personaName` = `小林` / `安娜`，於 T2 實作。
-3. **Codex 置於 `domain/core_loop/causal/`**，不放 `data/`。
+3. **Codex 置於 `domain/core_loop/causal/`**。
+4. **結算頁客群頁籤保留，歸因限定指派客戶**（T6）。

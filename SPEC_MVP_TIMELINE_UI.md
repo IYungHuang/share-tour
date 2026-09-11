@@ -10,7 +10,8 @@
 **Milestone M2 的唯一任務：將 M1 的領域核心透過 Riverpod 狀態層與 Flutter UI 完整接線，使玩家在手機上可以直接進行「選素材、排時間線、實時預覽、客戶審查、結算跳分、返回微調 / 🔄 再來一局」的完整閉環互動體驗。**
 
 ### 1.2 體驗核心指標
-1. **即時決策回饋（Zero-Latency 120Hz Preview）**：玩家在調換 4 個時段素材時，數值看板（成本、熱度、主題、疲勞骷髏、連鎖光軌）必須在 16ms 內即時重算並呈現變化。
+1. **即時決策回饋（Zero-Latency Preview）**：玩家在調換時段素材時，看板與光軌必須同步重算並呈現變化。
+   > 原文的「16ms / 120Hz」宣稱已刪除（增修 01 A 節）：widget test 量不到幀率，該宣稱無法驗收。`PLAN_MVP_CAUSAL_FEEDBACK` 已因同一理由刪除同款宣稱，改以「切片訂閱者 rebuild 次數」作為可測的替代。
 2. **四幕劇式旅行儀式感（Circadian Rhythm Fantasy）**：時段槽位具備鮮明的天色漸層與旅行節奏（06:00 晨曦散步 ➔ 11:00 午後美食 ➔ 16:00 黃昏絕景相機高潮 ➔ 19:00 深夜怪談收尾），打破冷冰冰的算術表格感。
 3. **動態評審跳分與 Near Miss 心流閉環**：評審彈窗逐項揭露客戶反應（超支扣分、絕景打折、反無聊懲罰）；在 60~69 分 Near Miss 時，提供「🔧 返回微調行程（Tweak & Retry）」讓玩家痛快替換超支卡，以及「🔄 放棄並再來一局（New Run）」的重玩心理推力。
 
@@ -44,7 +45,7 @@ stateDiagram-v2
    - `removeMaterialFromSlot(int slotIndex)`：清空該槽位（退回非使用狀態），無需擔心腰包溢出。
    - `swapSlots(int fromIndex, int toIndex)`：支援任意兩槽位互換（包含其中一槽位為空的情況，即槽位移動），受 `0 <= index < 4` 嚴格邊界保護。兩索引相同時為決定性 No-op。
    - 槽位變更時，控制器自動同步呼叫領域流水線 `TimelineItinerary.calculateStats` 更新 `currentStats`（Cost, Hype, Theme, Fatigue, Combos）。
-   - 當且僅當 4 個槽位皆非空時，標記 `canSubmit = true`。
+   - ~~當且僅當 4 個槽位皆非空時，標記 `canSubmit = true`。~~ **已由 `SPEC_MVP_AMENDMENT_01` 的 `AC-A1-3.7/3.8` 取代**：可提交槽位數為 3 或 4，且已填槽位必須連續佔用。現況實作見 `live_preview_hud.dart:171-172`。
 4. **目標客戶審查基準**：
    - 單局支援指定目標審查視角（`ClientType.budgetWorker` 極限窮遊社畜 vs `ClientType.hypeInfluencer` IG 網紅）。
    - 即時看板依據當前視角切換預算上限（2000 円 vs 8000 円）與超支預警。
@@ -99,16 +100,19 @@ stateDiagram-v2
 
 1. **客戶切換與審查預設**：
    - 預設載入當前委託客戶（如社畜），提供切換頁籤 `Key('client_tab_budgetWorker')` 與 `Key('client_tab_hypeInfluencer')`。
-2. **動態跳分揭露節奏 (Dramatic Reveal)**：
-   - **社畜小林**：
-     1. 預算得分：滿分 70，超支每 10 円扣 2 分（超支 160 円大字倒扣 `-32`）。
-     2. 主題得分：`Theme / 2`（最高 30 分）。
-     3. 反無聊扣分：若 Hype < 30，大字扣 `-25` 並吐槽「無聊到睡著」。
-   - **網紅安娜**：
-     1. 基礎總爆點：素材總 Hype（含黃昏相機與連鎖）。
-     2. 疲勞懲罰：每段拉車疲勞扣 15 Hype（大字扣 `-15` 並吐槽「脫妝不能忍」）。
-     3. 絕景檢驗：若無絕景，有效熱度伴隨標記直接打折 `×50% 無絕景折扣`。
-     4. 主題係數折算最終滿意度。
+2. **動態跳分揭露節奏 (Dramatic Reveal)**（**已依增修 01 A 節改寫為現行公式**）：
+   - **社畜小林**（`client_review_engine.dart:26-101`）：
+     1. 預算得分：滿分 `100 - themeWeight` = **44**。不超支得滿分；超支扣 `round(超支比例 × overspendPenaltyPoints)`（`overspendPenaltyPoints = 100`），結果 clamp 至 `0~44`。
+     2. 主題得分：`round(themeWeight × finalTheme / 100)`，`themeWeight = 56`，最高 **56**。
+     3. 反無聊扣分：`totalHype < boredomThreshold` 時固定扣 **25**。`boredomThreshold = targetHype × boredomHypeRatio` = `30 × 560%` = **168**（`client_spec.dart:40,49`）。
+     4. 滿意度 = `budgetScore + themeScore − boredomPenalty`，clamp `0~100`。
+   - **網紅安娜**（`client_review_engine.dart:103-160`）：
+     1. 基礎總爆點：素材總 Hype（含黃昏相機倍率與同標籤共鳴）。
+     2. 疲勞懲罰：每組相鄰高風險 `round(targetHype × 14%)` = **21 Hype**。混亂冒險哲學下**反轉為 +21**（`turnsAdjacentHighRiskIntoHypeCombo`，`:114-118`）。
+     3. 絕景階梯：`spotlightLadder = [0.70, 0.75, 0.80, 0.85, 1.00]`，依 `spotlightCount` 0~4 取值。**無絕景為 ×0.70，不是打五折；且這是四階階梯，不是二元開關。**
+     4. 主題係數：`(themeFloor + (100 − themeFloor) × finalTheme / 100) / 100`，`themeFloor = 44`。
+     5. 滿意度 = `effectiveHype / targetHype × 100 × themeFactor`，clamp `0~100`。
+   - **佣金**（兩位客戶共用）：`round(baseCommission × outcome.commissionRate) + totalStory × 5`。
 3. **評等大印章與回饋**：
    - 🌟 **PERFECT** (100 分)
    - ✅ **PASSED** (70~99 分)
@@ -129,7 +133,7 @@ stateDiagram-v2
 - [ ] **AC-UI-1.1**：初始化控制器時，初始階段為 `philosophizing`，4 槽位全為 null，腰包為空，`canSubmit` 為 false。
 - [ ] **AC-UI-1.2**：注入固定 Random 種子呼叫 `drawSampleMaterial(random: seed)`，成功將決定性素材加入腰包。
 - [ ] **AC-UI-1.3**：呼叫 `placeMaterialInSlot(0, m)`，Slot 0 被填充，`currentStats` 即刻更新；其餘 3 槽為空時 `canSubmit` 仍為 false。同一素材嘗試放入 Slot 1 時，觸發互換或移動，禁止重複引用。
-- [ ] **AC-UI-1.4**：填滿 4 槽位後，`canSubmit` 自動轉為 true；呼叫 `removeMaterialFromSlot(2)` 後，Slot 2 變為 null，`canSubmit` 自動回退為 false。
+- [ ] ~~**AC-UI-1.4**~~：**已作廢**，由 `SPEC_MVP_AMENDMENT_01` 的 `AC-A1-3.7` 取代（3 槽連續即可提交；2 槽與中間留空拒絕）。
 - [ ] **AC-UI-1.5**：呼叫 `swapSlots(1, 2)`（支援空槽），Slot 1 與 Slot 2 互換，`currentStats` 重新計算相鄰連鎖與疲勞狀態。
 - [ ] **AC-UI-1.6**：呼叫 `submitReview(ClientType.budgetWorker)`，產生合法的 `ReviewReport`，推進至 `clientReview`；呼叫 `acceptReview()` 後，賺得的佣金累積至 `state.equipment.coins`，推進至 `settled`。
 - [ ] **AC-UI-1.7**：在 Near Miss 狀態下呼叫 `tweakItinerary()`，階段安全回退至 `nightEditing`，4 槽位與腰包素材完整保留。
@@ -140,12 +144,14 @@ stateDiagram-v2
 - [ ] **AC-UI-2.2**：當相鄰兩槽位觸發標籤連鎖時，渲染帶有 `Key('combo_indicator_${slotA}_${slotB}')` 的連鎖光軌並包含 `+20% Combo` 文本。
 - [ ] **AC-UI-2.3**：當相鄰兩槽位皆為高風險（`riskLevel >= 3`）時，渲染帶有 `Key('fatigue_warning_${slotA}_${slotB}')` 的疲勞警示。
 - [ ] **AC-UI-2.4**：Slot 2（黃昏槽位）動態顯示當前相機等級之熱度倍率（Lv.1 顯示 1.5x、Lv.2 顯示 1.8x、Lv.3 顯示 2.2x）。
-- [ ] **AC-UI-2.5**：4 槽位未填滿時，`Key('submit_itinerary_button')` 為禁用狀態；4 槽位填滿時轉為可點擊。
+- [ ] ~~**AC-UI-2.5**~~：**已作廢**，由 `SPEC_MVP_AMENDMENT_01` 的 `AC-A1-3.8` 取代（合法 3 槽即啟用；2 槽與中間留空保持禁用並顯示可區分原因）。
 
 ### 3.3 雙客戶審查結算彈窗 UI (AC-UI-3: `ReviewSettlementModal Widget`)
 - [ ] **AC-UI-3.1**：審查彈窗開啟時，預設載入 `budgetWorker`，並提供切換頁籤 `Key('client_tab_hypeInfluencer')`。
 - [ ] **AC-UI-3.2**：輸入社畜超支測試數值（Cost 2160, Theme 60, Hype 30 ➔ 滿意度 68 分），UI 明確蓋上 `Key('stamp_near_miss')` 標籤，並含有 `超支` 扣分文字。
 - [ ] **AC-UI-3.3**：輸入網紅無絕景測試數值（Hype 200 無絕景 ➔ 滿意度 67 分），UI 明確蓋上 `Key('stamp_near_miss')` 標籤，並含有 `無絕景` 折扣文字。
+
+> **AC-UI-3.2 / 3.3 的推導已失效**，處置見附錄增修 01 **B 節**（屬規格變更，待 `SPEC_MVP_CAUSAL_FEEDBACK` v4 簽核後生效，在此之前兩條仍然有效）。3.2 重算為 45 分（Rejected）；3.3 結論仍成立但推導路徑已變。
 - [ ] **AC-UI-3.4**：在 Near Miss 評等下，點擊 `Key('btn_tweak_itinerary')`「返回微調」後彈窗關閉（`find.byType(ReviewSettlementModal)` 為 `findsNothing`），且工作台槽位素材保持不變。
 - [ ] **AC-UI-3.5**：點擊 `Key('btn_restart_run')` 後，觸發 `restartRun`，彈窗關閉且工作台槽位全數重置為空。
 
@@ -163,50 +169,59 @@ stateDiagram-v2
 
 ## 附錄：增修 01 —— 結算數字校正與因果可視化對齊
 
-**日期**：2026-09-12
-**上游**：`SPEC_MVP_CAUSAL_FEEDBACK.md` v3（§6.1）、`SPEC_MVP_AMENDMENT_01.md`
-**生效狀態**：A 節（數字校正）**即刻生效**，屬事實更正，與任何待審規格無關；B 節（條款作廢）**待 `SPEC_MVP_CAUSAL_FEEDBACK.md` v3 簽核後生效**，在此之前本體條款仍然有效。
+**日期**：2026-09-12（v2 修訂，依雙軌覆核意見重新分節）
+**上游**：`SPEC_MVP_CAUSAL_FEEDBACK.md` v4 §6、`SPEC_MVP_AMENDMENT_01.md`
 
-### A. 數字校正（即刻生效）
+> **v2 分節修訂說明**
+> 初版把「作廢 `AC-UI-3.2` / `AC-UI-3.3`」放在「即刻生效」的 A 節，覆核指出這站不住：**作廢一條已簽核的 AC 是規格變更，不是事實更正**，且「判定某段修改屬於哪一類」本身就該被覆核，不能由作者自行豁免。該項已移入 B 節。
+> 初版另只在檔尾另立對照表而未改 §2.3 正文，導致同一份文件兩套矛盾數字並存 —— 本版已**直接改寫正文**，附錄改為變更紀錄。
+> 初版的事實更正是選擇性的（漏了 `AC-UI-1.4` / `AC-UI-2.5` 與 16ms 宣稱），本版一併補上。
 
-§2.3「動態跳分揭露節奏」描述的是一套**已不存在**的計分模型。以 `client_review_engine.dart` 與 `client_spec.dart` 的現行實作為準改寫如下：
+### A. 事實更正（即刻生效，正文已改寫）
 
-| §2.3 原文 | 現行實作 |
-|---|---|
-| 社畜預算得分滿分 **70**、超支每 10 円扣 2 分 | 滿分 `100 - themeWeight` = **44**；超支扣 `round(overspendRatio × overspendPenaltyPoints)`，`overspendPenaltyPoints = 100`，結果 clamp 至 `0~44` |
-| 社畜主題得分 `Theme / 2`（最高 **30**） | `round(themeWeight × finalTheme / 100)`，`themeWeight = 56`，最高 **56** |
-| 反無聊：`Hype < 30` 扣 25 | `totalHype < boredomThreshold` 扣 25；`boredomThreshold = targetHype × boredomHypeRatio` = `30 × 560%` = **168** |
-| 網紅疲勞每段扣 **15 Hype** | 每對 `round(targetHype × 14%)` = **21 Hype**；混亂冒險哲學下**反轉為 +21**（`turnsAdjacentHighRiskIntoHypeCombo`） |
-| 無絕景 **×50%** 折扣 | 絕景**階梯**乘數 `spotlightLadder = [0.70, 0.75, 0.80, 0.85, 1.00]`，依 `spotlightCount` 0~4 取值；無絕景為 **×0.70**，不是 ×0.50 |
-| （原文未記載） | 網紅主題係數 `(themeFloor + (100 - themeFloor) × finalTheme / 100) / 100`，`themeFloor = 44` |
-| （原文未記載） | 佣金 `round(baseCommission × outcome.commissionRate) + totalStory × 5` |
+以下各項為「文件描述與現行程式碼不符」的單純更正，不涉及任何設計決定：
 
-**評等分界維持原文**（社畜 Near Miss 60~69、網紅 50~69）—— 該處與 `client_review_engine.dart:58,138` 一致，本來就是對的。
+| 項目 | 原文 | 現行實作 | 正文位置 |
+|---|---|---|---|
+| 社畜預算得分滿分 | 70 | **44**（`100 - themeWeight`，`client_review_engine.dart:32`） | §2.3 已改 |
+| 社畜超支扣分 | 每 10 円扣 2 分 | `round(超支比例 × 100)`，clamp `0~44`（`:37-43`） | §2.3 已改 |
+| 社畜主題得分 | `Theme / 2`，最高 30 | `round(56 × finalTheme / 100)`，最高 **56**（`:46`） | §2.3 已改 |
+| 反無聊門檻 | `Hype < 30` | `Hype < 168`（`client_spec.dart:40,49`） | §2.3 已改 |
+| 網紅疲勞 | 每段 −15 Hype | 每對 **∓21**（`round(150 × 14%)`）；混亂冒險為 **+21**（`client_review_engine.dart:111-118`） | §2.3 已改 |
+| 絕景折扣 | 無絕景 ×50% | **階梯** `[0.70, 0.75, 0.80, 0.85, 1.00]`，無絕景 ×0.70（`:9,121-124`） | §2.3 已改 |
+| 主題係數 | 未記載 | `(44 + 56 × finalTheme / 100) / 100`（`:127-129`） | §2.3 已補 |
+| 佣金 | 未記載 | `round(baseCommission × commissionRate) + totalStory × 5`（`:83-85`） | §2.3 已補 |
+| 提交門檻（`AC-UI-1.4` / `AC-UI-2.5` / §2.1） | 四槽全滿 | 3 或 4 槽且須連續（`SPEC_MVP_AMENDMENT_01` `AC-A1-3.7/3.8`，實作見 `live_preview_hud.dart:171-172`） | §2.1、§3.1、§3.2 已標作廢 |
+| §1.2「16ms / 120Hz」 | 硬性指標 | 刪除 —— widget test 量不到幀率，無法驗收 | §1.2 已改 |
 
-#### A.1 連帶失效的 AC
+**評等分界維持原文**（社畜 Near Miss 60~69、網紅 50~69）：與 `client_review_engine.dart:58,138` 一致，本來就是對的。
 
-- **`AC-UI-3.2`**：原文宣稱「Cost 2160, Theme 60, Hype 30 ➔ 滿意度 68 分」。以現行公式重算為 `budgetScore 36 + themeScore 34 − boredomPenalty 25 = 45`，評等是 **Rejected 而非 Near Miss**，整條前提不成立。
-  對應的 `review_settlement_widget_test.dart:154` 直接以 `satisfaction: 68` 建構 `ReviewReport`，**不經過引擎**，所以測試恆綠而 AC 的推導早已錯誤 —— 又一個假綠燈。
-- **`AC-UI-3.3`**：原文「Hype 200 無絕景 ➔ 67 分」未記載所用 Theme 值，且折扣係數已由 ×0.50 變為 ×0.70，數字需重新推導。
+### B. 規格變更（待 `SPEC_MVP_CAUSAL_FEEDBACK` v4 簽核後生效）
 
-> **處置**：兩條 AC 的**測試數值**須改為由 `ClientReviewEngine.evaluate()` 實際算出，而非硬編碼於 `ReviewReport`。此項併入 `SPEC_MVP_AMENDMENT_01` 的清償範圍（該修訂正在調整這些係數），本增修只負責記錄失效事實，不逕行改動測試。
-
-### B. 條款作廢（待 `SPEC_MVP_CAUSAL_FEEDBACK` v3 簽核後生效）
-
-因果 SPEC 的 `AC-CF-3.2` 要求編排期不得顯示計分結果數值 —— 全數字化的取捨是算術，不是策展抉擇（GDD Rule 12）。與本文件以下條款正面牴觸，屆時以因果 SPEC 為準：
+因果 SPEC 的 `AC-CF-3.2` 要求編排期不得顯示計分結果數值 —— 全數字化的取捨是算術，不是策展抉擇（GDD Rule 12）。屆時以因果 SPEC 為準：
 
 | 條款 | 處置 |
 |---|---|
-| **`AC-UI-2.2`**（連鎖光軌須含 `+20% Combo` 文本） | **作廢**。改為渲染定性符號 `[共鳴]`，不含百分比。`Key('combo_indicator_${slotA}_${slotB}')` 維持不變 |
-| **§2.2C 即時試算指標**（總開銷 / 預估熱度 / 主題滿意 三項） | **改寫**。僅保留「總開銷 / 預算上限」與超支紅字警示；刪除「預估熱度」與「主題滿意」 |
-| **§2.2C 客群視角切換器**（社畜視角 / 網紅視角） | **刪除**。客戶已於行前委託階段指派，`curator_studio_modal.dart:117` 以 `runState.client.type` 提交，切換器只造成認知混淆 |
+| **`AC-UI-2.2`**（光軌須含 `+20% Combo` 文本） | **作廢**。改渲染定性符號 `[共鳴]`。`Key('combo_indicator_...')` 維持不變 |
+| **§2.2C 即時試算指標**（總開銷 / 預估熱度 / 主題滿意） | **改寫**。僅保留「總開銷 / 預算上限」與超支紅字；刪除「預估熱度」與「主題滿意」 |
+| **§2.2C 客群視角切換器** | **刪除**。客戶已於行前指派（`curator_studio_modal.dart:117`），切換器只造成認知混淆 |
+| **§2.2B 卡面 `🎯35` 數值丸** | **作廢**。`themeValue` 是未經哲學係數換算的 base 值（實際 40%/90%/92%/**−70%**，`travel_philosophy.dart:62,72,78,84`），會製造錯誤的比較基準。改以 `★ / ★★ / 💢` 定性階梯 |
+| **`AC-UI-3.2`** | **作廢**。原文「Cost 2160, Theme 60, Hype 30 ➔ 68 分」以現行公式重算為 `36 + 34 − 25 = 45`，是 **Rejected 不是 Near Miss**，前提不成立。<br>連帶問題：`review_settlement_widget_test.dart:160` 直接以 `satisfaction: 68` 建構 `ReviewReport`，**不經過引擎**，故測試恆綠而 AC 的推導早已錯誤 —— 假綠燈 |
+| **`AC-UI-3.3`** | **改寫推導，結論保留**。實測現行引擎在 `finalTheme = 50` 時仍為 **67 分 / Near Miss**，與原文結論一致；失效的是推導路徑（×0.50 → ×0.70 階梯），不是結論。須補記所用的 Theme 值 |
+
+**兩條 AC 的承接者**：`AC-UI-3.2` / `AC-UI-3.3` 的**測試數值**須改為由 `ClientReviewEngine.evaluate()` 實際算出，而非硬編碼於 `ReviewReport`。此項歸 **`SPEC_MVP_AMENDMENT_01`** 承接（該修訂正在調整這些係數），須於該文件明文列入，否則這兩條會成為「被宣告失效卻無人負責重寫」的孤兒 AC。
 
 **明確維持有效**：
 
-- **`AC-UI-2.3`**（相鄰高風險渲染 `Key('fatigue_warning_${slotA}_${slotB}')`）—— 因果 SPEC 在此基礎上疊加符號與 Codex 直通，不取代。
-- **`AC-UI-2.4`**（Slot 2 顯示相機倍率 1.5x / 1.8x / 2.2x）—— 相機倍率是**裝備資訊**，不是本局的累計得分，不在「計分結果數值」的禁列內。
-- **§2.2B 素材卡面的 `🔥60` / `🎯35` 數值丸** —— 牌面固有屬性，同上。
+- **`AC-UI-2.3`**（相鄰高風險渲染 `Key('fatigue_warning_...')`）—— 因果 SPEC 在此基礎上疊加符號與 Codex 直通，不取代。
+- **`AC-UI-2.4`**（Slot 2 顯示相機倍率）—— 相機倍率是裝備資訊，不是本局累計得分。
+- **§2.2B 卡面 `🔥60` 數值丸** —— `hypeValue` 的 base 值確實會進 `slotEffectiveHypes`，是誠實的比較基準。
+- **§2.3 結算頁客群頁籤**（`client_tab_budgetWorker` / `client_tab_hypeInfluencer`）—— 結算期重算另一位客戶是免費的教學面，且佣金發放受 `curator_run_state.dart:358` 守衛保護。**編排期刪除雙客戶、結算期保留頁籤，兩者不矛盾**：編排期玩家不選客戶，另一位的表情是純噪音。
 
 ### C. 角色具名
 
-`§2.3` 的「社畜小林」「網紅安娜」在程式碼中無對應欄位（`ClientSpec` 只有 `displayName` 職稱）。已裁決於 `ClientSpec` 新增 `personaName`，見 `SPEC_MVP_CORE_LOOP.md` 增修註記與 `PLAN_MVP_CAUSAL_FEEDBACK.md` T2。
+`§2.3` 的「社畜小林」「網紅安娜」在程式碼中無對應欄位（`ClientSpec` 只有 `displayName` 職稱）。已裁決新增 `personaName`，見 `SPEC_MVP_CORE_LOOP.md` 增修註記與 `PLAN_MVP_CAUSAL_FEEDBACK.md` T2。
+
+### D. 本增修的流程瑕疵（記錄，待使用者追認或回退）
+
+本附錄的初版於 commit `cd69d93` 提交時，`SPEC_MVP_CAUSAL_FEEDBACK` 三份文件的狀態列仍為「待簽核」，違反 `CLAUDE.md` §1「每一關都必須等使用者明確點頭」。當時的自我豁免理由是「A 節屬事實更正，與待審規格無關」—— 該理由已於本版收回。使用者須明確追認或 `git revert` 後重走。
