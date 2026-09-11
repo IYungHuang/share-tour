@@ -49,12 +49,15 @@ void main() {
 
     for (final file in generic) {
       final source = file.readAsStringSync();
-      if (source.contains('taiwan') || source.contains('Taiwan')) {
+      if (source.contains('taiwan') ||
+          source.contains('Taiwan') ||
+          source.contains('kyoto') ||
+          source.contains('Kyoto')) {
         violations.add(file.path);
       }
     }
     expect(violations, isEmpty,
-        reason: '通用引擎硬編碼了特定城市：\n${violations.join('\n')}');
+        reason: '通用引擎硬編碼了特定城市（如 Taiwan / Kyoto）：\n${violations.join('\n')}');
   });
 
   test('domain 與 state 層不得引用遊戲數值模組', () {
