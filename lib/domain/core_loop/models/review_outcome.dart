@@ -40,6 +40,16 @@ class ReviewReport {
   /// 視覺動畫所需之子步驟分數 (View-Ready Subscores)
   final Map<String, num> subscores;
 
+  int get purityBonus => (subscores['purityBonus'] ?? 0).toInt();
+  int get themeFatigue => (subscores['themeFatigue'] ?? 0).toInt();
+  int get adventureCombo => (subscores['adventureCombo'] ?? 0).toInt();
+  int get hypeFatigue => (subscores['hypeFatigue'] ?? 0).toInt();
+  int get spotlightCount => (subscores['spotlightCount'] ?? 0).toInt();
+  int get boredomThreshold => (subscores['boredomThreshold'] ?? 168).toInt();
+  int get maxBudgetScore => (subscores['maxBudgetScore'] ?? 44).toInt();
+  int get themeWeight => (subscores['themeWeight'] ?? 56).toInt();
+  bool get hasPurityBonus => subscores.containsKey('purityBonus');
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||

@@ -131,10 +131,10 @@ void main() {
       expect(runState.equipment.coins, 1620); // 100 + 1520
       expect(runState.phase, CuratorRunPhase.settled);
 
-      // 在局外用 300 幣升級相機至 Lv.2
+      // 在局外用 500 幣升級相機至 Lv.2 (D9)
       final upgradedState = runState.upgradeEquipment(EquipmentType.camera);
       expect(upgradedState.equipment.camera.level, 2);
-      expect(upgradedState.equipment.coins, 1320); // 1620 - 300 = 1320
+      expect(upgradedState.equipment.coins, 1120); // 1620 - 500 = 1120
 
       // 觸發「再來一局」
       final nextRun = upgradedState.restartRun(
@@ -143,7 +143,7 @@ void main() {
       );
 
       // 驗證資產與裝備完整繼承
-      expect(nextRun.equipment.coins, 1320);
+      expect(nextRun.equipment.coins, 1120);
       expect(nextRun.equipment.camera.level, 2);
     });
   });

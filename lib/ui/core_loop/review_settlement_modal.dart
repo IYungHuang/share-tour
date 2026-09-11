@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/review_outcome.dart';
-import 'package:share_tour/domain/core_loop/review/client_review_engine.dart';
 import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
@@ -31,7 +30,6 @@ class ReviewSettlementModal extends ConsumerStatefulWidget {
 
 class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
   late ClientType _currentClientType;
-  ReviewReport? _report;
 
   @override
   void initState() {
@@ -47,55 +45,33 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
                     : ClientType.budgetWorker)
               : state.client.type);
     _currentClientType = initialType;
-    _report = widget.initialReport ?? state.latestReport;
   }
 
   void _switchClient(ClientType type) {
     setState(() {
       _currentClientType = type;
-      final state = ref.read(curatorRunControllerProvider);
-      final clientSpec = type == ClientType.budgetWorker
-          ? ClientSpec.budgetWorker
-          : ClientSpec.hypeInfluencer;
-      _report = ClientReviewEngine.evaluate(
-        client: clientSpec,
-        stats: state.currentStats,
-        philosophy: state.philosophy,
-      );
     });
   }
 
   /// 本局指派客戶的報告。結算的去留與佣金一律以它為準；
   /// 客戶頁籤只是「另一位客戶會怎麼評」的唯讀對照，不得變成免費重骰。
   ReviewReport _assignedReport() {
-    final state = ref.read(curatorRunControllerProvider);
-    final assigned = state.client;
-    final latest = state.latestReport;
-    if (latest != null && latest.clientType == assigned.type.name) {
-      return latest;
-    }
-    return ClientReviewEngine.evaluate(
-      client: assigned,
-      stats: state.currentStats,
-      philosophy: state.philosophy,
+    final assignedType = ref.watch(
+      curatorRunControllerProvider.select((state) => state.client.type),
     );
+    if (widget.initialReport != null &&
+        widget.initialReport!.clientType == assignedType.name) {
+      return widget.initialReport!;
+    }
+    return ref.watch(assignedReviewReportProvider);
   }
 
   ReviewReport _resolveReport() {
-    if (_report != null) return _report!;
-    final state = ref.read(curatorRunControllerProvider);
-    if (state.latestReport != null &&
-        state.latestReport!.clientType == _currentClientType.name) {
-      return state.latestReport!;
+    if (widget.initialReport != null &&
+        widget.initialReport!.clientType == _currentClientType.name) {
+      return widget.initialReport!;
     }
-    final clientSpec = _currentClientType == ClientType.budgetWorker
-        ? ClientSpec.budgetWorker
-        : ClientSpec.hypeInfluencer;
-    return ClientReviewEngine.evaluate(
-      client: clientSpec,
-      stats: state.currentStats,
-      philosophy: state.philosophy,
-    );
+    return ref.watch(comparisonReviewReportProvider(_currentClientType));
   }
 
 
@@ -519,14 +495,31 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
       final totalCost = report.subscores['totalCost'] ?? 0;
       final targetBudget = report.subscores['targetBudget'] ?? 2000;
       final isOverspent = totalCost > targetBudget;
+      final boredomThreshold = report.boredomThreshold;
+      final maxBudgetScore = report.maxBudgetScore;
+      final themeWeight = report.themeWeight;
 
       return Column(
         children: [
-          _buildScoreRow('預算得分 (超支扣分)', '$budgetScore / 70'),
-          _buildScoreRow('主題契合得分', '$themeScore / 30'),
+          _buildScoreRow('預算得分 (超支扣分)', '$budgetScore / $maxBudgetScore'),
+          _buildScoreRow('主題契合得分', '$themeScore / $themeWeight'),
+          if (report.hasPurityBonus)
+            _buildScoreRow(
+              '風格純度獎勵',
+              report.purityBonus > 0
+                  ? '+${report.purityBonus} 分 (純度達成)'
+                  : '0 分 (純度失效)',
+              isNegative: report.purityBonus <= 0,
+            ),
+          if (report.themeFatigue > 0)
+            _buildScoreRow(
+              '拉車疲勞扣分',
+              '-${report.themeFatigue} 分',
+              isNegative: true,
+            ),
           if (boredomPenalty > 0)
             _buildScoreRow(
-              '反無聊懲罰 (Hype<30)',
+              '反無聊懲罰 (Hype<$boredomThreshold)',
               '-$boredomPenalty 分',
               isNegative: true,
             ),
@@ -541,16 +534,51 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
     } else {
       final effectiveHype = report.subscores['effectiveHype'] ?? 0;
       final spotlightMultiplier =
-          report.subscores['spotlightMultiplier'] ?? 1.0;
-      final themeFactor = report.subscores['themeFactor'] ?? 1.0;
-      final hasNoSpotlight = spotlightMultiplier < 1.0;
+          (report.subscores['spotlightMultiplier'] ?? 1.0).toDouble();
+      final themeFactor =
+          (report.subscores['themeFactor'] ?? 1.0).toDouble();
+      final spotlightCount = report.spotlightCount;
+
+      final String spotlightText;
+      if (spotlightCount == 0 && spotlightMultiplier < 1.0) {
+        spotlightText = '無絕景 (階梯 ${(spotlightMultiplier * 100).round()}%)';
+      } else if (spotlightMultiplier < 1.0 && spotlightCount > 0) {
+        spotlightText = '絕景 $spotlightCount/4 張 (階梯 ${(spotlightMultiplier * 100).round()}%)';
+      } else {
+        spotlightText = '絕景已達標 (階梯 ${(spotlightMultiplier * 100).round()}%)';
+      }
 
       return Column(
         children: [
           _buildScoreRow('爆點熱度折算', '$effectiveHype 點'),
+          if (report.adventureCombo > 0)
+            _buildScoreRow(
+              '冒險連段加成',
+              '+${report.adventureCombo} Hype',
+            ),
+          if (report.hypeFatigue > 0)
+            _buildScoreRow(
+              '拉車脫妝懲罰',
+              '-${report.hypeFatigue} Hype',
+              isNegative: true,
+            ),
+          if (report.themeFatigue > 0)
+            _buildScoreRow(
+              '拉車疲勞扣分',
+              '-${report.themeFatigue} 分',
+              isNegative: true,
+            ),
+          if (report.hasPurityBonus)
+            _buildScoreRow(
+              '風格純度獎勵',
+              report.purityBonus > 0
+                  ? '+${report.purityBonus} 分 (純度達成)'
+                  : '0 分 (純度失效)',
+              isNegative: report.purityBonus <= 0,
+            ),
           _buildScoreRow('主題加權係數', '${(themeFactor * 100).round()} %'),
-          if (hasNoSpotlight)
-            _buildScoreRow('絕景打折提醒', '無絕景打五折', isNegative: true),
+          if (spotlightMultiplier < 1.0)
+            _buildScoreRow('絕景打折提醒', spotlightText, isNegative: true),
         ],
       );
     }

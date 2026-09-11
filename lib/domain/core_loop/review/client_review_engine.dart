@@ -19,7 +19,7 @@ class ClientReviewEngine {
   }) {
     switch (client.type) {
       case ClientType.budgetWorker:
-        return _evaluateBudgetWorker(client, stats);
+        return _evaluateBudgetWorker(client, stats, philosophy);
       case ClientType.hypeInfluencer:
         return _evaluateHypeInfluencer(client, stats, philosophy);
     }
@@ -30,6 +30,7 @@ class ClientReviewEngine {
   static ReviewReport _evaluateBudgetWorker(
     ClientSpec client,
     ItineraryStats stats,
+    TravelPhilosophy philosophy,
   ) {
     final themeWeight = client.themeWeight;
     final maxBudgetScore = 100 - themeWeight;
@@ -89,6 +90,9 @@ class ClientReviewEngine {
     final earnedCoins =
         (client.baseCommission * outcome.commissionRate).round() + storyBonus;
 
+    final purityBonus = stats.purityBonus;
+    final themeFatigue = stats.fatiguePairs.length * 10;
+
     return ReviewReport(
       clientType: client.type.name,
       satisfaction: satisfaction,
@@ -99,8 +103,13 @@ class ClientReviewEngine {
         'budgetScore': budgetScore,
         'themeScore': themeScore,
         'boredomPenalty': boredomPenalty,
+        'boredomThreshold': client.boredomThreshold,
+        'maxBudgetScore': maxBudgetScore,
+        'themeWeight': themeWeight,
         'totalCost': stats.totalCost,
         'targetBudget': client.targetBudget,
+        'purityBonus': purityBonus,
+        'themeFatigue': themeFatigue,
       },
     );
   }
@@ -116,11 +125,17 @@ class ClientReviewEngine {
     final fatigueDeltaHype =
         (client.targetHype * 14 / 100).round() * stats.fatiguePairs.length;
     final int netHype;
+    final int adventureCombo;
+    final int hypeFatigue;
     if (philosophy.turnsAdjacentHighRiskIntoHypeCombo) {
       // 混亂冒險：相鄰高風險轉為冒險連段加成
       netHype = stats.totalHype + fatigueDeltaHype;
+      adventureCombo = fatigueDeltaHype;
+      hypeFatigue = 0;
     } else {
       netHype = (stats.totalHype - fatigueDeltaHype).clamp(0, 999999);
+      adventureCombo = 0;
+      hypeFatigue = fatigueDeltaHype;
     }
 
     // 2. 絕景階梯係數 (D5: 0..4 階梯)
@@ -132,7 +147,6 @@ class ClientReviewEngine {
     final floor = client.themeFloor;
     final themeFactor =
         (floor + (100 - floor) * (stats.finalTheme / 100.0)) / 100.0;
-
 
     // 4. 滿意度計算
     final rawScore = (effectiveHype / client.targetHype) * 100.0 * themeFactor;
@@ -167,6 +181,9 @@ class ClientReviewEngine {
     final earnedCoins =
         (client.baseCommission * outcome.commissionRate).round() + storyBonus;
 
+    final purityBonus = stats.purityBonus;
+    final themeFatigue = stats.fatiguePairs.length * 10;
+
     return ReviewReport(
       clientType: client.type.name,
       satisfaction: satisfaction,
@@ -178,7 +195,12 @@ class ClientReviewEngine {
         'fatigueDeltaHype': fatigueDeltaHype,
         'effectiveHype': effectiveHype,
         'spotlightMultiplier': spotlightMultiplier,
+        'spotlightCount': stats.spotlightCount,
         'themeFactor': themeFactor,
+        'purityBonus': purityBonus,
+        'themeFatigue': themeFatigue,
+        'adventureCombo': adventureCombo,
+        'hypeFatigue': hypeFatigue,
       },
     );
   }

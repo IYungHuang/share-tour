@@ -4,11 +4,11 @@ import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 
 void main() {
   group('Milestone M4 領域層存檔與數值階梯測試 (AC-M4-2, AC-M4-3)', () {
-    test('AC-M4-2.1: 升級球鞋 Lv.1 -> Lv.2 需 300 幣，扣款後 HP 升至 125', () {
-      final inventory = EquipmentInventory.initial().copyWith(coins: 350);
+    test('AC-M4-2.1: 升級球鞋 Lv.1 -> Lv.2 需 500 幣，扣款後 HP 升至 125', () {
+      final inventory = EquipmentInventory.initial().copyWith(coins: 550);
       expect(inventory.sneakers.level, 1);
       expect(inventory.sneakers.maxHp, 100);
-      expect(inventory.sneakers.nextUpgradeCost, 300);
+      expect(inventory.sneakers.nextUpgradeCost, 500);
       expect(inventory.sneakers.isMaxLevel, isFalse);
       expect(inventory.sneakers.canAffordUpgrade(inventory.coins), isTrue);
 
@@ -16,14 +16,14 @@ void main() {
       expect(upgraded.coins, 50);
       expect(upgraded.sneakers.level, 2);
       expect(upgraded.sneakers.maxHp, 125);
-      expect(upgraded.sneakers.nextUpgradeCost, 1200);
+      expect(upgraded.sneakers.nextUpgradeCost, 2000);
       expect(upgraded.sneakers.canAffordUpgrade(upgraded.coins), isFalse);
     });
 
     test('AC-M4-2.2: 金幣不足升級時拋出 InsufficientCoinsException 且零副作用', () {
       final inventory = EquipmentInventory.initial().copyWith(coins: 200);
       expect(inventory.camera.level, 1);
-      expect(inventory.camera.nextUpgradeCost, 300);
+      expect(inventory.camera.nextUpgradeCost, 500);
       expect(inventory.camera.canAffordUpgrade(inventory.coins), isFalse);
 
       expect(

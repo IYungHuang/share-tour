@@ -67,6 +67,9 @@ class ItineraryStats {
   /// 行程中是否含有至少 1 個絕景素材 (衍生自 spotlightCount > 0)
   final bool hasSpotlight;
 
+  /// 純度加成分數 (達成時為 1，失效為 0)
+  int get purityBonus => purityActive ? TimelineItinerary.defaultPurityBonus : 0;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -113,6 +116,9 @@ enum ItinerarySubmissionIssue {
 
 /// 4 槽位時間線行程表 (支援草稿狀態與即時預覽)
 class TimelineItinerary {
+  /// 純度成立時的主題加分 (D6 勝者為 1)
+  static const int defaultPurityBonus = 1;
+
   TimelineItinerary({List<TravelMaterial?>? slots})
     : slots = List.unmodifiable(
         slots ?? List<TravelMaterial?>.filled(4, null),
@@ -274,7 +280,7 @@ class TimelineItinerary {
 
     // 3.2 純度判定：所有已填素材皆為契合素材
     final purityActive = filledCount > 0 && allFilledAligned;
-    const purityBonus = 1; // D6 確定性勝者為 1
+    const purityBonus = defaultPurityBonus;
 
     // 3.3 扣除疲勞前 Theme (含基準、時段、節奏與純度)
     final themeBeforeFatigue =
