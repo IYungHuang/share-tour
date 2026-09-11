@@ -4,14 +4,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/engine_pause_coordinator.dart';
 import 'data/core_loop/kyoto_night_catalog.dart';
+import 'data/core_loop/kyoto_poi_material_resolver.dart';
 import 'data/core_loop/local_persistence_repository.dart';
-import 'data/core_loop/taiwan_attraction_materials.dart';
+import 'domain/core_loop/models/curator_save_data.dart';
+import 'domain/core_loop/models/persistence_repository.dart';
 import 'domain/core_loop/run/curator_run_phase.dart';
 import 'domain/location/camera/camera_follow.dart';
 import 'domain/location/models/district_attraction.dart';
 import 'domain/location/models/geo_fix.dart';
 import 'domain/location/models/location_status.dart';
-import 'game/map_module/manifests/taiwan_map_manifest.dart';
+import 'domain/location/projection/map_manifest.dart';
+import 'game/map_module/manifests/kyoto_night_map_manifest.dart';
 import 'game/universal_overworld_game.dart';
 import 'state/core_loop/curator_run_providers.dart';
 import 'state/core_loop/persistence_providers.dart';
@@ -24,32 +27,46 @@ import 'ui/core_loop/field/curator_field_hud.dart';
 import 'ui/core_loop/field/gathering_floating_feedback_overlay.dart';
 import 'ui/core_loop/gear_shop/gear_shop_modal.dart';
 
+/// 建立正式環境根 Widget，集中注入圖資、素材庫、解析器與儲存庫 (Commit 12, T10)
+ProviderScope buildProductionApp({
+  required PersistenceRepository repository,
+  required CuratorSaveData initialSave,
+  OverworldMapManifest? manifest,
+}) {
+  final activeManifest = manifest ?? const KyotoNightMapManifest();
+  return ProviderScope(
+    // 圖資與城市 DLC 在此注入。通用引擎與狀態層都不知道自己跑的是哪座城市。
+    overrides: [
+      mapManifestProvider.overrideWithValue(activeManifest),
+      curatorMaterialPoolProvider.overrideWithValue(kyotoNightMaterials),
+      poiMaterialResolverProvider.overrideWithValue(
+        const KyotoPoiMaterialResolver(),
+      ),
+      persistenceRepositoryProvider.overrideWithValue(repository),
+      initialSaveDataProvider.overrideWithValue(initialSave),
+    ],
+    child: const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: OverworldScaffold(),
+    ),
+  );
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final repo = LocalPersistenceRepository();
 
-  // 分類遮罩解碼與本機存檔非同步並行預載水合 (Task M7, 零 FOUC)
+  // 圖資與本機存檔非同步並行預載水合 (Task M7, 零 FOUC)
   final (manifest, initialSave) = await (
-    TaiwanMapManifest.load(),
+    KyotoNightMapManifest.load(),
     repo.loadSave(),
   ).wait;
 
   runApp(
-    ProviderScope(
-      // 圖資與城市 DLC 在此注入。通用引擎與狀態層都不知道自己跑的是哪座城市。
-      overrides: [
-        mapManifestProvider.overrideWithValue(manifest),
-        curatorMaterialPoolProvider.overrideWithValue(kyotoNightMaterials),
-        poiMaterialResolverProvider.overrideWithValue(
-          const TaiwanPoiMaterialResolver(),
-        ),
-        persistenceRepositoryProvider.overrideWithValue(repo),
-        initialSaveDataProvider.overrideWithValue(initialSave),
-      ],
-      child: const MaterialApp(
-        debugShowCheckedModeBanner: false,
-        home: OverworldScaffold(),
-      ),
+    buildProductionApp(
+      repository: repo,
+      initialSave: initialSave,
+      manifest: manifest,
     ),
   );
 }
@@ -287,6 +304,7 @@ class _RetroHudOverlay extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final s = ref.watch(locationControllerProvider);
+    final manifest = ref.watch(mapManifestProvider);
     final priority = hudPriorityOf(s.status);
     return SafeArea(
       child: Padding(
@@ -298,9 +316,11 @@ class _RetroHudOverlay extends ConsumerWidget {
             _RetroPanel(
               color: const Color(0xFFC0834B),
               children: [
-                const Text(
-                  'TAIWAN: OVERWORLD',
-                  style: TextStyle(
+                Text(
+                  manifest.mapId == 'kyoto_night_block'
+                      ? 'KYOTO: NIGHT BLOCK'
+                      : 'TAIWAN: OVERWORLD',
+                  style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 11,
                     color: Colors.black,

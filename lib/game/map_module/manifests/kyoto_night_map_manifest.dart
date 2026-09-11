@@ -1,0 +1,79 @@
+import 'package:vector_math/vector_math.dart';
+
+import '../../../data/core_loop/kyoto_night_layout.dart';
+import '../../../domain/location/models/district_attraction.dart';
+import '../../../domain/location/projection/map_manifest.dart';
+
+/// 京都夜間街區圖資模組 (City as DLC, Commit 12, T10)
+///
+/// 1024x1024 獨立像素街區，以有界仿射轉換實現經緯度與像素互換。
+/// 採集判定直接以像素半徑 (triggerRadiusPixels) 結算，不倚賴大地圖 mpp。
+class KyotoNightMapManifest implements OverworldMapManifest {
+  const KyotoNightMapManifest();
+
+  static Future<KyotoNightMapManifest> load() async =>
+      const KyotoNightMapManifest();
+
+  static const double minLat = 34.9800;
+  static const double maxLat = 35.0200;
+  static const double minLng = 135.7400;
+  static const double maxLng = 135.7800;
+
+  @override
+  String get mapId => 'kyoto_night_block';
+
+  @override
+  String get assetPath => 'kyoto_night_block.png';
+
+  @override
+  Vector2 get mapDimensions => Vector2(1024, 1024);
+
+  @override
+  int get oceanColorArgb => 0xFF10141E;
+
+  @override
+  Vector2 get defaultSpawnPixel => kyotoSpawnPixel.clone();
+
+  @override
+  double get dpadSpeedPixelsPerSecond => kyotoDpadSpeedPixelsPerSecond;
+
+  @override
+  List<PoiMarker> get poiNodes => const [];
+
+  @override
+  List<DistrictAttraction> get districtAttractions =>
+      buildKyotoNightAttractions(unproject: unprojectToGeo);
+
+  @override
+  List<AdministrativeDistrict> get administrativeDistricts => [
+        AdministrativeDistrict(
+          code: 'kyoto_central',
+          name: '京都夜間街區',
+          centerGeo: const GeoPoint(35.0000, 135.7600),
+          centerPixel: Vector2(512, 512),
+          minZoomForSpots: 0.5,
+        ),
+      ];
+
+  @override
+  bool containsGeo(double lat, double lng) {
+    return lat >= minLat && lat <= maxLat && lng >= minLng && lng <= maxLng;
+  }
+
+  @override
+  Vector2 projectToPixel(double lat, double lng) {
+    final x = (lng - minLng) / (maxLng - minLng) * 1024.0;
+    final y = (maxLat - lat) / (maxLat - minLat) * 1024.0;
+    return Vector2(x, y);
+  }
+
+  @override
+  GeoPoint unprojectToGeo(Vector2 pixel) {
+    final lat = maxLat - (pixel.y / 1024.0) * (maxLat - minLat);
+    final lng = minLng + (pixel.x / 1024.0) * (maxLng - minLng);
+    return GeoPoint(lat, lng);
+  }
+
+  @override
+  double metersPerPixelAt(Vector2 pixel) => 4.0;
+}
