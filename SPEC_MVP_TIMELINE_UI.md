@@ -158,3 +158,55 @@ stateDiagram-v2
    - 本階段禁止實作線上伺服器存檔或遠端排行榜。
    - 本階段禁止實作過度複雜的粒子特效系統，維持經典乾淨的 JRPG 像素風格。
 3. **決定性隨機性（CC-3）**：測試中的抽卡必須支援隨機種子注入，確保 Widget 測試與單元測試 100% 穩定可重現。
+
+---
+
+## 附錄：增修 01 —— 結算數字校正與因果可視化對齊
+
+**日期**：2026-09-12
+**上游**：`SPEC_MVP_CAUSAL_FEEDBACK.md` v3（§6.1）、`SPEC_MVP_AMENDMENT_01.md`
+**生效狀態**：A 節（數字校正）**即刻生效**，屬事實更正，與任何待審規格無關；B 節（條款作廢）**待 `SPEC_MVP_CAUSAL_FEEDBACK.md` v3 簽核後生效**，在此之前本體條款仍然有效。
+
+### A. 數字校正（即刻生效）
+
+§2.3「動態跳分揭露節奏」描述的是一套**已不存在**的計分模型。以 `client_review_engine.dart` 與 `client_spec.dart` 的現行實作為準改寫如下：
+
+| §2.3 原文 | 現行實作 |
+|---|---|
+| 社畜預算得分滿分 **70**、超支每 10 円扣 2 分 | 滿分 `100 - themeWeight` = **44**；超支扣 `round(overspendRatio × overspendPenaltyPoints)`，`overspendPenaltyPoints = 100`，結果 clamp 至 `0~44` |
+| 社畜主題得分 `Theme / 2`（最高 **30**） | `round(themeWeight × finalTheme / 100)`，`themeWeight = 56`，最高 **56** |
+| 反無聊：`Hype < 30` 扣 25 | `totalHype < boredomThreshold` 扣 25；`boredomThreshold = targetHype × boredomHypeRatio` = `30 × 560%` = **168** |
+| 網紅疲勞每段扣 **15 Hype** | 每對 `round(targetHype × 14%)` = **21 Hype**；混亂冒險哲學下**反轉為 +21**（`turnsAdjacentHighRiskIntoHypeCombo`） |
+| 無絕景 **×50%** 折扣 | 絕景**階梯**乘數 `spotlightLadder = [0.70, 0.75, 0.80, 0.85, 1.00]`，依 `spotlightCount` 0~4 取值；無絕景為 **×0.70**，不是 ×0.50 |
+| （原文未記載） | 網紅主題係數 `(themeFloor + (100 - themeFloor) × finalTheme / 100) / 100`，`themeFloor = 44` |
+| （原文未記載） | 佣金 `round(baseCommission × outcome.commissionRate) + totalStory × 5` |
+
+**評等分界維持原文**（社畜 Near Miss 60~69、網紅 50~69）—— 該處與 `client_review_engine.dart:58,138` 一致，本來就是對的。
+
+#### A.1 連帶失效的 AC
+
+- **`AC-UI-3.2`**：原文宣稱「Cost 2160, Theme 60, Hype 30 ➔ 滿意度 68 分」。以現行公式重算為 `budgetScore 36 + themeScore 34 − boredomPenalty 25 = 45`，評等是 **Rejected 而非 Near Miss**，整條前提不成立。
+  對應的 `review_settlement_widget_test.dart:154` 直接以 `satisfaction: 68` 建構 `ReviewReport`，**不經過引擎**，所以測試恆綠而 AC 的推導早已錯誤 —— 又一個假綠燈。
+- **`AC-UI-3.3`**：原文「Hype 200 無絕景 ➔ 67 分」未記載所用 Theme 值，且折扣係數已由 ×0.50 變為 ×0.70，數字需重新推導。
+
+> **處置**：兩條 AC 的**測試數值**須改為由 `ClientReviewEngine.evaluate()` 實際算出，而非硬編碼於 `ReviewReport`。此項併入 `SPEC_MVP_AMENDMENT_01` 的清償範圍（該修訂正在調整這些係數），本增修只負責記錄失效事實，不逕行改動測試。
+
+### B. 條款作廢（待 `SPEC_MVP_CAUSAL_FEEDBACK` v3 簽核後生效）
+
+因果 SPEC 的 `AC-CF-3.2` 要求編排期不得顯示計分結果數值 —— 全數字化的取捨是算術，不是策展抉擇（GDD Rule 12）。與本文件以下條款正面牴觸，屆時以因果 SPEC 為準：
+
+| 條款 | 處置 |
+|---|---|
+| **`AC-UI-2.2`**（連鎖光軌須含 `+20% Combo` 文本） | **作廢**。改為渲染定性符號 `[共鳴]`，不含百分比。`Key('combo_indicator_${slotA}_${slotB}')` 維持不變 |
+| **§2.2C 即時試算指標**（總開銷 / 預估熱度 / 主題滿意 三項） | **改寫**。僅保留「總開銷 / 預算上限」與超支紅字警示；刪除「預估熱度」與「主題滿意」 |
+| **§2.2C 客群視角切換器**（社畜視角 / 網紅視角） | **刪除**。客戶已於行前委託階段指派，`curator_studio_modal.dart:117` 以 `runState.client.type` 提交，切換器只造成認知混淆 |
+
+**明確維持有效**：
+
+- **`AC-UI-2.3`**（相鄰高風險渲染 `Key('fatigue_warning_${slotA}_${slotB}')`）—— 因果 SPEC 在此基礎上疊加符號與 Codex 直通，不取代。
+- **`AC-UI-2.4`**（Slot 2 顯示相機倍率 1.5x / 1.8x / 2.2x）—— 相機倍率是**裝備資訊**，不是本局的累計得分，不在「計分結果數值」的禁列內。
+- **§2.2B 素材卡面的 `🔥60` / `🎯35` 數值丸** —— 牌面固有屬性，同上。
+
+### C. 角色具名
+
+`§2.3` 的「社畜小林」「網紅安娜」在程式碼中無對應欄位（`ClientSpec` 只有 `displayName` 職稱）。已裁決於 `ClientSpec` 新增 `personaName`，見 `SPEC_MVP_CORE_LOOP.md` 增修註記與 `PLAN_MVP_CAUSAL_FEEDBACK.md` T2。

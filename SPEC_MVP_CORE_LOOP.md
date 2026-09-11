@@ -215,3 +215,26 @@
 ### AC-ML-7 單局再來一局生命週期
 - **AC-ML-7.1** 執行 `Restart Run` 後，新局的 HP 依球鞋等級回滿，Budget 重新發放，Theme 為 50，腰包與 4 槽位清空。
 - **AC-ML-7.2** 執行 `Restart Run` 後，上一局所賺取的佣金累積與已升級裝備等級維持不變。
+
+---
+
+## 增修註記 01 —— 客戶具名（2026-09-12）
+
+**上游**：`SPEC_MVP_CAUSAL_FEEDBACK.md` v3 §7.2
+**生效狀態**：待因果 SPEC 簽核後隨其 T2 一併實作。
+
+`REQ-ML-05` 的兩位客戶目前僅有職稱（`ClientSpec.displayName` = `極限窮遊社畜` / `IG 網紅`），但 `SPEC_MVP_TIMELINE_UI.md:103,107` 的結算文案早已以「小林」「安娜」稱呼他們。文件與程式碼的落差使得任何以人名撰寫的台詞都無處取值。
+
+**變更**：`ClientSpec` 新增 `final String personaName`。
+
+| `ClientType` | `personaName` | `displayName`（不變） |
+|---|---|---|
+| `budgetWorker` | `小林` | `極限窮遊社畜` |
+| `hypeInfluencer` | `安娜` | `IG 網紅` |
+
+**約束**：
+
+- `displayName` 保留職稱語意，用於行前委託的客戶類型標示；`personaName` 用於一切由客戶本人發話的場合（審查台詞、編排期心態氣泡）。
+- `ClientSpec.operator ==` 只比對 `type`，新增欄位不影響相等語意，無需同步修改。
+- `ClientSpec` 為手寫純類別，不涉 `freezed`／`json_serializable`，不需重跑 codegen。
+- 人名屬世界觀文案，**不得**出現具名城市（架構約束第 2 條）。

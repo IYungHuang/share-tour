@@ -63,21 +63,39 @@
 - Modify: `SPEC_MVP_TIMELINE_UI.md`
 
 ### Steps
-1. 追加「增修 01：因果可視化對齊」段落，明載：
+1. `SPEC_MVP_TIMELINE_UI.md` 追加「增修 01：因果可視化對齊」段落，明載：
    - **作廢 `AC-UI-2.2`**（光軌須含 `+20% Combo` 文本）→ 改為渲染定性符號 `[共鳴]`，不含百分比。
    - **改寫 §2.2C 即時試算指標** → 僅保留「總開銷 / 預算上限」與超支警示；刪除「預估熱度」與「主題滿意」兩項。
    - **刪除 §2.2C 客群視角切換器** → 客戶已於行前委託指派（`curator_studio_modal.dart:117` 以 `runState.client.type` 提交），切換器造成認知混淆。
    - **明載 `AC-UI-2.3`（疲勞警示 Key）與 `AC-UI-2.4`（相機倍率）維持有效**。
-2. 標註增修理由與上游文件（SPEC_MVP_CAUSAL_FEEDBACK v3 §3.1.3、AC-CF-3.2）。
-3. **COMMIT**：
+2. **校正同檔 §2.3 的過期結算數字**（與本 SPEC 無關，但該節現在描述的是一套已不存在的公式）：
+
+   | §2.3 原文 | 現行實作 |
+   |---|---|
+   | 社畜預算滿分 70、超支每 10 円扣 2 分 | 滿分 `100 - themeWeight` = **44**；超支扣 `round(超支比例 × overspendPenaltyPoints(100))`，clamp 至 `0~44` |
+   | 社畜主題得分 `Theme / 2`（最高 30） | `round(themeWeight(56) × finalTheme / 100)`，最高 **56** |
+   | 反無聊：`Hype < 30` 扣 25 | `totalHype < boredomThreshold`（`targetHype × boredomHypeRatio 560%` = **168**）扣 25 |
+   | 網紅疲勞每段扣 15 Hype | 每對 `round(targetHype × 14%)` = **21**；混亂冒險哲學下為 **+21**（`turnsAdjacentHighRiskIntoHypeCombo`） |
+   | 無絕景 `×50%` 折扣 | 絕景**階梯**乘數 `[0.70, 0.75, 0.80, 0.85, 1.00]`（0~4 張） |
+   | （未記載） | 主題係數 `(themeFloor(44) + 56 × finalTheme / 100) / 100`；佣金 `baseCommission × outcome.commissionRate + totalStory × 5` |
+
+   評等分界維持原文（社畜 Near Miss 60~69、網紅 50~69）—— 該處本來就是對的。
+3. `SPEC_MVP_CORE_LOOP.md` 補增修註記：`ClientSpec` 新增 `personaName`（`小林` / `安娜`），`displayName` 保留職稱語意，`operator ==` 仍只比對 `type`。
+4. **COMMIT**：
    ```text
-   docs(spec): amend timeline UI spec for causal feedback alignment
+   docs(spec): amend timeline UI spec and correct its stale settlement math
 
    AC-CF-3.2 forbids exact score readouts during the editing phase, which
    directly contradicts AC-UI-2.2 and the live preview HUD clause. Retire the
    combo percentage text and the Theme/Hype readouts, drop the client
    perspective switcher now that the client is pinned at briefing time, and
    record that the camera multiplier and fatigue warning clauses stay in force.
+
+   The settlement reveal in the same section still describes a scoring model
+   that no longer exists, down to the budget score cap and the spotlight
+   discount. Restate it from the current engine so nobody implements the
+   document instead of the code. Note the new persona name field on ClientSpec
+   in the core loop spec, since that class is governed there.
    ```
 
 ---
@@ -169,11 +187,13 @@ bool get hasFatigueRisk => riskLevel >= 3;
 
 `clientImpression`：
 ```dart
-final satisfaction = ClientReviewEngine
-    .evaluate(client: client, stats: stats, philosophy: philosophy)
-    .satisfaction;
-// canSubmit == false → neutral；否則 >=90 ecstatic / >=70 pleased / >=50 neutral / >=30 stressed / else furious
+final report = ClientReviewEngine
+    .evaluate(client: client, stats: stats, philosophy: philosophy);
+// canSubmit == false → neutral
+// 否則依 report.outcome：perfect→ecstatic / pass→pleased / nearMiss→neutral
+//   rejected → report.satisfaction >= 30 ? stressed : furious
 ```
+> 以 `outcome` 而非 `satisfaction` 分桶是硬性要求：社畜退件門檻 60、網紅 50（`client_review_engine.dart:58,138`），統一門檻會讓社畜 50~59 分顯示 Near Miss 表情而實際被退件 —— 那正是本 SPEC 要消滅的「畫面說謊」。
 
 ### Steps
 1. **RED**：`causal_feedback_test.dart` 覆蓋 AC-CF-1.1~1.9，測試名即 AC 編號。
@@ -200,6 +220,7 @@ final satisfaction = ClientReviewEngine
 ### Files
 - Create: `lib/domain/core_loop/causal/curator_codex.dart`
 - Create: `test/domain/core_loop/curator_codex_test.dart`
+- Modify: `lib/domain/core_loop/review/client_spec.dart`（新增 `personaName`）
 - Modify: `lib/ui/core_loop/field/attraction_detail_card.dart`
 - Modify: `lib/ui/core_loop/field/gathering_replace_bottom_sheet.dart`
 - Modify: `test/ui/core_loop/attraction_gathering_ui_test.dart`
@@ -233,15 +254,18 @@ class CuratorCodex {
 ### Steps
 1. **RED**：`curator_codex_test.dart` 驗 11 個 reasonCode 皆有非空 `title`/`explanation`，且全文不含 `taiwan`/`kyoto`。
 2. **GREEN**：建 `curator_codex.dart`。
-3. **UI WIRING**：兩支 field UI 於 `material.hasFatigueRisk` 時渲染 `[💀 拉車隱患]`。
-4. **VERIFY**：`flutter test test/domain/core_loop/curator_codex_test.dart test/ui/core_loop/attraction_gathering_ui_test.dart`
-5. **COMMIT**：
+3. **具名**：`ClientSpec` 新增 `final String personaName`（`budgetWorker` → `小林`、`hypeInfluencer` → `安娜`）。`operator ==` 只比對 `type`，不必更動；`ClientSpec` 為手寫純類別，不需 codegen。`curator_briefing_modal.dart:258` 改為「小林（極限窮遊社畜）」形式。
+4. **UI WIRING**：兩支 field UI 於 `material.hasFatigueRisk` 時渲染 `[💀 拉車隱患]`。
+5. **VERIFY**：`flutter test test/domain/core_loop/curator_codex_test.dart test/ui/core_loop/attraction_gathering_ui_test.dart test/ui/core_loop/curator_briefing_modal_test.dart`
+6. **COMMIT**：
    ```text
-   feat(core-loop): add curator codex and overworld fatigue signifier
+   feat(core-loop): name the causal rules and the clients
 
    Name every causal rule in world jargon so the concept exists before it costs
    the player points, and mark fatigue hazard on gathering cards during the day
-   to close the gap between collecting a card and being punished at night.
+   to close the gap between collecting a card and being punished at night. Give
+   each client a persona name, which the timeline UI spec has used in prose
+   since it was written while the code only ever had a job title.
    ```
 
 ---
@@ -474,7 +498,7 @@ testWidgets('AC-CF-2.1: 每個因果代碼都必須在工作台上看得見', (t
   - [ ] AC-CF-1.2 網紅 × 混亂冒險：連段取代 Hype 側疲勞，Theme 側疲勞仍在
   - [ ] AC-CF-1.3 社畜不存在 Hype 側疲勞或連段
   - [ ] AC-CF-1.4 超支階梯依本局客戶預算動態判定
-  - [ ] AC-CF-1.5 表情與 `ClientReviewEngine` 評等一致
+  - [ ] AC-CF-1.5 表情由 `ReviewOutcome` 導出，含社畜 50~59 分案例
   - [ ] AC-CF-1.6 未達提交門檻鎖 `neutral`
   - [ ] AC-CF-1.7 `ambient_slot_affinity` 涵蓋 Slot 0/1/3
   - [ ] AC-CF-1.8 `primaryCulpritSlot` 決定性
@@ -497,6 +521,13 @@ testWidgets('AC-CF-2.1: 每個因果代碼都必須在工作台上看得見', (t
 
 ## 10. 未納入本計劃（回報後由使用者裁決）
 
-1. **`purity_bonus` 存廢**：`timeline_itinerary.dart` 的 `purityBonus = 1`，實值 1 分，低於感知門檻。本計劃不為它做表現；依 Rule 35 建議檢討刪除該規則本身。
-2. **客戶具名角色**：`ClientSpec` 目前只有 `極限窮遊社畜` / `IG 網紅`，無人名。若要在氣泡文案用具名角色，須先於 `ClientSpec` 補欄位（屬 core loop 規格變更）。
-3. **`CLAUDE.md` §0 過期指令**：`dart test test/domain/` 一行不可用，建議另開 docs 提交修正。
+1. **`CLAUDE.md` §0 過期指令**：`dart test test/domain/` 一行不可用（無 `package:test` 直接相依），且「316 passed」已過期。建議另開 docs 提交修正。
+2. **`SPEC_MVP_TIMELINE_UI` §2.1 的四槽限定描述**：已由 `AC-A1-3.7/3.8` 取代，但原文仍在。屬 `SPEC_MVP_AMENDMENT_01` 的清償範圍，本計劃不碰。
+
+---
+
+## 11. 已裁決（2026-09-12）
+
+1. **`purity_bonus` 保留規則，不做編排期徽章**。`purityBonus = 1` 是 D4+D5+D6 聯立求解的確定性勝者（`PLAN_MVP_AMENDMENT_01.md:77`），刪除會使 `AC-A1-3.2` 失去機制並迫使三維聯立重跑。其回饋歸屬結算文案，由既有 `AC-A1-3.5` 承接。
+2. **客戶具名採用**：`ClientSpec.personaName` = `小林` / `安娜`，於 T2 實作。
+3. **Codex 置於 `domain/core_loop/causal/`**，不放 `data/`。

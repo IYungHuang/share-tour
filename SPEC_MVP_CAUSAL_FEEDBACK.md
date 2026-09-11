@@ -116,15 +116,17 @@ satisfaction = ClientReviewEngine.evaluate(
 ).satisfaction
 ```
 
-分桶（與 `client_review_engine.dart` 的評等分界同源）：
+分桶**必須以 `report.outcome` 為準，不得以 `satisfaction` 自訂門檻**：兩位客戶的評等分界不同（社畜 Rejected `< 60`、網紅 `< 50`，見 `client_review_engine.dart:58,138`），照統一門檻切會讓社畜 55 分時表情顯示 Near Miss 而實際是退件。
 
-| satisfaction | ClientImpression | 對應評等 |
-|---|---|---|
-| >= 90 | `ecstatic` | Perfect |
-| >= 70 | `pleased` | Pass |
-| >= 50 | `neutral` | Near Miss |
-| >= 30 | `stressed` | — |
-| < 30 | `furious` | Rejected |
+| `ReviewOutcome` | ClientImpression |
+|---|---|
+| `perfect` | `ecstatic` |
+| `pass` | `pleased` |
+| `nearMiss` | `neutral` |
+| `rejected` 且 `satisfaction >= 30` | `stressed` |
+| `rejected` 且 `satisfaction < 30` | `furious` |
+
+`rejected` 拆兩態是為了湊滿五態表情，兩者都落在「會被退件」的語意內，不會讓表情暗示比實際更好的結果。
 
 **未達提交門檻保護**：`stats.canSubmit == false`（不足 3 槽或不連續）時鎖定為 `neutral`，避免空排程即顯示暴怒。
 
@@ -173,7 +175,7 @@ satisfaction = ClientReviewEngine.evaluate(
 - [ ] **AC-CF-1.2**：客戶為網紅且哲學為混亂冒險時，產出 `chaotic_combo`（positive）且**不**產出 `fatigue_hype_penalty`；`fatigue_spike`（Theme 側）仍須產出。
 - [ ] **AC-CF-1.3**：客戶為社畜時，無論哲學為何皆**不**產出 `chaotic_combo` 或 `fatigue_hype_penalty`（Hype 側疲勞不存在於社畜審查）。
 - [ ] **AC-CF-1.4**：動態預算 —— 社畜（2000）超支 10% 產出 `budget_overrun_minor`、超支 35% 產出 `budget_overrun_major`；同一份行程對網紅（8000）不產出任何超支事實。
-- [ ] **AC-CF-1.5**：`clientImpression` 與 `ClientReviewEngine.evaluate()` 之評等一致 —— 對 Perfect 行程為 `ecstatic`、Rejected 行程為 `furious`。
+- [ ] **AC-CF-1.5**：`clientImpression` 由 `ReviewOutcome` 導出且不得暗示比實際更好的結果 —— 逐一驗證 perfect→`ecstatic`、pass→`pleased`、nearMiss→`neutral`、rejected→`stressed`/`furious`；**並須包含一則社畜 `satisfaction` 落在 50~59 的案例**（該區間網紅為 Near Miss、社畜為 Rejected，是統一門檻分桶會出錯的地方）。
 - [ ] **AC-CF-1.6**：`stats.canSubmit == false` 時 `clientImpression` 鎖定為 `neutral`。
 - [ ] **AC-CF-1.7**：Slot 0、Slot 1、Slot 3 各自命中時段條件時，皆產出對應 `slotIndex` 的 `ambient_slot_affinity`（三槽皆須覆蓋）。
 - [ ] **AC-CF-1.8**：`primaryCulpritSlot` 依 §2.4 優先序決定，同輸入重複計算結果恆等（決定性）。
@@ -223,8 +225,12 @@ satisfaction = ClientReviewEngine.evaluate(
 
 ---
 
-## 7. 待決問題
+## 7. 已裁決事項
 
-1. **`purity_bonus` 存廢（Rule 35）**：`timeline_itinerary.dart` 的 `purityBonus = 1`，實值 1 分，低於玩家感知門檻。v2 曾規劃以 `✨ 極簡純度` 重度徽章呈現 —— 為 1 分掛重度徽章是誤導。本 v3 將其排除於可視化之外。**建議一併檢討刪除該規則**：若刪掉它不會降低玩家創造旅行的能力，依 Rule 35 就該刪。待使用者裁決。
-2. **客戶具名**：`client_spec.dart` 目前僅有 `極限窮遊社畜` 與 `IG 網紅`，無人名。心態氣泡文案若要用具名角色（如「小林」「安娜」），須先在 `ClientSpec` 補欄位。本 SPEC 暫以 `displayName` 撰寫文案。
-3. **Codex 歸屬層**：`lib/data/` 現定義為「外部世界實作」，且 `lib/ui/` 目前零 `data/` 相依。純靜態文案字典置於 `domain/core_loop/codex/` 較合身；待 plan 階段定案。
+1. **`purity_bonus` 保留規則，但不做編排期徽章**（使用者裁決，2026-09-12）。
+   `timeline_itinerary.dart:277` 的 `purityBonus = 1` **不是殘留值**：依 `PLAN_MVP_AMENDMENT_01.md:77`，D4（疲勞量級）+ D5（絕景階梯）+ D6（純度量級）為不可分開決定的**聯立求解**，1 是滿足 `AC-A1-3.2/3.3/3.6` 的確定性勝者，在數學上承重。刪除它會使 `AC-A1-3.2`（存在一位客戶使 3 槽純行程勝過全部 4 槽排列）失去機制，並迫使三維聯立重跑 —— 爆炸半徑跨進 `SPEC_MVP_AMENDMENT_01` 的施工範圍。
+   同時它在**感知上不可見**（1 分），且它回答的問題是「該不該為了湊滿塞第 4 張不合哲學的卡」，屬**提交當下的一次性決定**，效果不隨排列方式改變 —— 不符合 §1.2 第 2 點「主動因果軸」的判準。故其回饋歸屬結算文案，由既有的 `AC-A1-3.5`（純度成立與失效時文案可區分）承接，本 SPEC 不重複規範。
+2. **客戶具名採用**（使用者裁決，2026-09-12）。
+   `小林`／`安娜` 已寫在已簽核的 `SPEC_MVP_TIMELINE_UI.md:103,107`，但 `ClientSpec` 無對應欄位。新增 `final String personaName`（`budgetWorker` → `小林`、`hypeInfluencer` → `安娜`）。表情氣泡、結算吐槽與行前簡報一律以人名稱呼，`displayName` 保留為職稱。
+   `ClientSpec` 屬 `SPEC_MVP_CORE_LOOP.md` 管轄，須於該文件補增修註記（見 PLAN T0）。`ClientSpec.operator ==` 只比對 `type`，新增欄位不影響相等語意。
+3. **Codex 歸屬層**：置於 `domain/core_loop/causal/`。`lib/data/` 現定義為「外部世界實作」，且 `lib/ui/` 目前零 `data/` 相依，不為一份靜態文案字典新開這條相依方向。
