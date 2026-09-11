@@ -136,5 +136,47 @@ void main() {
       await tester.pumpWidget(createSubject(state));
       expect(find.textContaining('📷 1.8x'), findsOneWidget);
     });
+
+    testWidgets('AC-A1-3.8: 四個槽位容器常駐，合法 3 槽端點顯示「刻意留白」，未達 3 槽顯示預設提示', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      var state = CuratorRunState.initial();
+
+      // 1. 全空時：4 個槽位卡片皆存在，無「刻意留白」
+      await tester.pumpWidget(createSubject(state));
+      expect(find.byKey(const Key('slot_card_0')), findsOneWidget);
+      expect(find.byKey(const Key('slot_card_1')), findsOneWidget);
+      expect(find.byKey(const Key('slot_card_2')), findsOneWidget);
+      expect(find.byKey(const Key('slot_card_3')), findsOneWidget);
+      expect(find.text('刻意留白'), findsNothing);
+
+      // 2. 僅放 2 槽 ([0, 1])：仍無「刻意留白」
+      state = state
+          .setTimelineSlot(0, walkMaterial)
+          .setTimelineSlot(1, foodMaterial);
+      await tester.pumpWidget(createSubject(state));
+      expect(find.text('刻意留白'), findsNothing);
+
+      // 3. 3 槽連續 [0, 1, 2]：Slot 3 端點顯示「刻意留白」
+      state = state.setTimelineSlot(2, duskMaterial);
+      await tester.pumpWidget(createSubject(state));
+      expect(find.text('刻意留白'), findsOneWidget);
+
+      // 4. 3 槽連續 [1, 2, 3]：Slot 0 端點顯示「刻意留白」
+      state = state
+          .setTimelineSlot(0, null)
+          .setTimelineSlot(3, walkMaterial);
+      await tester.pumpWidget(createSubject(state));
+      expect(find.text('刻意留白'), findsOneWidget);
+
+      // 5. 3 槽中間留空 [0, 1, 3]：不可提交，無「刻意留白」
+      state = state
+          .setTimelineSlot(0, walkMaterial)
+          .setTimelineSlot(2, null);
+      await tester.pumpWidget(createSubject(state));
+      expect(find.text('刻意留白'), findsNothing);
+    });
   });
 }

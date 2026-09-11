@@ -22,6 +22,10 @@ class CompactSlotCard extends ConsumerWidget {
         (s) => s.equipment.camera.cameraMultiplier,
       ),
     );
+    // 監聽是否已達可呈送審查標準 (用於端點空槽呈現「刻意留白」)
+    final canSubmit = ref.watch(
+      curatorRunControllerProvider.select((s) => s.canSubmit),
+    );
 
     final (timeLabel, defaultHint, gradientColors) = switch (slotIndex) {
       0 => (
@@ -110,7 +114,7 @@ class CompactSlotCard extends ConsumerWidget {
               // 素材內容或未放置提示
               Expanded(
                 child: material == null
-                    ? _buildEmptyContent(defaultHint)
+                    ? _buildEmptyContent(canSubmit ? '刻意留白' : defaultHint)
                     : _buildFilledContent(material),
               ),
             ],

@@ -1,7 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:share_tour/data/core_loop/kyoto_night_catalog.dart';
 import 'package:share_tour/domain/core_loop/models/timeline_itinerary.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
+import 'package:share_tour/domain/core_loop/review/client_review_engine.dart';
+import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 
 void main() {
   group('4 槽位時間線行程表與擊穿流水線測試 (AC-ML-4)', () {
@@ -429,6 +432,355 @@ void main() {
 
         expect(statsPure.purityActive, isTrue);
         expect(statsPure.themeBeforeFatigue, equals(statsPure.themeBaseline + 1));
+      });
+    });
+
+    group('Amendment-01: 3 槽提交與純度測試 (AC-A1-3)', () {
+      test('AC-A1-3.0 空槽位不計槽位加成，且留空晨曦槽與留空深夜槽損失不同', () {
+        // 晨曦槽有 #散步+5，黃昏槽有相機倍率，深夜槽有 #深夜收尾 (自定義時段加成)
+        final m1 = createMaterial(id: 'm1', name: '散步素材', tags: ['#散步'], hype: 30, cost: 100);
+        final m2 = createMaterial(id: 'm2', name: '黃昏素材', tags: ['#絕景'], hype: 40, cost: 100);
+        final m3 = createMaterial(id: 'm3', name: '深夜素材', tags: ['#深夜'], hype: 30, cost: 100);
+
+        // 晨曦留空: [null, m1, m2, m3] (slots 1, 2, 3)
+        final dawnEmpty = TimelineItinerary(slots: [null, m1, m2, m3]);
+        final dawnStats = dawnEmpty.calculateStats(
+          philosophy: TravelPhilosophy.slow,
+          cameraMultiplier: 1.5,
+        );
+
+        // 深夜留空: [m1, m2, m3, null] (slots 0, 1, 2)
+        final nightEmpty = TimelineItinerary(slots: [m1, m2, m3, null]);
+        final nightStats = nightEmpty.calculateStats(
+          philosophy: TravelPhilosophy.slow,
+          cameraMultiplier: 1.5,
+        );
+
+        // 空槽位 effectiveHype 必須為 0，且無槽位 Theme 加成
+        expect(dawnStats.slotEffectiveHypes[0], equals(0));
+        expect(dawnStats.slotThemeBonuses.containsKey(0), isFalse);
+        expect(nightStats.slotEffectiveHypes[3], equals(0));
+        expect(nightStats.slotThemeBonuses.containsKey(3), isFalse);
+
+        // 留空晨曦槽與留空深夜槽的損失與結果數值必須不同
+        expect(
+          dawnStats.finalTheme != nightStats.finalTheme ||
+              dawnStats.totalHype != nightStats.totalHype,
+          isTrue,
+        );
+      });
+
+      test('AC-A1-3.1 3 槽連續行程可通過提交前置檢查；2 槽與中間留空皆不可', () {
+        final m = createMaterial(id: 'm', name: '卡片');
+
+        // 合法 3 槽: [0, 1, 2]
+        final legal012 = TimelineItinerary(slots: [m, m, m, null]);
+        expect(legal012.canSubmit, isTrue);
+        expect(legal012.submissionIssue, isNull);
+
+        // 合法 3 槽: [1, 2, 3]
+        final legal123 = TimelineItinerary(slots: [null, m, m, m]);
+        expect(legal123.canSubmit, isTrue);
+        expect(legal123.submissionIssue, isNull);
+
+        // 2 槽: [0, 1]
+        final twoSlots = TimelineItinerary(slots: [m, m, null, null]);
+        expect(twoSlots.canSubmit, isFalse);
+        expect(twoSlots.submissionIssue, equals(ItinerarySubmissionIssue.tooFewSlots));
+
+        // 2 槽: [1, 2]
+        final twoSlotsMid = TimelineItinerary(slots: [null, m, m, null]);
+        expect(twoSlotsMid.canSubmit, isFalse);
+        expect(twoSlotsMid.submissionIssue, equals(ItinerarySubmissionIssue.tooFewSlots));
+
+        // 3 槽中間留空: [0, 1, 3] (Slot 2 缺口)
+        final gapAt2 = TimelineItinerary(slots: [m, m, null, m]);
+        expect(gapAt2.canSubmit, isFalse);
+        expect(gapAt2.submissionIssue, equals(ItinerarySubmissionIssue.nonContiguous));
+
+        // 3 槽中間留空: [0, 2, 3] (Slot 1 缺口)
+        final gapAt1 = TimelineItinerary(slots: [m, null, m, m]);
+        expect(gapAt1.canSubmit, isFalse);
+        expect(gapAt1.submissionIssue, equals(ItinerarySubmissionIssue.nonContiguous));
+
+        // 4 槽完整
+        final full = TimelineItinerary(slots: [m, m, m, m]);
+        expect(full.canSubmit, isTrue);
+        expect(full.submissionIssue, isNull);
+      });
+
+      test('AC-A1-3.2 存在 4 張手牌使 3 槽純行程最佳滿意度高於全部 4 槽排列 (小資族)', () {
+        final all = kyotoNightMaterials;
+        final cat = all.firstWhere((m) => m.id == 'kyoto_pontocho_cat');
+        final ghost = all.firstWhere((m) => m.id == 'kyoto_ghost_vending');
+        final delta = all.firstWhere((m) => m.id == 'kyoto_kamogawa_delta');
+        final kappo = all.firstWhere((m) => m.id == 'kyoto_gion_kappo');
+
+        const phil = TravelPhilosophy.midnight;
+        final hand = [cat, ghost, delta, kappo];
+
+        // 3 槽純行程由 3 張契合卡 [cat, ghost, delta] 組成
+        final pureAligned = [cat, ghost, delta];
+        var max3PureSatisfaction = -1;
+
+        final perms3 = [
+          [pureAligned[0], pureAligned[1], pureAligned[2]],
+          [pureAligned[0], pureAligned[2], pureAligned[1]],
+          [pureAligned[1], pureAligned[0], pureAligned[2]],
+          [pureAligned[1], pureAligned[2], pureAligned[0]],
+          [pureAligned[2], pureAligned[0], pureAligned[1]],
+          [pureAligned[2], pureAligned[1], pureAligned[0]],
+        ];
+
+        for (final p in perms3) {
+          // 放在 [0, 1, 2]
+          final itinA = TimelineItinerary(slots: [p[0], p[1], p[2], null]);
+          final statsA = itinA.calculateStats(philosophy: phil, cameraMultiplier: 1.5);
+          final repA = ClientReviewEngine.evaluate(
+            client: ClientSpec.budgetWorker,
+            stats: statsA,
+            philosophy: phil,
+          );
+          if (repA.satisfaction > max3PureSatisfaction) {
+            max3PureSatisfaction = repA.satisfaction;
+          }
+
+          // 放在 [1, 2, 3]
+          final itinB = TimelineItinerary(slots: [null, p[0], p[1], p[2]]);
+          final statsB = itinB.calculateStats(philosophy: phil, cameraMultiplier: 1.5);
+          final repB = ClientReviewEngine.evaluate(
+            client: ClientSpec.budgetWorker,
+            stats: statsB,
+            philosophy: phil,
+          );
+          if (repB.satisfaction > max3PureSatisfaction) {
+            max3PureSatisfaction = repB.satisfaction;
+          }
+        }
+
+        // 4 槽全部 24 種排列
+        var max4Satisfaction = -1;
+        void permute4(List<TravelMaterial> list, int idx) {
+          if (idx == list.length - 1) {
+            final itin = TimelineItinerary(slots: [list[0], list[1], list[2], list[3]]);
+            final stats = itin.calculateStats(philosophy: phil, cameraMultiplier: 1.5);
+            final rep = ClientReviewEngine.evaluate(
+              client: ClientSpec.budgetWorker,
+              stats: stats,
+              philosophy: phil,
+            );
+            if (rep.satisfaction > max4Satisfaction) {
+              max4Satisfaction = rep.satisfaction;
+            }
+            return;
+          }
+          for (var x = idx; x < list.length; x++) {
+            final tmp = list[idx];
+            list[idx] = list[x];
+            list[x] = tmp;
+            permute4(list, idx + 1);
+            final tmp2 = list[idx];
+            list[idx] = list[x];
+            list[x] = tmp2;
+          }
+        }
+        permute4(List<TravelMaterial>.of(hand), 0);
+
+        expect(
+          max3PureSatisfaction,
+          greaterThan(max4Satisfaction),
+          reason: '3 槽純行程滿意度 ($max3PureSatisfaction) 必須高於該手牌全部 4 槽排列 ($max4Satisfaction)',
+        );
+      });
+
+      test('AC-A1-3.3 對流量網紅同一手牌 4 槽最佳滿意度高於任何合法 3 槽排列', () {
+        final all = kyotoNightMaterials;
+        final cat = all.firstWhere((m) => m.id == 'kyoto_pontocho_cat');
+        final ghost = all.firstWhere((m) => m.id == 'kyoto_ghost_vending');
+        final delta = all.firstWhere((m) => m.id == 'kyoto_kamogawa_delta');
+        final kappo = all.firstWhere((m) => m.id == 'kyoto_gion_kappo');
+
+        const phil = TravelPhilosophy.midnight;
+        final hand = [cat, ghost, delta, kappo];
+
+        // 4 槽最佳滿意度
+        var max4Satisfaction = -1;
+        void permute4(List<TravelMaterial> list, int idx) {
+          if (idx == list.length - 1) {
+            final itin = TimelineItinerary(slots: [list[0], list[1], list[2], list[3]]);
+            final stats = itin.calculateStats(philosophy: phil, cameraMultiplier: 1.5);
+            final rep = ClientReviewEngine.evaluate(
+              client: ClientSpec.hypeInfluencer,
+              stats: stats,
+              philosophy: phil,
+            );
+            if (rep.satisfaction > max4Satisfaction) {
+              max4Satisfaction = rep.satisfaction;
+            }
+            return;
+          }
+          for (var x = idx; x < list.length; x++) {
+            final tmp = list[idx];
+            list[idx] = list[x];
+            list[x] = tmp;
+            permute4(list, idx + 1);
+            final tmp2 = list[idx];
+            list[idx] = list[x];
+            list[x] = tmp2;
+          }
+        }
+        permute4(List<TravelMaterial>.of(hand), 0);
+
+        // 任意 3 張素材的合法 3 槽排列
+        var max3Satisfaction = -1;
+        final choices = [
+          [cat, ghost, delta],
+          [cat, ghost, kappo],
+          [cat, delta, kappo],
+          [ghost, delta, kappo],
+        ];
+
+        for (final c in choices) {
+          final p3List = [
+            [c[0], c[1], c[2]], [c[0], c[2], c[1]],
+            [c[1], c[0], c[2]], [c[1], c[2], c[0]],
+            [c[2], c[0], c[1]], [c[2], c[1], c[0]],
+          ];
+          for (final p in p3List) {
+            // [0, 1, 2]
+            final itinA = TimelineItinerary(slots: [p[0], p[1], p[2], null]);
+            final statsA = itinA.calculateStats(philosophy: phil, cameraMultiplier: 1.5);
+            final repA = ClientReviewEngine.evaluate(
+              client: ClientSpec.hypeInfluencer,
+              stats: statsA,
+              philosophy: phil,
+            );
+            if (repA.satisfaction > max3Satisfaction) {
+              max3Satisfaction = repA.satisfaction;
+            }
+
+            // [1, 2, 3]
+            final itinB = TimelineItinerary(slots: [null, p[0], p[1], p[2]]);
+            final statsB = itinB.calculateStats(philosophy: phil, cameraMultiplier: 1.5);
+            final repB = ClientReviewEngine.evaluate(
+              client: ClientSpec.hypeInfluencer,
+              stats: statsB,
+              philosophy: phil,
+            );
+            if (repB.satisfaction > max3Satisfaction) {
+              max3Satisfaction = repB.satisfaction;
+            }
+          }
+        }
+
+        expect(
+          max4Satisfaction,
+          greaterThan(max3Satisfaction),
+          reason: '流量網紅 4 槽最佳滿意度 ($max4Satisfaction) 必須高於任何合法 3 槽 ($max3Satisfaction)',
+        );
+      });
+
+      test('AC-A1-3.4 混入非契合素材時純度獎勵消失 (涵蓋 3/4 槽與中性/排斥)', () {
+        const phil = TravelPhilosophy.midnight; // preferred: #深夜, #小酌; repelled: #大眾名店, #打卡熱點
+        final aligned = createMaterial(id: 'a', name: '契合', tags: ['#深夜'], risk: 1);
+        final neutral = createMaterial(id: 'n', name: '中性', tags: ['#一般景點'], risk: 1);
+        final repelled = createMaterial(id: 'r', name: '排斥', tags: ['#大眾名店'], risk: 1);
+
+        // 3 槽純度測試
+        final pure3 = TimelineItinerary(slots: [aligned, aligned, aligned, null])
+            .calculateStats(philosophy: phil, cameraMultiplier: 1.0);
+        expect(pure3.purityActive, isTrue);
+
+        final neutral3 = TimelineItinerary(slots: [aligned, aligned, neutral, null])
+            .calculateStats(philosophy: phil, cameraMultiplier: 1.0);
+        expect(neutral3.purityActive, isFalse);
+
+        final repelled3 = TimelineItinerary(slots: [aligned, repelled, aligned, null])
+            .calculateStats(philosophy: phil, cameraMultiplier: 1.0);
+        expect(repelled3.purityActive, isFalse);
+
+        // 4 槽純度測試
+        final pure4 = TimelineItinerary(slots: [aligned, aligned, aligned, aligned])
+            .calculateStats(philosophy: phil, cameraMultiplier: 1.0);
+        expect(pure4.purityActive, isTrue);
+
+        final neutral4 = TimelineItinerary(slots: [aligned, aligned, neutral, aligned])
+            .calculateStats(philosophy: phil, cameraMultiplier: 1.0);
+        expect(neutral4.purityActive, isFalse);
+
+        final repelled4 = TimelineItinerary(slots: [aligned, aligned, aligned, repelled])
+            .calculateStats(philosophy: phil, cameraMultiplier: 1.0);
+        expect(repelled4.purityActive, isFalse);
+      });
+
+      test('AC-A1-3.6 高風險全卡表 (riskLevel >= 3) 3 槽最佳滿意度不得高於 4 槽最佳滿意度', () {
+        final highRisk = kyotoNightMaterials.where((m) => m.riskLevel >= 3).toList();
+        expect(highRisk.length, greaterThanOrEqualTo(4));
+
+        for (final phil in TravelPhilosophy.values) {
+          var best3 = -1;
+          var best4 = -1;
+
+          // 3 槽窮舉: 2 * P(m, 3)
+          for (var i = 0; i < highRisk.length; i++) {
+            for (var j = 0; j < highRisk.length; j++) {
+              if (j == i) continue;
+              for (var k = 0; k < highRisk.length; k++) {
+                if (k == i || k == j) continue;
+                final m0 = highRisk[i];
+                final m1 = highRisk[j];
+                final m2 = highRisk[k];
+
+                final itinA = TimelineItinerary(slots: [m0, m1, m2, null]);
+                final sA = itinA.calculateStats(philosophy: phil, cameraMultiplier: 1.5);
+                final repA = ClientReviewEngine.evaluate(
+                  client: ClientSpec.hypeInfluencer,
+                  stats: sA,
+                  philosophy: phil,
+                );
+                if (repA.satisfaction > best3) best3 = repA.satisfaction;
+
+                final itinB = TimelineItinerary(slots: [null, m0, m1, m2]);
+                final sB = itinB.calculateStats(philosophy: phil, cameraMultiplier: 1.5);
+                final repB = ClientReviewEngine.evaluate(
+                  client: ClientSpec.hypeInfluencer,
+                  stats: sB,
+                  philosophy: phil,
+                );
+                if (repB.satisfaction > best3) best3 = repB.satisfaction;
+              }
+            }
+          }
+
+          // 4 槽窮舉: P(m, 4)
+          for (var i = 0; i < highRisk.length; i++) {
+            for (var j = 0; j < highRisk.length; j++) {
+              if (j == i) continue;
+              for (var k = 0; k < highRisk.length; k++) {
+                if (k == i || k == j) continue;
+                for (var l = 0; l < highRisk.length; l++) {
+                  if (l == i || l == j || l == k) continue;
+                  final itin = TimelineItinerary(
+                    slots: [highRisk[i], highRisk[j], highRisk[k], highRisk[l]],
+                  );
+                  final s = itin.calculateStats(philosophy: phil, cameraMultiplier: 1.5);
+                  final rep = ClientReviewEngine.evaluate(
+                    client: ClientSpec.hypeInfluencer,
+                    stats: s,
+                    philosophy: phil,
+                  );
+                  if (rep.satisfaction > best4) best4 = rep.satisfaction;
+                }
+              }
+            }
+          }
+
+          expect(
+            best3,
+            lessThanOrEqualTo(best4),
+            reason: '${phil.displayName} 高風險 3 槽 ($best3) 不得高於 4 槽 ($best4)',
+          );
+        }
       });
     });
   });

@@ -373,8 +373,11 @@ class CuratorRunState {
   bool get isExhausted =>
       resources.isExhausted || phase == CuratorRunPhase.nightEditing;
 
-  /// 4 槽位是否已全部填滿可呈送審查
+  /// 是否已達可呈送審查標準 (連續 3 槽或填滿 4 槽)
   bool get canSubmit => itinerary.canSubmit;
+
+  /// 行程表提交問題 (轉交 domain 行程表判定)
+  ItinerarySubmissionIssue? get submissionIssue => itinerary.submissionIssue;
 
   /// 當前 4 槽位時間線之即時計算指標 (包含哲學加權與相機倍率，嚴格依據快照)
   ItineraryStats get currentStats => itinerary.calculateStats(

@@ -49,31 +49,70 @@ void main() {
   }
 
   group('即時數值看板與腰包抽屜 Widget 測試 (AC-UI-2.5 & U3)', () {
-    testWidgets('AC-UI-2.5: 4 槽位未填滿時 submit 按鈕禁用；填滿時轉為啟用', (tester) async {
+    testWidgets('AC-A1-3.8: submit 按鈕依槽數與連續性動態控制啟用狀態，並以可區分文案顯示禁用原因', (tester) async {
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
 
       var state = CuratorRunState.initial();
-      await tester.pumpWidget(createSubject(initialState: state));
 
-      // 未填滿時禁用
-      final disabledBtn = tester.widget<ElevatedButton>(
+      // 1. 空狀態 (< 3 槽): 禁用，顯示「至少安排 3 個時段」
+      await tester.pumpWidget(createSubject(initialState: state));
+      var submitBtn = tester.widget<ElevatedButton>(
         find.byKey(const Key('submit_itinerary_button')),
       );
-      expect(disabledBtn.onPressed, isNull);
-      expect(find.textContaining('請填滿 4 個時段'), findsOneWidget);
+      expect(submitBtn.onPressed, isNull);
+      expect(find.textContaining('至少安排 3 個時段'), findsOneWidget);
 
-      // 填滿 4 槽位
-      for (var i = 0; i < 4; i++) {
-        state = state.setTimelineSlot(i, sampleMaterials[i]);
-      }
+      // 2. 放入 2 槽 ([0, 1]): 仍 < 3 槽，禁用，顯示「至少安排 3 個時段」
+      state = state
+          .setTimelineSlot(0, sampleMaterials[0])
+          .setTimelineSlot(1, sampleMaterials[1]);
       await tester.pumpWidget(createSubject(initialState: state));
-
-      final enabledBtn = tester.widget<ElevatedButton>(
+      submitBtn = tester.widget<ElevatedButton>(
         find.byKey(const Key('submit_itinerary_button')),
       );
-      expect(enabledBtn.onPressed, isNotNull);
+      expect(submitBtn.onPressed, isNull);
+      expect(find.textContaining('至少安排 3 個時段'), findsOneWidget);
+
+      // 3. 3 槽中間缺口 ([0, 1, 3]): 禁用，顯示「素材需連續排列」
+      state = state.setTimelineSlot(3, sampleMaterials[3]);
+      await tester.pumpWidget(createSubject(initialState: state));
+      submitBtn = tester.widget<ElevatedButton>(
+        find.byKey(const Key('submit_itinerary_button')),
+      );
+      expect(submitBtn.onPressed, isNull);
+      expect(find.textContaining('素材需連續排列'), findsOneWidget);
+
+      // 4. 3 槽連續 ([0, 1, 2]): 啟用，顯示「呈送客戶審查」
+      state = state
+          .setTimelineSlot(3, null)
+          .setTimelineSlot(2, sampleMaterials[2]);
+      await tester.pumpWidget(createSubject(initialState: state));
+      submitBtn = tester.widget<ElevatedButton>(
+        find.byKey(const Key('submit_itinerary_button')),
+      );
+      expect(submitBtn.onPressed, isNotNull);
+      expect(find.textContaining('呈送客戶審查'), findsOneWidget);
+
+      // 5. 3 槽連續 ([1, 2, 3]): 啟用，顯示「呈送客戶審查」
+      state = state
+          .setTimelineSlot(0, null)
+          .setTimelineSlot(3, sampleMaterials[3]);
+      await tester.pumpWidget(createSubject(initialState: state));
+      submitBtn = tester.widget<ElevatedButton>(
+        find.byKey(const Key('submit_itinerary_button')),
+      );
+      expect(submitBtn.onPressed, isNotNull);
+      expect(find.textContaining('呈送客戶審查'), findsOneWidget);
+
+      // 6. 填滿 4 槽: 啟用，顯示「呈送客戶審查」
+      state = state.setTimelineSlot(0, sampleMaterials[0]);
+      await tester.pumpWidget(createSubject(initialState: state));
+      submitBtn = tester.widget<ElevatedButton>(
+        find.byKey(const Key('submit_itinerary_button')),
+      );
+      expect(submitBtn.onPressed, isNotNull);
       expect(find.textContaining('呈送客戶審查'), findsOneWidget);
     });
 

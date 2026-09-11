@@ -10,6 +10,7 @@ import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/persistence_repository.dart';
 import 'package:share_tour/domain/core_loop/models/poi_material_resolver.dart';
 import 'package:share_tour/domain/core_loop/models/review_outcome.dart';
+import 'package:share_tour/domain/core_loop/models/timeline_itinerary.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
 import 'package:share_tour/domain/core_loop/review/client_review_engine.dart';
@@ -176,7 +177,12 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
   /// 呈送審查 (產生確定性結算報告，推進至 clientReview)
   void submitReview(ClientType clientType) {
     if (!state.canSubmit) {
-      throw StateError('4 個槽位尚未全部填滿，無法呈送審查');
+      final issue = state.submissionIssue;
+      final message = switch (issue) {
+        ItinerarySubmissionIssue.nonContiguous => '素材需連續排列，無法呈送審查',
+        _ => '至少安排 3 個時段，無法呈送審查',
+      };
+      throw StateError(message);
     }
 
     final clientSpec = switch (clientType) {

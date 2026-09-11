@@ -74,5 +74,37 @@ void main() {
 
       expect(find.byType(ReviewSettlementModal), findsOneWidget);
     });
+
+    testWidgets('AC-A1-3.8: 從真按鈕提交兩種合法 3 槽 ([0,1,2] 與 [1,2,3])，成功進 clientReview 並開 ReviewSettlementModal', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      // 測試 [0, 1, 2]
+      final state012 = CuratorRunState.initial()
+          .setTimelineSlot(0, sampleMaterials[0])
+          .setTimelineSlot(1, sampleMaterials[1])
+          .setTimelineSlot(2, sampleMaterials[2]);
+
+      await tester.pumpWidget(createSubject(initialState: state012));
+      expect(find.byKey(const Key('submit_itinerary_button')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('submit_itinerary_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ReviewSettlementModal), findsOneWidget);
+
+      // 測試 [1, 2, 3]
+      final state123 = CuratorRunState.initial()
+          .setTimelineSlot(1, sampleMaterials[1])
+          .setTimelineSlot(2, sampleMaterials[2])
+          .setTimelineSlot(3, sampleMaterials[3]);
+
+      await tester.pumpWidget(createSubject(initialState: state123));
+      expect(find.byKey(const Key('submit_itinerary_button')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('submit_itinerary_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ReviewSettlementModal), findsOneWidget);
+    });
   });
 }

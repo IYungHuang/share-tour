@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_tour/domain/core_loop/models/timeline_itinerary.dart';
 import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 
@@ -21,6 +22,9 @@ class _LivePreviewHUDState extends ConsumerState<LivePreviewHUD> {
     final stats = ref.watch(itineraryStatsProvider);
     final canSubmit = ref.watch(
       curatorRunControllerProvider.select((s) => s.canSubmit),
+    );
+    final submissionIssue = ref.watch(
+      curatorRunControllerProvider.select((s) => s.submissionIssue),
     );
 
     final targetBudget = switch (_selectedClientView) {
@@ -161,7 +165,12 @@ class _LivePreviewHUDState extends ConsumerState<LivePreviewHUD> {
                 ),
                 onPressed: canSubmit ? (widget.onSubmit ?? () {}) : null,
                 child: Text(
-                  canSubmit ? '呈送客戶審查' : '請填滿 4 個時段',
+                  canSubmit
+                      ? '呈送客戶審查'
+                      : switch (submissionIssue) {
+                          ItinerarySubmissionIssue.nonContiguous => '素材需連續排列',
+                          _ => '至少安排 3 個時段',
+                        },
                   style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,

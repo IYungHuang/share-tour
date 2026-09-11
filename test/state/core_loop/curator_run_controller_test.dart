@@ -137,6 +137,76 @@ void main() {
       expect(state.canSubmit, isFalse);
     });
 
+    test('AC-A1-3.7: 允許 [0,1,2] 與 [1,2,3] 3 槽連續提交；拒絕 2 槽與非連續缺口且 phase/report 不變', () {
+      final controller = container.read(curatorRunControllerProvider.notifier);
+
+      // 1. [0, 1, 2] 3 槽連續配置：允許提交
+      controller.placeMaterialInSlot(0, testMaterials[0]);
+      controller.placeMaterialInSlot(1, testMaterials[1]);
+      controller.placeMaterialInSlot(2, testMaterials[2]);
+      var state = container.read(curatorRunControllerProvider);
+      expect(state.canSubmit, isTrue);
+
+      controller.submitReview(ClientType.budgetWorker);
+      state = container.read(curatorRunControllerProvider);
+      expect(state.phase, equals(CuratorRunPhase.clientReview));
+      expect(state.latestReport, isNotNull);
+
+      // 重置至 nightEditing 狀態以測試 [1, 2, 3]
+      controller.tweakItinerary();
+      controller.removeMaterialFromSlot(0);
+      controller.placeMaterialInSlot(3, testMaterials[3]);
+      state = container.read(curatorRunControllerProvider);
+      expect(state.itinerary.slots[0], isNull);
+      expect(state.canSubmit, isTrue);
+
+      controller.submitReview(ClientType.hypeInfluencer);
+      state = container.read(curatorRunControllerProvider);
+      expect(state.phase, equals(CuratorRunPhase.clientReview));
+
+      // 測試 2 槽配置 (拒絕提交，且 phase/report 不變)
+      controller.tweakItinerary();
+      controller.removeMaterialFromSlot(1);
+      // 現況：Slot 2, 3 有牌，共 2 槽
+      state = container.read(curatorRunControllerProvider);
+      expect(state.canSubmit, isFalse);
+      final reportBeforeRejection = state.latestReport;
+      final phaseBeforeRejection = state.phase;
+
+      expect(
+        () => controller.submitReview(ClientType.budgetWorker),
+        throwsA(isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('至少安排 3 個時段，無法呈送審查'),
+        )),
+      );
+      state = container.read(curatorRunControllerProvider);
+      expect(state.phase, equals(phaseBeforeRejection));
+      expect(state.latestReport, equals(reportBeforeRejection));
+
+      // 測試 3 槽中間留空配置 [0, 1, 3] (Slot 2 留空，拒絕提交且 phase/report 不變)
+      controller.placeMaterialInSlot(0, testMaterials[0]);
+      controller.placeMaterialInSlot(1, testMaterials[1]);
+      controller.removeMaterialFromSlot(2);
+      controller.placeMaterialInSlot(3, testMaterials[3]);
+      state = container.read(curatorRunControllerProvider);
+      expect(state.itinerary.slots[2], isNull);
+      expect(state.canSubmit, isFalse);
+
+      expect(
+        () => controller.submitReview(ClientType.budgetWorker),
+        throwsA(isA<StateError>().having(
+          (e) => e.message,
+          'message',
+          contains('素材需連續排列，無法呈送審查'),
+        )),
+      );
+      state = container.read(curatorRunControllerProvider);
+      expect(state.phase, equals(phaseBeforeRejection));
+      expect(state.latestReport, equals(reportBeforeRejection));
+    });
+
     test('AC-UI-1.5: swapSlots 支援任意兩槽位互換（含空槽），重新計算相鄰連鎖與疲勞', () {
       final controller = container.read(curatorRunControllerProvider.notifier);
       controller.placeMaterialInSlot(0, testMaterials[0]);

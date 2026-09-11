@@ -102,6 +102,15 @@ class ItineraryStats {
       'ItineraryStats(Cost: $totalCost, Hype: $totalHype, Theme: $finalTheme, Baseline: $themeBaseline, BeforeFatigue: $themeBeforeFatigue, Story: $totalStory, Spotlights: $spotlightCount, Purity: $purityActive, canSubmit: $canSubmit)';
 }
 
+/// 時間線行程表提交檢查異常原因
+enum ItinerarySubmissionIssue {
+  /// 槽位數量不足 3 個
+  tooFewSlots,
+
+  /// 槽位未連續排列 (存在中間缺口)
+  nonContiguous,
+}
+
 /// 4 槽位時間線行程表 (支援草稿狀態與即時預覽)
 class TimelineItinerary {
   TimelineItinerary({List<TravelMaterial?>? slots})
@@ -120,8 +129,39 @@ class TimelineItinerary {
   /// 槽位是否全數填滿
   bool get isComplete => slots.every((s) => s != null);
 
-  /// 是否可以提交審查 (必須恰好 4 個非空槽位)
-  bool get canSubmit => isComplete;
+  /// 行程表提交合法性檢查 (REQ-A1-05)
+  ///
+  /// 規則：
+  /// - < 3 槽: tooFewSlots
+  /// - 恰 3 槽: 必須連續 ([0, 1, 2] 或 [1, 2, 3])，否則 nonContiguous
+  /// - 4 槽: 合法 (null)
+  ItinerarySubmissionIssue? get submissionIssue {
+    final filledIndices = <int>[];
+    for (var i = 0; i < slots.length; i++) {
+      if (slots[i] != null) {
+        filledIndices.add(i);
+      }
+    }
+    if (filledIndices.length < 3) {
+      return ItinerarySubmissionIssue.tooFewSlots;
+    }
+    if (filledIndices.length == 3) {
+      final isContiguous = (filledIndices[0] == 0 &&
+              filledIndices[1] == 1 &&
+              filledIndices[2] == 2) ||
+          (filledIndices[0] == 1 &&
+              filledIndices[1] == 2 &&
+              filledIndices[2] == 3);
+      if (!isContiguous) {
+        return ItinerarySubmissionIssue.nonContiguous;
+      }
+      return null;
+    }
+    return null;
+  }
+
+  /// 是否可以提交審查 (連續 3 槽或填滿 4 槽)
+  bool get canSubmit => submissionIssue == null;
 
   /// 指定槽位設定素材
   TimelineItinerary setSlot(int index, TravelMaterial? material) {
