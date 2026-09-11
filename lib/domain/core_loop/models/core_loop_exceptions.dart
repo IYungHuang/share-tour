@@ -25,3 +25,13 @@ class PoiUnavailableException implements Exception {
   @override
   String toString() => 'PoiUnavailableException: 景點 $poiId 無可採集之素材';
 }
+
+/// 前置條件未滿足異常 (例如未選哲學即嘗試出發)
+class PreconditionFailedException implements Exception {
+  const PreconditionFailedException(this.message);
+  final String message;
+
+  @override
+  String toString() => 'PreconditionFailedException: $message';
+}
+

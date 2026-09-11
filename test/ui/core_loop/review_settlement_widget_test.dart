@@ -48,6 +48,8 @@ void main() {
   Widget createSubject({
     required CuratorRunState state,
     ReviewReport? initialReport,
+    VoidCallback? onOpenGearShop,
+    VoidCallback? onRestartRun,
   }) {
     return ProviderScope(
       key: UniqueKey(),
@@ -62,7 +64,11 @@ void main() {
       ],
       child: MaterialApp(
         home: Scaffold(
-          body: ReviewSettlementModal(initialReport: initialReport),
+          body: ReviewSettlementModal(
+            initialReport: initialReport,
+            onOpenGearShop: onOpenGearShop,
+            onRestartRun: onRestartRun,
+          ),
         ),
       ),
     );
@@ -222,6 +228,78 @@ void main() {
       expect(find.byKey(const Key('btn_restart_run')), findsOneWidget);
       await tester.tap(find.byKey(const Key('btn_restart_run')));
       await tester.pump();
+    });
+
+    testWidgets('AC-M4-4.3: Near Miss 呈現反事實導購提示', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      const report = ReviewReport(
+        clientType: 'hypeInfluencer',
+        outcome: ReviewOutcome.nearMiss,
+        satisfaction: 67,
+        earnedCoins: 450,
+        feedbackQuote: '差點就震撼了！',
+        subscores: {},
+      );
+
+      final state = CuratorRunState.initial().copyWith(
+        phase: CuratorRunPhase.clientReview,
+        latestReport: report,
+      );
+
+      await tester.pumpWidget(
+        createSubject(state: state, initialReport: report),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('near_miss_shop_tip')), findsOneWidget);
+      expect(find.textContaining('要是黃昏再震撼一點就好了'), findsOneWidget);
+    });
+
+    testWidgets('AC-M4-4.3: 結算完成展示前往裝備舖與再來一局雙出口', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      const report = ReviewReport(
+        clientType: 'budgetWorker',
+        outcome: ReviewOutcome.pass,
+        satisfaction: 80,
+        earnedCoins: 1000,
+        feedbackQuote: '合格！',
+        subscores: {},
+      );
+
+      final state = CuratorRunState.initial().copyWith(
+        phase: CuratorRunPhase.settled,
+        latestReport: report,
+      );
+
+      var gearShopOpened = false;
+      var restartRunCalled = false;
+
+      await tester.pumpWidget(
+        createSubject(
+          state: state,
+          initialReport: report,
+          onOpenGearShop: () => gearShopOpened = true,
+          onRestartRun: () => restartRunCalled = true,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('settlement_go_to_shop_button')), findsOneWidget);
+      expect(find.byKey(const Key('settlement_restart_run_button')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('settlement_go_to_shop_button')));
+      await tester.pumpAndSettle();
+      expect(gearShopOpened, isTrue);
+
+      await tester.tap(find.byKey(const Key('settlement_restart_run_button')));
+      await tester.pumpAndSettle();
+      expect(restartRunCalled, isTrue);
     });
   });
 }

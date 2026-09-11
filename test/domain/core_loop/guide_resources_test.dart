@@ -4,7 +4,7 @@ import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 
 void main() {
   group('阿導資源狀態機測試 (AC-ML-1)', () {
-    test('AC-ML-1.1 球鞋 Lv.1 初始 HP 為 100；球鞋 Lv.2 初始 HP 為 115', () {
+    test('AC-ML-1.1 球鞋 Lv.1 初始 HP 為 100；球鞋 Lv.2 初始 HP 為 125', () {
       final equipLv1 = EquipmentInventory.initial();
       final resLv1 = GuideResources.initial(
         startingBudget: 2000,
@@ -26,8 +26,8 @@ void main() {
         startingBudget: 8000,
         equipment: equipLv2,
       );
-      expect(resLv2.hp, 115);
-      expect(resLv2.maxHp, 115);
+      expect(resLv2.hp, 125);
+      expect(resLv2.maxHp, 125);
       expect(resLv2.budget, 8000);
     });
 

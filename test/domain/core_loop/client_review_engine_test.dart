@@ -88,7 +88,7 @@ void main() {
 
       expect(report.outcome, ReviewOutcome.perfect);
       expect(report.satisfaction, greaterThanOrEqualTo(90));
-      expect(report.earnedCoins, 2000 * 1.5 + (5 * 5)); // 3000 + 25 = 3025
+      expect(report.earnedCoins, 1500 * 1.5 + (5 * 5)); // 2250 + 25 = 2275
     });
 
     test('AC-ML-5.5 網紅無絕景打五折 Near Miss: Hype 200 無絕景打五折得 67 分', () {
@@ -111,8 +111,8 @@ void main() {
       expect(report.outcome, ReviewOutcome.nearMiss);
       expect(
         report.earnedCoins,
-        (2000 * 0.3).round() + (3 * 5),
-      ); // 600 + 15 = 615
+        (1500 * 0.3).round() + (3 * 5),
+      ); // 450 + 15 = 465
     });
 
     test('AC-ML-5.6 網紅疲勞脫妝退件 (Rejected): 疲勞扣 30 Hype，Theme 20 導致滿意度 46 分', () {

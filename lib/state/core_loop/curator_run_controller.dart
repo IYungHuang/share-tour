@@ -2,7 +2,11 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_tour/domain/core_loop/models/core_loop_exceptions.dart';
+import 'package:share_tour/domain/core_loop/models/curator_save_data.dart';
+import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
+import 'package:share_tour/domain/core_loop/models/persistence_repository.dart';
 import 'package:share_tour/domain/core_loop/models/poi_material_resolver.dart';
+import 'package:share_tour/domain/core_loop/models/review_outcome.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
 import 'package:share_tour/domain/core_loop/review/client_review_engine.dart';
@@ -10,18 +14,37 @@ import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 
-/// 策展單局控制器 (Riverpod StateNotifier，管理單局完整狀態機)
+/// 策展單局控制器 (Riverpod StateNotifier，管理單局完整狀態機與存檔持久化)
 class CuratorRunController extends StateNotifier<CuratorRunState> {
   CuratorRunController({
     required List<TravelMaterial> materialPool,
     PoiMaterialResolver? resolver,
     CuratorRunState? initialState,
+    PersistenceRepository? persistenceRepository,
+    CuratorSaveData? initialSaveData,
   }) : _materialPool = materialPool,
        _resolver = resolver,
-       super(initialState ?? CuratorRunState.initial());
+       _persistenceRepository = persistenceRepository,
+       _profileId = initialSaveData?.profileId,
+       _completedRuns = initialSaveData?.completedRuns ?? 0,
+       _lastMonotonicSeq = initialSaveData?.lastMonotonicSeq ?? 0,
+       super(
+         initialState ??
+             (initialSaveData != null
+                 ? CuratorRunState.createBriefing(
+                     equipment: initialSaveData.toEquipmentInventory(),
+                   )
+                 : CuratorRunState.createBriefing(
+                     equipment: EquipmentInventory.initial(),
+                   )),
+       );
 
   final List<TravelMaterial> _materialPool;
   PoiMaterialResolver? _resolver;
+  final PersistenceRepository? _persistenceRepository;
+  final String? _profileId;
+  int _completedRuns;
+  int _lastMonotonicSeq;
 
   /// 設定景點素材解析器
   void setResolver(PoiMaterialResolver resolver) {
@@ -63,12 +86,26 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     );
   }
 
-  /// 選定當局旅行哲學 (推進至 nightEditing)
+  /// 行前選定旅行哲學
   void selectPhilosophy(TravelPhilosophy philosophy) {
-    state = state.copyWith(
-      philosophy: philosophy,
-      phase: CuratorRunPhase.nightEditing,
-    );
+    state = state.selectPhilosophy(philosophy);
+  }
+
+  /// 行前靈感重擲刷新候選卡 (首局零幣免費，其餘扣除 100 幣並寫入存檔)
+  void rerollPhilosophies({Random? random}) {
+    state = state.rerollPhilosophies(random: random);
+    _persistSave();
+  }
+
+  /// 確認出發踩線 (狀態轉至 fieldTrip，原子鎖定裝備快照)
+  void departToFieldTrip() {
+    state = state.departToFieldTrip();
+  }
+
+  /// 黑市升級局外裝備 (即時扣幣並寫入存檔)
+  void upgradeEquipment(EquipmentType type) {
+    state = state.upgradeEquipment(type);
+    _persistSave();
   }
 
   /// 抽取測試樣本素材 (支援 Random 種子注入，遵循 CC-3 決定性重播)
@@ -157,13 +194,15 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     );
   }
 
-  /// 接受審查結果 (累積佣金，推進至 settled)
-  void acceptReview() {
-    final report = state.latestReport;
+  /// 接受審查結果 (累積佣金，推進至 settled，自動持久化)
+  void acceptReview({ReviewReport? acceptedReport}) {
+    final report = acceptedReport ?? state.latestReport;
     if (report == null) {
       throw StateError('尚無結算報告可供接受');
     }
     state = state.completeReview(report);
+    _completedRuns++;
+    _persistSave();
   }
 
   /// 返回微調行程 (在 Near Miss / Rejected 下退回 nightEditing，保留槽位與腰包)
@@ -171,12 +210,45 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     state = state.tweakItinerary();
   }
 
-  /// 重新啟動新單局 (保留裝備與累積金幣，清空槽位腰包，生成新 UUID)
-  void restartRun({ClientSpec? nextClient, TravelPhilosophy? nextPhilosophy}) {
-    state = CuratorRunState.initial(
-      client: nextClient ?? state.client,
-      philosophy: nextPhilosophy ?? state.philosophy,
+  /// 開啟全新行前準備局
+  void startNewBriefing({ClientSpec? client, Random? random}) {
+    state = CuratorRunState.createBriefing(
       equipment: state.equipment,
+      client: client,
+      random: random,
     );
+  }
+
+  /// 重新啟動新單局 (進入行前準備 philosophizing 階段，保留裝備與金幣)
+  void restartRun({
+    ClientSpec? nextClient,
+    TravelPhilosophy? nextPhilosophy,
+    Random? random,
+  }) {
+    final briefing = CuratorRunState.createBriefing(
+      equipment: state.equipment,
+      client: nextClient ?? state.client,
+      random: random,
+    );
+    state = nextPhilosophy != null
+        ? briefing.copyWith(philosophy: nextPhilosophy)
+        : briefing;
+  }
+
+  void _persistSave() {
+    final repo = _persistenceRepository;
+    if (repo != null) {
+      final saveData = CuratorSaveData(
+        profileId: _profileId ?? state.runId,
+        coins: state.equipment.coins,
+        sneakersLevel: state.equipment.sneakers.level,
+        cameraLevel: state.equipment.camera.level,
+        waistBagLevel: state.equipment.waistBag.level,
+        completedRuns: _completedRuns,
+        lastMonotonicSeq: ++_lastMonotonicSeq,
+        updatedAtUtc: DateTime.now().toUtc(),
+      );
+      repo.save(saveData);
+    }
   }
 }

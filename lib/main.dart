@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'data/core_loop/kyoto_night_catalog.dart';
+import 'data/core_loop/local_persistence_repository.dart';
 import 'data/core_loop/taiwan_attraction_materials.dart';
+import 'domain/core_loop/run/curator_run_phase.dart';
 import 'domain/location/camera/camera_follow.dart';
 import 'domain/location/models/district_attraction.dart';
 import 'domain/location/models/geo_fix.dart';
@@ -11,17 +13,25 @@ import 'domain/location/models/location_status.dart';
 import 'game/map_module/manifests/taiwan_map_manifest.dart';
 import 'game/universal_overworld_game.dart';
 import 'state/core_loop/curator_run_providers.dart';
+import 'state/core_loop/persistence_providers.dart';
 import 'state/location/location_providers.dart';
+import 'ui/core_loop/briefing/curator_briefing_modal.dart';
 import 'ui/core_loop/curator_studio_modal.dart';
 import 'ui/core_loop/field/attraction_detail_card.dart';
 import 'ui/core_loop/field/curator_field_hud.dart';
 import 'ui/core_loop/field/gathering_floating_feedback_overlay.dart';
+import 'ui/core_loop/gear_shop/gear_shop_modal.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // 分類遮罩的解碼是非同步的（讀圖檔），故圖資載入本身也非同步——
-  // 在此等待完成，之後 containsGeo 是常數時間的陣列查詢。
-  final manifest = await TaiwanMapManifest.load();
+  final repo = LocalPersistenceRepository();
+
+  // 分類遮罩解碼與本機存檔非同步並行預載水合 (Task M7, 零 FOUC)
+  final (manifest, initialSave) = await (
+    TaiwanMapManifest.load(),
+    repo.loadSave(),
+  ).wait;
+
   runApp(
     ProviderScope(
       // 圖資與城市 DLC 在此注入。通用引擎與狀態層都不知道自己跑的是哪座城市。
@@ -31,6 +41,8 @@ void main() async {
         poiMaterialResolverProvider.overrideWithValue(
           const TaiwanPoiMaterialResolver(),
         ),
+        persistenceRepositoryProvider.overrideWithValue(repo),
+        initialSaveDataProvider.overrideWithValue(initialSave),
       ],
       child: const MaterialApp(
         debugShowCheckedModeBanner: false,
@@ -57,33 +69,85 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
       ValueNotifier((null, 0));
   final GatheringFloatingFeedbackController _gatheringFeedbackController =
       GatheringFloatingFeedbackController();
+
+  // EnginePauseCoordinator: 引用計數暫停協調器 (防範多層彈窗競爭與洩漏, AC-M4-4.4)
+  int _enginePauseRefCount = 0;
   bool _isStudioModalOpen = false;
+  bool _isBriefingModalOpen = false;
+  bool _isGearShopModalOpen = false;
+
+  void _pauseEngine() {
+    _enginePauseRefCount++;
+    if (_enginePauseRefCount == 1 && _game.isAttached && _game.isLoaded) {
+      _game.pauseEngine();
+    }
+  }
+
+  void _resumeEngine() {
+    _enginePauseRefCount = (_enginePauseRefCount - 1).clamp(0, 99999);
+    if (_enginePauseRefCount == 0 && mounted && _game.isAttached && _game.isLoaded) {
+      _game.resumeEngine();
+    }
+  }
+
+  Future<T?> _showModalSafely<T>(WidgetBuilder builder) async {
+    _pauseEngine();
+    try {
+      return await showModalBottomSheet<T>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: builder,
+      );
+    } finally {
+      _resumeEngine();
+    }
+  }
 
   Future<void> _openCuratorStudioSafely() async {
     if (_isStudioModalOpen || !mounted) return;
     _isStudioModalOpen = true;
     _selectedAttraction.value = null;
-    _game.attractionLayer.selectAttraction(null);
-    _game.pauseEngine();
+    if (_game.isLoaded) {
+      _game.attractionLayer.selectAttraction(null);
+    }
     try {
-      await showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        useSafeArea: true,
-        backgroundColor: Colors.transparent,
-        builder: (ctx) => const CuratorStudioModal(),
-      );
+      await _showModalSafely((ctx) => const CuratorStudioModal());
     } finally {
       _isStudioModalOpen = false;
-      if (mounted && _game.isAttached) {
-        _game.resumeEngine();
-      }
+    }
+  }
+
+  Future<void> _openBriefingModalSafely() async {
+    if (_isBriefingModalOpen || !mounted) return;
+    _isBriefingModalOpen = true;
+    _selectedAttraction.value = null;
+    if (_game.isLoaded) {
+      _game.attractionLayer.selectAttraction(null);
+    }
+    try {
+      await _showModalSafely(
+        (ctx) => CuratorBriefingModal(
+          onOpenGearShop: () => _openGearShopSafely(),
+        ),
+      );
+    } finally {
+      _isBriefingModalOpen = false;
+    }
+  }
+
+  Future<void> _openGearShopSafely() async {
+    if (_isGearShopModalOpen || !mounted) return;
+    _isGearShopModalOpen = true;
+    try {
+      await _showModalSafely((ctx) => const GearShopModal());
+    } finally {
+      _isGearShopModalOpen = false;
     }
   }
 
   /// 前後景事件只有 widget 樹拿得到，所以由這裡轉發給定位層。
-  /// 取消訂閱與否的判斷不在這裡——那是 LocationSubscriptionManager 的職責，
-  /// 每個接線點各自計時的話，寬限期會有好幾份實作。
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final notifier = ref.read(locationControllerProvider.notifier);
@@ -124,17 +188,29 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
       onAttractionSelected: (a) => _selectedAttraction.value = a,
       onDistrictRevealed: (d, count) => _focusedDistrict.value = (d, count),
     );
+
+    // 啟動開場自動引導：若處於 philosophizing 階段則主動彈出行前委託底抽屜
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final state = ref.read(curatorRunControllerProvider);
+      if (state.phase == CuratorRunPhase.philosophizing) {
+        _openBriefingModalSafely();
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // 體力透支自動返程 (AC-M3-6.2)
+    // 狀態機事件監聽：行前準備與體力透支自動彈窗
     ref.listen(curatorRunControllerProvider, (previous, next) {
-      if (next.isExhausted && (previous == null || !previous.isExhausted)) {
+      if (next.phase == CuratorRunPhase.philosophizing &&
+          previous?.phase != CuratorRunPhase.philosophizing) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            _openCuratorStudioSafely();
-          }
+          if (mounted) _openBriefingModalSafely();
+        });
+      } else if (next.isExhausted && (previous == null || !previous.isExhausted)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _openCuratorStudioSafely();
         });
       }
     });
@@ -180,6 +256,7 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
           'ModeToggle': (context, game) => _ModeToggle(
             game: game,
             onOpenStudio: _openCuratorStudioSafely,
+            onOpenGearShop: _openGearShopSafely,
           ),
         },
         initialActiveOverlays: const [
@@ -404,9 +481,11 @@ class _ModeToggle extends ConsumerWidget {
   const _ModeToggle({
     required this.game,
     required this.onOpenStudio,
+    this.onOpenGearShop,
   });
   final UniversalOverworldGame game;
   final VoidCallback onOpenStudio;
+  final VoidCallback? onOpenGearShop;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -424,6 +503,41 @@ class _ModeToggle extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              // 黑市裝備入口按鈕
+              if (onOpenGearShop != null)
+                GestureDetector(
+                  key: const Key('gear_shop_launcher_button'),
+                  onTap: onOpenGearShop,
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1E293B),
+                      border: Border.all(color: Colors.amber, width: 3),
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black, offset: Offset(3, 3)),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.storefront, size: 16, color: Colors.amber),
+                        SizedBox(width: 4),
+                        Text(
+                          '🛒 黑市裝備',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                            color: Colors.amber,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               // 策展工作台入口按鈕 (開啟時掛起 Flame 引擎以防穿透與降溫省電)
               GestureDetector(
                 key: const Key('curator_studio_launcher_button'),

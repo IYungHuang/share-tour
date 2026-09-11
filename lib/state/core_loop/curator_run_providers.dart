@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_tour/domain/core_loop/models/persistence_repository.dart';
 import 'package:share_tour/domain/core_loop/models/poi_material_resolver.dart';
 import 'package:share_tour/domain/core_loop/models/timeline_itinerary.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
@@ -8,6 +9,7 @@ import 'package:share_tour/domain/location/models/district_attraction.dart';
 import 'package:share_tour/state/location/location_providers.dart';
 
 import 'curator_run_controller.dart';
+import 'persistence_providers.dart';
 
 /// 抽象素材池 DLC 注入點 (守護 Clean Architecture，由 main.dart 或測試注入具體圖資素材)
 final curatorMaterialPoolProvider = Provider<List<TravelMaterial>>((ref) {
@@ -29,9 +31,19 @@ final curatorRunControllerProvider =
       } catch (_) {
         // 在未注入 resolver 的環境中容錯降級
       }
+      PersistenceRepository? persistenceRepo;
+      try {
+        persistenceRepo = ref.watch(persistenceRepositoryProvider);
+      } catch (_) {
+        // 在未注入 persistence 的測試環境中容錯降級
+      }
+      final initialSave = ref.watch(initialSaveDataProvider);
+
       return CuratorRunController(
         materialPool: pool,
         resolver: resolver,
+        persistenceRepository: persistenceRepo,
+        initialSaveData: initialSave,
       );
     });
 
@@ -41,11 +53,10 @@ final itineraryStatsProvider = Provider<ItineraryStats>((ref) {
   return state.currentStats;
 });
 
-/// 單向探索許可 Provider (控制 DPad / GPS 小人移動)
+/// 單向探索許可 Provider (控制 DPad / GPS 小人移動；僅在 fieldTrip 踩線且未透支時允許)
 final canExploreProvider = Provider<bool>((ref) {
   final state = ref.watch(curatorRunControllerProvider);
-  return (state.phase == CuratorRunPhase.fieldTrip ||
-          state.phase == CuratorRunPhase.philosophizing) &&
+  return state.phase == CuratorRunPhase.fieldTrip &&
       !state.resources.isExhausted;
 });
 

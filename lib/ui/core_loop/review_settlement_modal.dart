@@ -1,16 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/review_outcome.dart';
 import 'package:share_tour/domain/core_loop/review/client_review_engine.dart';
 import 'package:share_tour/domain/core_loop/review/client_spec.dart';
+import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
+
+import 'gear_shop/gear_shop_modal.dart';
 
 /// 雙客戶動態審查跳分與 Near Miss 結算彈窗 (ReviewSettlementModal)
 class ReviewSettlementModal extends ConsumerStatefulWidget {
-  const ReviewSettlementModal({super.key, this.initialReport, this.onClose});
+  const ReviewSettlementModal({
+    super.key,
+    this.initialReport,
+    this.onClose,
+    this.onOpenGearShop,
+    this.onRestartRun,
+  });
 
   final ReviewReport? initialReport;
   final VoidCallback? onClose;
+  final VoidCallback? onOpenGearShop;
+  final VoidCallback? onRestartRun;
 
   @override
   ConsumerState<ReviewSettlementModal> createState() =>
@@ -24,13 +36,18 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
   @override
   void initState() {
     super.initState();
+    final state = ref.read(curatorRunControllerProvider);
     final initialType = widget.initialReport != null
         ? (widget.initialReport!.clientType == 'hypeInfluencer'
               ? ClientType.hypeInfluencer
               : ClientType.budgetWorker)
-        : ClientType.budgetWorker;
+        : (state.latestReport != null
+              ? (state.latestReport!.clientType == 'hypeInfluencer'
+                    ? ClientType.hypeInfluencer
+                    : ClientType.budgetWorker)
+              : state.client.type);
     _currentClientType = initialType;
-    _report = widget.initialReport;
+    _report = widget.initialReport ?? state.latestReport;
   }
 
   void _switchClient(ClientType type) {
@@ -67,6 +84,8 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
   Widget build(BuildContext context) {
     final report = _resolveReport();
     final outcome = report.outcome;
+    final runState = ref.watch(curatorRunControllerProvider);
+    final isSettled = runState.phase == CuratorRunPhase.settled;
     final isNearMissOrRejected =
         outcome == ReviewOutcome.nearMiss || outcome == ReviewOutcome.rejected;
 
@@ -99,13 +118,13 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: Color(0xFF0F172A),
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 12),
 
-              // 客戶切換頁籤
+              // 雙客戶切換頁籤
               Row(
                 children: [
                   Expanded(
@@ -127,63 +146,195 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
               ),
               const SizedBox(height: 16),
 
-              // 分數與大印章看板
+              // 滿意度大看板與結果印章
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  border: Border.all(color: Colors.black, width: 2),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.black, width: 1.5),
                   boxShadow: const [
-                    BoxShadow(color: Colors.black12, offset: Offset(2, 2)),
+                    BoxShadow(
+                      color: Colors.black12,
+                      offset: Offset(2, 2),
+                      blurRadius: 0,
+                    ),
                   ],
                 ),
                 child: Column(
                   children: [
-                    // 大印章
-                    _buildStamp(outcome),
-                    const SizedBox(height: 10),
-
-                    // 滿意度大字
-                    Text(
-                      '${report.satisfaction} 分',
-                      style: TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: _scoreColor(outcome),
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Text(
+                                '滿意度評分',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${report.satisfaction}',
+                                style: TextStyle(
+                                  fontSize: 38,
+                                  fontWeight: FontWeight.bold,
+                                  color: _scoreColor(outcome),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: _buildStamp(outcome),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 6),
+                    const Divider(height: 24, thickness: 1),
 
-                    // 客戶吐槽/金句
+                    // 客戶吐槽微文案
                     Container(
-                      padding: const EdgeInsets.all(8),
-                      color: const Color(0xFFF8FAFC),
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
                       child: Text(
                         '「${report.feedbackQuote}」',
                         style: const TextStyle(
                           fontSize: 12,
                           fontStyle: FontStyle.italic,
-                          color: Colors.black87,
+                          color: Color(0xFF334155),
+                          height: 1.4,
                         ),
-                        textAlign: TextAlign.center,
                       ),
                     ),
-                    const Divider(height: 20),
 
-                    // 子分數細項
+                    // Near Miss 反事實導購提示 (REQ-M4-04)
+                    if (outcome == ReviewOutcome.nearMiss) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        key: const Key('near_miss_shop_tip'),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF7ED),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFFDBA74), width: 1),
+                        ),
+                        child: Row(
+                          children: [
+                            const Text('💡', style: TextStyle(fontSize: 14)),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                _buildNearMissTip(
+                                  clientType: report.clientType,
+                                  equipment: runState.equipment,
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF9A3412),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 12),
+                    // 細部評分擊穿
                     _buildSubscores(report),
                   ],
                 ),
               ),
               const SizedBox(height: 16),
 
-              // 操作按鈕 (雙軌：Near Miss 微調 vs 放棄重來)
-              if (isNearMissOrRejected) ...[
+              // 底部動作按鈕
+              if (isSettled) ...[
+                // 結算完成雙出口 (AC-M4-4.3)
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        key: const Key('settlement_go_to_shop_button'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFE65100),
+                          side: const BorderSide(color: Color(0xFFE65100), width: 1.5),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                        onPressed: () {
+                          if (widget.onOpenGearShop != null) {
+                            widget.onOpenGearShop!();
+                          } else {
+                            showModalBottomSheet(
+                              context: context,
+                              backgroundColor: Colors.transparent,
+                              isScrollControlled: true,
+                              builder: (_) => const GearShopModal(),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.shopping_bag, size: 18),
+                        label: const Text(
+                          '🛒 前往黑市',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        key: const Key('settlement_restart_run_button'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1E293B),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                        onPressed: () {
+                          ref
+                              .read(curatorRunControllerProvider.notifier)
+                              .restartRun();
+                          if (widget.onRestartRun != null) {
+                            widget.onRestartRun!();
+                          } else {
+                            Navigator.of(context).popUntil((r) => r.isFirst);
+                          }
+                        },
+                        icon: const Icon(Icons.replay, size: 18),
+                        label: const Text(
+                          '🔄 再來一局',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else if (isNearMissOrRejected) ...[
                 ElevatedButton(
                   key: const Key('btn_tweak_itinerary'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF59E0B),
-                    foregroundColor: Colors.black,
+                    backgroundColor: const Color(0xFFEA580C),
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(4),
@@ -217,10 +368,10 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
                     ref
                         .read(curatorRunControllerProvider.notifier)
                         .restartRun();
-                    if (widget.onClose != null) {
-                      widget.onClose!();
+                    if (widget.onRestartRun != null) {
+                      widget.onRestartRun!();
                     } else {
-                      Navigator.of(context).maybePop();
+                      Navigator.of(context).popUntil((r) => r.isFirst);
                     }
                   },
                   child: const Text('🔄 放棄並再來一局'),
@@ -240,11 +391,9 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
                   onPressed: () {
                     ref
                         .read(curatorRunControllerProvider.notifier)
-                        .acceptReview();
+                        .acceptReview(acceptedReport: _resolveReport());
                     if (widget.onClose != null) {
                       widget.onClose!();
-                    } else {
-                      Navigator.of(context).maybePop();
                     }
                   },
                   child: Text(
@@ -406,5 +555,20 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
         ],
       ),
     );
+  }
+
+  String _buildNearMissTip({
+    required String clientType,
+    required EquipmentInventory equipment,
+  }) {
+    if (clientType == 'hypeInfluencer') {
+      final camLv = equipment.camera.level;
+      final nextLv = camLv < 3 ? camLv + 1 : 3;
+      return '要是黃昏再震撼一點就好了... 📸 相機目前 Lv.$camLv，升至 Lv.$nextLv 可提升高潮加成！';
+    } else {
+      final shoeLv = equipment.sneakers.level;
+      final nextLv = shoeLv < 3 ? shoeLv + 1 : 3;
+      return '要是體力能再多走兩步就好了... 👟 球鞋目前 Lv.$shoeLv，升至 Lv.$nextLv 可提升 HP 上限！';
+    }
   }
 }

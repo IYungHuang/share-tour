@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 
 import 'components/live_preview_hud.dart';
@@ -111,10 +110,11 @@ class CuratorStudioModal extends ConsumerWidget {
   }
 
   void _handleSubmit(BuildContext context, WidgetRef ref) {
-    // 預設以社畜視角呈送
+    final runState = ref.read(curatorRunControllerProvider);
+    // 依本局開局揭曉之客戶進行呈送
     ref
         .read(curatorRunControllerProvider.notifier)
-        .submitReview(ClientType.budgetWorker);
+        .submitReview(runState.client.type);
 
     showModalBottomSheet(
       context: context,

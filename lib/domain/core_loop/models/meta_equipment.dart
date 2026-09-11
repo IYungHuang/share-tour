@@ -34,12 +34,12 @@ class EquipmentItem {
   final EquipmentType type;
   final int level;
 
-  /// 球鞋數值映射：HP 上限 (Lv.1: 100, Lv.2: 115, Lv.3: 130)
+  /// 球鞋數值映射：HP 上限 (Lv.1: 100, Lv.2: 125, Lv.3: 155)
   int get maxHp {
     return switch (level) {
       1 => 100,
-      2 => 115,
-      _ => 130,
+      2 => 125,
+      _ => 155,
     };
   }
 
@@ -61,14 +61,21 @@ class EquipmentItem {
     };
   }
 
-  /// 升級下一級所需花費 (Lv.1 -> Lv.2: 500, Lv.2 -> Lv.3: 1500)
+  /// 升級下一級所需花費 (Lv.1 -> Lv.2: 300, Lv.2 -> Lv.3: 1200)
   int? get nextUpgradeCost {
     return switch (level) {
-      1 => 500,
-      2 => 1500,
+      1 => 300,
+      2 => 1200,
       _ => null,
     };
   }
+
+  /// 是否已達最高等級 (Lv.3)
+  bool get isMaxLevel => level >= 3;
+
+  /// 是否有足夠金幣進行下一級升級
+  bool canAffordUpgrade(int currentCoins) =>
+      nextUpgradeCost != null && currentCoins >= nextUpgradeCost!;
 
   EquipmentItem copyWith({int? level}) =>
       EquipmentItem(type: type, level: level ?? this.level);

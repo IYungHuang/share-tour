@@ -43,7 +43,7 @@ class ClientSpec {
     targetBudget: 8000,
     minTheme: 50,
     targetHype: 150,
-    baseCommission: 2000,
+    baseCommission: 1500,
   );
 
   @override

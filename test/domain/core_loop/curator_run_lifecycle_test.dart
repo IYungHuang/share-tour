@@ -53,7 +53,7 @@ void main() {
           ),
         );
 
-        expect(runState.resources.hp, 65); // 115 - 50 = 65
+        expect(runState.resources.hp, 75); // 125 - 50 = 75
         expect(runState.resources.budget, 800); // 2000 - 1200 = 800
         expect(runState.inventory.count, 1);
         expect(runState.itinerary.slots[0], isNotNull);
@@ -72,8 +72,8 @@ void main() {
         expect(secondRun.client.type, ClientType.hypeInfluencer);
         expect(secondRun.philosophy, TravelPhilosophy.slow);
         expect(secondRun.phase, CuratorRunPhase.fieldTrip);
-        expect(secondRun.resources.hp, 115); // 依 Lv.2 球鞋回滿 115
-        expect(secondRun.resources.maxHp, 115);
+        expect(secondRun.resources.hp, 125); // 依 Lv.2 球鞋回滿 125
+        expect(secondRun.resources.maxHp, 125);
         expect(secondRun.resources.budget, 8000); // 網紅起始預算 8000
         expect(secondRun.resources.theme, 50); // Theme 回復 50
         expect(secondRun.resources.hype, 0); // Hype 回復 0
@@ -109,10 +109,10 @@ void main() {
       expect(runState.equipment.coins, 1620); // 100 + 1520
       expect(runState.phase, CuratorRunPhase.settled);
 
-      // 在局外用 500 幣升級相機至 Lv.2
+      // 在局外用 300 幣升級相機至 Lv.2
       final upgradedState = runState.upgradeEquipment(EquipmentType.camera);
       expect(upgradedState.equipment.camera.level, 2);
-      expect(upgradedState.equipment.coins, 1120);
+      expect(upgradedState.equipment.coins, 1320); // 1620 - 300 = 1320
 
       // 觸發「再來一局」
       final nextRun = upgradedState.restartRun(
@@ -121,7 +121,7 @@ void main() {
       );
 
       // 驗證資產與裝備完整繼承
-      expect(nextRun.equipment.coins, 1120);
+      expect(nextRun.equipment.coins, 1320);
       expect(nextRun.equipment.camera.level, 2);
     });
   });

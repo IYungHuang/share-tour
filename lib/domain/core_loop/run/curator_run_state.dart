@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:uuid/uuid.dart';
 
 import '../models/core_loop_exceptions.dart';
@@ -13,7 +15,7 @@ import 'curator_run_phase.dart';
 
 /// 單局旅行策展人完整狀態實體 (不可變領域狀態機)
 class CuratorRunState {
-  const CuratorRunState({
+  CuratorRunState({
     required this.runId,
     required this.phase,
     required this.client,
@@ -22,9 +24,13 @@ class CuratorRunState {
     required this.inventory,
     required this.itinerary,
     required this.equipment,
+    EquipmentInventory? equipmentSnapshot,
+    this.philosophyChoices = const [],
+    this.selectedPhilosophy,
+    this.rerollsUsed = 0,
     this.gatheredPoiIds = const {},
     this.latestReport,
-  });
+  }) : equipmentSnapshot = equipmentSnapshot ?? equipment;
 
   /// 建立全新單局初始狀態 (預設 philosophizing 階段，UUID 遵循 CC-1)
   factory CuratorRunState.initial({
@@ -62,6 +68,43 @@ class CuratorRunState {
       inventory: inventory,
       itinerary: itinerary,
       equipment: effectiveEquipment,
+      equipmentSnapshot: effectiveEquipment,
+      gatheredPoiIds: const {},
+    );
+  }
+
+  /// 建立行前準備階段新局 (隨機客戶、三選一哲學候選卡、CC-1)
+  factory CuratorRunState.createBriefing({
+    required EquipmentInventory equipment,
+    ClientSpec? client,
+    String? runId,
+    Random? random,
+  }) {
+    final rng = random ?? Random();
+    final effectiveClient = client ??
+        (rng.nextBool() ? ClientSpec.budgetWorker : ClientSpec.hypeInfluencer);
+    final effectiveId = runId ?? const Uuid().v4();
+    final choices = _pickDistinctPhilosophies(rng, 3);
+    final resources = GuideResources.initial(
+      startingBudget: effectiveClient.targetBudget,
+      equipment: equipment,
+    );
+    final inventory = MaterialInventory(capacity: equipment.waistBag.capacity);
+    final itinerary = TimelineItinerary.empty();
+
+    return CuratorRunState(
+      runId: effectiveId,
+      phase: CuratorRunPhase.philosophizing,
+      client: effectiveClient,
+      philosophy: choices.first,
+      resources: resources,
+      inventory: inventory,
+      itinerary: itinerary,
+      equipment: equipment,
+      equipmentSnapshot: equipment,
+      philosophyChoices: choices,
+      selectedPhilosophy: null,
+      rerollsUsed: 0,
       gatheredPoiIds: const {},
     );
   }
@@ -95,6 +138,7 @@ class CuratorRunState {
       inventory: inventory,
       itinerary: itinerary,
       equipment: equipment,
+      equipmentSnapshot: equipment,
       gatheredPoiIds: const {},
     );
   }
@@ -111,6 +155,15 @@ class CuratorRunState {
   /// 當局選定之旅行哲學
   final TravelPhilosophy philosophy;
 
+  /// 行前準備之 3 張不重複候選哲學卡
+  final List<TravelPhilosophy> philosophyChoices;
+
+  /// 行前選定之哲學卡 (出發前為 null，出發時鎖定為 philosophy)
+  final TravelPhilosophy? selectedPhilosophy;
+
+  /// 當局行前已重擲次數
+  final int rerollsUsed;
+
   /// 阿導 3+1 核心資源狀態機 (HP, Budget, Theme, Hype)
   final GuideResources resources;
 
@@ -123,11 +176,74 @@ class CuratorRunState {
   /// 局外裝備庫存 (球鞋、相機、腰包與佣金幣)
   final EquipmentInventory equipment;
 
+  /// 當局出發時鎖定之裝備快照 (防作弊：當局踩線與計算一律使用快照)
+  final EquipmentInventory equipmentSnapshot;
+
   /// 單局內已踩線採集之 POI ID 集合 (防止原地無腦洗牌)
   final Set<String> gatheredPoiIds;
 
   /// 最近一次客戶審查結算報告
   final ReviewReport? latestReport;
+
+  /// 是否具備出發踩線資格 (已選定哲學)
+  bool get canDepart => selectedPhilosophy != null;
+
+  /// 下一次靈感重擲費用 (首局且局外零幣時免費 0 幣，其餘皆扣 100 幣)
+  int get nextRerollCost =>
+      (rerollsUsed == 0 && equipment.coins == 0) ? 0 : 100;
+
+  /// 是否有足夠金幣重擲哲學
+  bool get canReroll =>
+      nextRerollCost == 0 || equipment.coins >= nextRerollCost;
+
+  /// 行前單選旅行哲學
+  CuratorRunState selectPhilosophy(TravelPhilosophy choice) {
+    return copyWith(selectedPhilosophy: choice);
+  }
+
+  /// 靈感重擲刷新候選卡 (首局零幣免費，其餘扣 100 幣，不足拋出異常)
+  CuratorRunState rerollPhilosophies({Random? random}) {
+    final cost = nextRerollCost;
+    if (!canReroll) {
+      throw InsufficientCoinsException(cost, equipment.coins);
+    }
+    final rng = random ?? Random();
+    final newChoices = _pickDistinctPhilosophies(rng, 3);
+    final nextEquipment = cost > 0
+        ? equipment.copyWith(coins: equipment.coins - cost)
+        : equipment;
+
+    return copyWith(
+      equipment: nextEquipment,
+      philosophyChoices: newChoices,
+      selectedPhilosophy: null,
+      rerollsUsed: rerollsUsed + 1,
+    );
+  }
+
+  /// 確認出發踩線 (狀態轉至 fieldTrip，原子鎖定 equipmentSnapshot，HP與腰包上限依快照初始化)
+  CuratorRunState departToFieldTrip() {
+    if (selectedPhilosophy == null) {
+      throw const PreconditionFailedException('必須先選定一項旅行哲學方可出發踩線');
+    }
+    final chosenPhilosophy = selectedPhilosophy!;
+    final snapshot = equipment;
+    final nextResources = GuideResources.initial(
+      startingBudget: client.targetBudget,
+      equipment: snapshot,
+    );
+    final nextInventory =
+        MaterialInventory(capacity: snapshot.waistBag.capacity);
+
+    return copyWith(
+      phase: CuratorRunPhase.fieldTrip,
+      philosophy: chosenPhilosophy,
+      equipmentSnapshot: snapshot,
+      resources: nextResources,
+      inventory: nextInventory,
+      gatheredPoiIds: const {},
+    );
+  }
 
   /// 踩線取材原子轉移 (REQ-M3-03, AC-M3-3)
   CuratorRunState gatherPoiMaterial({
@@ -234,7 +350,7 @@ class CuratorRunState {
     );
   }
 
-  /// 局外升級裝備
+  /// 局外升級裝備 (升級 equipment，但 equipmentSnapshot 維持不變)
   CuratorRunState upgradeEquipment(EquipmentType type) {
     final nextEquipment = equipment.upgrade(type);
     return copyWith(equipment: nextEquipment);
@@ -247,10 +363,10 @@ class CuratorRunState {
   /// 4 槽位是否已全部填滿可呈送審查
   bool get canSubmit => itinerary.canSubmit;
 
-  /// 當前 4 槽位時間線之即時計算指標 (包含哲學加權與相機倍率)
+  /// 當前 4 槽位時間線之即時計算指標 (包含哲學加權與相機倍率，嚴格依據快照)
   ItineraryStats get currentStats => itinerary.calculateStats(
         philosophy: philosophy,
-        cameraMultiplier: equipment.camera.cameraMultiplier,
+        cameraMultiplier: equipmentSnapshot.camera.cameraMultiplier,
       );
 
   /// Near Miss 或 Rejected 時返回微調行程 (退回 nightEditing 階段，保留槽位與腰包)
@@ -267,12 +383,19 @@ class CuratorRunState {
     ClientSpec? nextClient,
     TravelPhilosophy? nextPhilosophy,
     TravelPhilosophy? targetPhilosophy,
+    Random? random,
   }) {
-    // 繼承既有裝備與佣金，重新生成 UUID，重置局內所有數值與已採集 POI
-    return CuratorRunState.create(
-      client: nextClient ?? client,
-      philosophy: nextPhilosophy ?? targetPhilosophy ?? philosophy,
+    if (nextPhilosophy != null || targetPhilosophy != null) {
+      return CuratorRunState.create(
+        client: nextClient ?? client,
+        philosophy: nextPhilosophy ?? targetPhilosophy ?? philosophy,
+        equipment: equipment,
+      );
+    }
+    return CuratorRunState.createBriefing(
+      client: nextClient,
       equipment: equipment,
+      random: random,
     );
   }
 
@@ -281,10 +404,14 @@ class CuratorRunState {
     CuratorRunPhase? phase,
     ClientSpec? client,
     TravelPhilosophy? philosophy,
+    List<TravelPhilosophy>? philosophyChoices,
+    TravelPhilosophy? selectedPhilosophy,
+    int? rerollsUsed,
     GuideResources? resources,
     MaterialInventory? inventory,
     TimelineItinerary? itinerary,
     EquipmentInventory? equipment,
+    EquipmentInventory? equipmentSnapshot,
     Set<String>? gatheredPoiIds,
     ReviewReport? latestReport,
   }) => CuratorRunState(
@@ -292,13 +419,26 @@ class CuratorRunState {
     phase: phase ?? this.phase,
     client: client ?? this.client,
     philosophy: philosophy ?? this.philosophy,
+    philosophyChoices: philosophyChoices ?? this.philosophyChoices,
+    selectedPhilosophy: selectedPhilosophy ?? this.selectedPhilosophy,
+    rerollsUsed: rerollsUsed ?? this.rerollsUsed,
     resources: resources ?? this.resources,
     inventory: inventory ?? this.inventory,
     itinerary: itinerary ?? this.itinerary,
     equipment: equipment ?? this.equipment,
+    equipmentSnapshot: equipmentSnapshot ?? this.equipmentSnapshot,
     gatheredPoiIds: gatheredPoiIds ?? this.gatheredPoiIds,
     latestReport: latestReport ?? this.latestReport,
   );
+
+  static List<TravelPhilosophy> _pickDistinctPhilosophies(
+    Random rng,
+    int count,
+  ) {
+    final all = List<TravelPhilosophy>.from(TravelPhilosophy.values);
+    all.shuffle(rng);
+    return List<TravelPhilosophy>.unmodifiable(all.take(count));
+  }
 
   @override
   bool operator ==(Object other) =>
@@ -309,10 +449,13 @@ class CuratorRunState {
           phase == other.phase &&
           client == other.client &&
           philosophy == other.philosophy &&
+          selectedPhilosophy == other.selectedPhilosophy &&
+          rerollsUsed == other.rerollsUsed &&
           resources == other.resources &&
           inventory == other.inventory &&
           itinerary == other.itinerary &&
           equipment == other.equipment &&
+          equipmentSnapshot == other.equipmentSnapshot &&
           _setsEqual(gatheredPoiIds, other.gatheredPoiIds);
 
   @override
@@ -321,10 +464,13 @@ class CuratorRunState {
     phase,
     client,
     philosophy,
+    selectedPhilosophy,
+    rerollsUsed,
     resources,
     inventory,
     itinerary,
     equipment,
+    equipmentSnapshot,
     Object.hashAll(gatheredPoiIds),
   );
 
