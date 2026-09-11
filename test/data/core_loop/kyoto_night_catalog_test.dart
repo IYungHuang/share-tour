@@ -52,5 +52,17 @@ void main() {
         expect(m.riskLevel, inInclusiveRange(1, 5));
       }
     });
+
+    test('AC-A1-6.5 content tax keeps at most one free low-risk spotlight', () {
+      final catalog = kyotoNightMaterials;
+      final yasaka = catalog.firstWhere((m) => m.id == 'kyoto_yasaka_pagoda');
+      expect(yasaka.cost, equals(500));
+      expect(yasaka.riskLevel, equals(2));
+
+      final freeLowRiskSpotlights = catalog
+          .where((m) => m.isSpotlight && m.cost == 0 && m.riskLevel <= 2)
+          .toList();
+      expect(freeLowRiskSpotlights.length, lessThanOrEqualTo(1));
+    });
   });
 }

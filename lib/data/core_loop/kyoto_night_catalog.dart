@@ -87,7 +87,7 @@ const List<TravelMaterial> kyotoNightMaterials = [
     hypeValue: 70,
     isSpotlight: true,
     storyValue: 4,
-    cost: 0,
+    cost: 500,
     riskLevel: 2,
     description: '日出前三十分鐘的法觀寺五重塔，石坡空無一人，晨曦如水洗般純淨。',
   ),
