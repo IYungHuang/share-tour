@@ -2,7 +2,7 @@
 
 以旅行為世界觀的 **Luggage Roguelite** 手機遊戲。玩家在真實世界走動，GPS 位移映射到一張手繪的 8-bit 大地圖上；抵達 POI 觸發遭遇，戰利品塞進一只格子有限的行李箱。
 
-> 開發中。目前只有 GPS 追蹤子系統（任務 C）落地並通過真機驗證，遭遇系統與背包系統尚未實作。
+> 開發中。GPS 追蹤子系統（任務 C）已通過真機驗證；MVP 核心迴圈 M1（純領域規則）、M2（4 槽位時間線與雙客戶審查）、M3（大世界 POI 取材）已實作，M4（行前委託、黑市裝備、本機存檔）尚在覆核。
 
 ---
 
@@ -29,11 +29,9 @@
 flutter pub get
 dart run build_runner build --delete-conflicting-outputs
 flutter analyze   # 應為 0 issues
-flutter test      # 應為 192 passed, 1 skipped
+flutter test      # 應為 316 passed, 0 skipped
 flutter run
 ```
-
-那個 skip 是刻意的 —— 見下方「已知問題」。
 
 ### 不用真機測 GPS
 
@@ -62,7 +60,7 @@ lib/
 
 通用引擎不含任何特定城市的演算法。底圖、POI、道路拓撲與 GPS 校準全部透過 `OverworldMapManifest` 外部注入（`TaiwanMapManifest`、將來的 `KyotoMapManifest`⋯），由 `main.dart` 的 `ProviderScope.overrides` 接上。
 
-Manifest 契約提供：投影（經緯度→像素）、反投影、道路吸附、有效地理範圍、降落點、公尺/像素比例、POI 與道路節點列舉。介面不含 `dart:ui` 型別。
+Manifest 契約提供：投影（經緯度→像素）、反投影、有效地理範圍（分類遮罩查詢）、降落點、公尺/像素比例、POI 節點列舉。介面不含 `dart:ui` 型別。道路吸附已於 SPEC C v6 刪除。
 
 投影用**控制錨點網格的反距離加權插值（IDW）**，因為手繪地圖經過非線性誇張處理，無法用單一線性變換對應。
 
@@ -130,9 +128,7 @@ spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
 
 ## 已知問題
 
-**PRE-8｜台灣圖資的道路節點與 POI 重疊。** `TaiwanMapManifest` 的 5 個道路節點中有 4 個與 POI 座標完全相同（實測間距 0.000 px）。吸附上限 50 公尺，玩家走近景點會被吸到節點上，而節點就是 POI —— 等於自動打卡。遭遇系統一接上就會誤觸發。
-
-規則本身的測試是綠的；紅的只有台灣資料組，因此 `test/taiwan_map_manifest_test.dart` 掛 `skip`（理由寫在 skip 訊息裡）。修法是補上真正的路網節點，屬任務 D。
+（目前無。原 PRE-8「道路節點與 POI 重疊」已隨 SPEC C v6 刪除道路吸附而解除，`taiwan_map_manifest_test.dart` 的 skip 已移除。）
 
 ---
 
@@ -144,7 +140,8 @@ spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
 | `CROSS_CUTTING_CONSTRAINTS.md` | 拘束全子系統的決策，**優先於各子系統 SPEC** |
 | `ARCHITECTURE_BRIEF.md` | 專案目標與任務書 |
 | `SPEC_C_GPS_TRACKING.md` / `SPEC_C_AMENDMENT_01.md` | 任務 C 規格與增修 |
-| `PLAN_C_GPS_TRACKING.md` | 任務 C 施工計劃 |
+| `PLAN_C_GPS_TRACKING.md` / `PLAN_C_AMENDMENT_01.md` | 任務 C 施工計劃 |
+| `SPEC_MVP_*.md` / `PLAN_MVP_*.md` | MVP 核心迴圈 M1~M4 規格與計劃 |
 | `TASK_D_LOCAL_TIER_PROPOSAL.md` | 任務 D 提案 |
 | `HANDOFF.md` | 當前交接狀態 |
 | `ARCHITECTURE_DESIGN.md` | 早期設計文件，**參考素材，非權威** |

@@ -10,7 +10,6 @@ import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 import 'package:share_tour/domain/location/models/district_attraction.dart';
 import 'package:share_tour/domain/location/models/location_status.dart';
 import 'package:share_tour/domain/location/projection/map_manifest.dart';
-import 'package:share_tour/state/core_loop/curator_run_controller.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 import 'package:share_tour/state/location/location_controller.dart';
 import 'package:share_tour/state/location/location_providers.dart';

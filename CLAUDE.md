@@ -4,6 +4,23 @@
 
 ---
 
+## 0. 常用指令
+
+```bash
+dart run build_runner build --delete-conflicting-outputs   # 先跑，否則 analyze/test 必失敗
+flutter analyze                                            # 須 0 errors / 0 warnings
+flutter test                                               # 全套（目前 316 passed, 0 skipped）
+flutter test test/domain/core_loop/timeline_itinerary_test.dart   # 單檔
+flutter test --plain-name 'AC-ML-4.4'                      # 單條 AC（AC 編號即測試名，最常用）
+dart test test/domain/                                     # 純 domain，不需模擬器
+bash tool/simulate_walk.sh                                 # 灌模擬座標進連線裝置
+python3 tool/build_and_verify.py                           # 重生底圖/遮罩/路網（改圖資才跑）
+```
+
+架構大圖見 §9。
+
+---
+
 ## 1. 開發流程（不可跳級）
 
 ```
@@ -22,7 +39,7 @@ spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
 
 設計文件 ≠ spec。若把兩者混在一起，退回重寫。
 
-**SPEC 逐個子系統過關，不一次寫完。** 目前順序：C（GPS 追蹤）→ A（遭遇系統）→ B（行李箱背包）。理由：C 是 A 的前置，範圍最小。
+**SPEC 逐個子系統過關，不一次寫完。** 任務 C（GPS 追蹤）已落地並通過真機驗證；其後改走 MVP 核心迴圈路線，順序 M1（純領域迴圈）→ M2（時間線 UI）→ M3（POI 取材）→ M4（行前委託／黑市裝備／存檔）。原先規劃的 A（遭遇系統）、B（行李箱背包）由核心迴圈的素材與腰包機制吸收。
 
 ---
 
@@ -41,7 +58,7 @@ spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
 |---|---|---|
 | `domain/` | 純 `dart test` | 高 |
 | `state/`（Riverpod Notifier） | `ProviderContainer` + fake repository | 高 |
-| `services/gps` | 注入虛擬定位來源，不碰真機 | 中 |
+| `data/location` | 注入虛擬定位來源，不碰真機 | 中 |
 | `game/`, `ui/` | 煙霧測試 | 不追求 |
 
 **spec 的每條需求都必須附可測的 AC**，否則寫不出測試。
@@ -70,7 +87,7 @@ spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
 
 **通用引擎不得含任何特定城市的演算法。** 「城市即實體 DLC」。
 
-`OverworldMapManifest` 需提供：投影（經緯度→像素）、反投影（像素→經緯度）、道路吸附、有效地理範圍。
+`OverworldMapManifest` 需提供：投影（經緯度→像素）、反投影（像素→經緯度）、有效地理範圍（分類遮罩查詢）。道路吸附已於 SPEC C v6 刪除，勿重新加入。
 
 **解耦驗收標準**：能用一個**純數學、不含圖檔與真實地理資料**的 `FakeMapManifest` 跑完整套 domain 測試。做得到才算解耦成立。
 
@@ -122,7 +139,11 @@ spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
 | `SPEC_C_AMENDMENT_01.md` | 任務 C 實地測試後的增修草案。**已併入 `SPEC_C_GPS_TRACKING.md` v6，狀態為歷史紀錄**，僅供查閱實測證據（F1~F9）與三方覆核的收斂過程，不再是待審文件 |
 | `PLAN_C_GPS_TRACKING.md` | 任務 C 的原始施工計劃（T1~T20），**已於真機驗證中執行完畢** |
 | `PLAN_C_AMENDMENT_01.md` | SPEC v6 相對 v5.1 增量的實作計劃（T21~T29），目前的待執行清單 |
-| `HANDOFF.md` | 交接紀錄，跨對話的進度快照，會隨每次交接改寫 |
+| `SPEC_MVP_CORE_LOOP.md` / `PLAN_MVP_CORE_LOOP.md` | M1 純領域核心迴圈（3+1 資源、5 種旅行哲學、素材契約），SPEC v3 正式通過，已實作 |
+| `SPEC_MVP_TIMELINE_UI.md` / `PLAN_MVP_TIMELINE_UI.md` | M2 4 槽位時間線編輯器、雙客戶 Review 彈窗、狀態接線，SPEC v2，已實作 |
+| `SPEC_MVP_POI_GATHERING.md` / `PLAN_MVP_POI_GATHERING.md` | M3 大世界 POI 踩線取材、野外 HUD、體力透支返程，SPEC v2 簽核，已實作 |
+| `SPEC_MVP_META_PROGRESSION.md` / `PLAN_MVP_META_PROGRESSION.md` | M4 行前委託、黑市裝備升級、`PersistenceRepository` 本機存檔。SPEC v2 / PLAN v1，**未提交版控、待覆核** |
+| `HANDOFF.md` | 交接紀錄，跨對話的進度快照，會隨每次交接改寫。**目前內容停在 2026-09-07 任務 C 階段，已過期** |
 | `TASK_D_LOCAL_TIER_PROPOSAL.md` | 任務 D（地方層地圖）提案 |
 | `ARCHITECTURE_DESIGN.md` | 早期設計文件，**參考素材，非權威** |
 
@@ -139,3 +160,48 @@ spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
   （乾淨 clone 上未跑 codegen 時分析必然失敗，這不是缺陷。）
 - 自 `lib/` import 的套件一律要在 `pubspec.yaml` 宣告直接相依，否則觸發 `depend_on_referenced_packages`。
 - 動檔前先確認該檔沒有其他 Agent 正在讀寫。
+
+---
+
+## 9. 架構大圖（讀多檔才看得出來的部分）
+
+### 分層
+
+```
+lib/
+  domain/   純 Dart 規則（location 管線、core_loop 數值與狀態機）。零框架相依。
+  data/     外部世界實作（geolocator、權限閘門、wakelock、城市素材目錄）
+  state/    手寫 Riverpod Notifier（無 codegen）
+  game/     Flame 元件與城市圖資模組（map_module/）
+  ui/       Widget，以 Flame overlay 疊在遊戲上
+  core/     時鐘（含單調時鐘）、建置旗標
+```
+
+### 架構約束由測試強制，不靠自律
+
+`test/architecture/layer_boundaries_test.dart` 三條，違反就紅：
+
+1. `lib/domain` 不得 import `package:flutter/`、`dart:ui`、`package:flame/`、`package:geolocator/`、`vector_math_64.dart`。
+2. **`lib/domain`、`lib/state`、`lib/game/universal_overworld_game.dart` 的原始碼不得出現字串 `taiwan`/`Taiwan`/`kyoto`/`Kyoto`** —— 註解與字面值都算，最容易誤觸。
+3. location 層不得碰 `domain/stats/` 或 `SurvivalStats`（單一寫入點）。
+
+### GPS 管線是一串獨立閘門
+
+`lib/domain/location/pipeline/`：
+
+```
+LocationSource → 權限解析 → 品質閘（精度門檻）→ 節流
+              → 重定位偵測 → 顯著性閘 → 投影 → 平滑 → 里程累計
+```
+
+**歷史教訓**：任務 C 真機驗證抓到的四個 bug 全是同一形狀 —— 元件本身正確且測過，但**接線沒人測**（`resetBaselines()` 零呼叫端、`FixThrottle` 在 `lib/` 內零引用）。故接線本身必須有測試，不能只測元件。
+
+投影用**控制錨點的反距離加權插值（IDW）**（`domain/location/projection/control_mesh.dart`）：手繪地圖經非線性誇張，無單一線性變換可對應。
+
+### DLC 注入點
+
+`main.dart` 的 `ProviderScope.overrides` 三個：`mapManifestProvider`、`curatorMaterialPoolProvider`、`poiMaterialResolverProvider`。`TaiwanMapManifest.load()` 是非同步的（解碼 `assets/maps/taiwan/mask.png` 分類遮罩），`main()` 內 await 完才 `runApp`。
+
+### 核心迴圈現況
+
+M1~M3 已實作（`domain/core_loop/`、`state/core_loop/`、`ui/core_loop/`）：單局 5~10 分鐘，接委託 → 選哲學 → 大世界採集 → 夜間 4 槽位時間線 → 雙客戶 100 分制 Review → 局外升級。M4（存檔與黑市）尚未施工。
