@@ -162,14 +162,14 @@ void main() {
       );
     }
 
-    testWidgets('AC-M3-2.1: 範圍內景點顯示「📸 踩線取材」並預覽代價 -14 HP 與 ¥600', (tester) async {
+    testWidgets('AC-M3-2.1: 範圍內景點顯示「📸 踩線取材」並預覽代價 -12 HP 與 ¥600', (tester) async {
       final selected = ValueNotifier<DistrictAttraction?>(attractionReady);
       final state = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);
 
       await tester.pumpWidget(buildTestWidget(selected: selected, state: state));
 
       expect(find.text('台北101觀景台'), findsOneWidget);
-      expect(find.textContaining('-14 HP'), findsOneWidget);
+      expect(find.textContaining('-12 HP'), findsOneWidget);
       expect(find.textContaining('¥600'), findsOneWidget);
       expect(find.text('📸 踩線取材'), findsOneWidget);
     });
@@ -183,7 +183,7 @@ void main() {
       expect(find.text('太遠 (需<50m)'), findsOneWidget);
     });
 
-    testWidgets('AC-M3-3.1: 點擊「📸 踩線取材」觸發取材回調', (tester) async {
+    testWidgets('AC-M3-3.1: 點擊「📸 踩線取材」觸發取材回調 (足額 12 HP)', (tester) async {
       final selected = ValueNotifier<DistrictAttraction?>(attractionReady);
       final state = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);
       TravelMaterial? gatheredItem;
@@ -203,10 +203,36 @@ void main() {
 
       expect(gatheredItem, isNotNull);
       expect(gatheredItem!.id, 'mat_101');
-      expect(hpCost, 14);
+      expect(hpCost, 12);
 
       // 踩線後按鈕變為「✅ 本日已踩線」
       expect(find.text('✅ 本日已踩線'), findsOneWidget);
+    });
+
+    testWidgets('AC-A1-5.5: 最後一搏時實扣回調精確為剩餘 5 HP，不得回傳名目成本 12 HP', (tester) async {
+      final selected = ValueNotifier<DistrictAttraction?>(attractionReady);
+      // 人為設定 HP = 5
+      final state = CuratorRunState.initial(initialBudget: 2000, initialHp: 5);
+      TravelMaterial? gatheredItem;
+      int? hpCost;
+
+      await tester.pumpWidget(buildTestWidget(
+        selected: selected,
+        state: state,
+        onGathered: (m, hp) {
+          gatheredItem = m;
+          hpCost = hp;
+        },
+      ));
+
+      // 預覽仍顯示名目成本 -12 HP
+      expect(find.textContaining('-12 HP'), findsOneWidget);
+
+      await tester.tap(find.text('📸 踩線取材'));
+      await tester.pumpAndSettle();
+
+      expect(gatheredItem, isNotNull);
+      expect(hpCost, 5, reason: '最後一搏實扣量必須為 5 HP 而非名目 12 HP');
     });
 
     testWidgets('AC-M3-4.1 & 4.3: 腰包滿額時顯示「👝 踩線換牌」，點擊彈出換牌抽屜', (tester) async {
@@ -221,7 +247,17 @@ void main() {
         );
       }
 
-      await tester.pumpWidget(buildTestWidget(selected: selected, state: state));
+      TravelMaterial? gatheredItem;
+      int? hpCost;
+
+      await tester.pumpWidget(buildTestWidget(
+        selected: selected,
+        state: state,
+        onGathered: (m, hp) {
+          gatheredItem = m;
+          hpCost = hp;
+        },
+      ));
 
       expect(find.text('👝 踩線換牌'), findsOneWidget);
 
@@ -237,8 +273,42 @@ void main() {
       await tester.tap(find.text('捨棄此卡').first);
       await tester.pumpAndSettle();
 
-      // 換牌完成，抽屜關閉，景點標記為已踩線
+      // 換牌完成，抽屜關閉，景點標記為已踩線，回調實扣 12 HP
       expect(find.text('✅ 本日已踩線'), findsOneWidget);
+      expect(gatheredItem, isNotNull);
+      expect(hpCost, 12);
+    });
+
+    testWidgets('AC-A1-5.5: 換牌取消不扣資源、不出浮字', (tester) async {
+      final selected = ValueNotifier<DistrictAttraction?>(attractionReady);
+      var state = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);
+      for (int i = 0; i < 6; i++) {
+        state = state.copyWith(
+          inventory: state.inventory.add(
+            sampleMaterial.copyWith(id: 'mat_old_$i', name: '舊卡 $i'),
+          ),
+        );
+      }
+
+      var onGatheredCalled = false;
+      await tester.pumpWidget(buildTestWidget(
+        selected: selected,
+        state: state,
+        onGathered: (m, hp) {
+          onGatheredCalled = true;
+        },
+      ));
+
+      await tester.tap(find.text('👝 踩線換牌'));
+      await tester.pumpAndSettle();
+
+      // 點擊空白處關閉抽屜 (取消換牌)
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+
+      // 未發生取材回調
+      expect(onGatheredCalled, isFalse);
+      expect(find.text('👝 踩線換牌'), findsOneWidget);
     });
   });
 }

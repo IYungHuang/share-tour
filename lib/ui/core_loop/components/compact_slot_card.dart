@@ -16,10 +16,10 @@ class CompactSlotCard extends ConsumerWidget {
     final material = ref.watch(
       curatorRunControllerProvider.select((s) => s.itinerary.slots[slotIndex]),
     );
-    // 監聽相機倍率 (Slot 2 專用)
+    // 監聽相機倍率 (Slot 2 專用，嚴格依據出發鎖定之快照)
     final cameraMultiplier = ref.watch(
       curatorRunControllerProvider.select(
-        (s) => s.equipment.camera.cameraMultiplier,
+        (s) => s.equipmentSnapshot.camera.cameraMultiplier,
       ),
     );
     // 監聽是否已達可呈送審查標準 (用於端點空槽呈現「刻意留白」)

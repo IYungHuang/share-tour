@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
+import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 import 'package:share_tour/domain/location/models/district_attraction.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 import 'package:share_tour/state/location/location_providers.dart';
@@ -164,7 +165,7 @@ class AttractionDetailCard extends ConsumerWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            '⚡ 消耗: -${10 + material.riskLevel * 2} HP',
+                            '⚡ 消耗: -${gatheringHpCost(material)} HP',
                             style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,
@@ -299,9 +300,8 @@ class _AttractionGatherActionButton extends ConsumerWidget {
           : () async {
               if (eligibility == GatheringEligibility.ready) {
                 if (material != null) {
-                  final deltaHp = 10 + material!.riskLevel * 2;
-                  controller.gatherPoi(attraction.id);
-                  onGathered?.call(material!, deltaHp);
+                  final result = controller.gatherPoi(attraction.id);
+                  onGathered?.call(result.material, result.hpSpent);
                 }
               } else if (eligibility == GatheringEligibility.inventoryFull) {
                 if (material != null) {
@@ -314,12 +314,11 @@ class _AttractionGatherActionButton extends ConsumerWidget {
                     currentMaterials: currentMaterials,
                   );
                   if (dropIndex != null && context.mounted) {
-                    final deltaHp = 10 + material!.riskLevel * 2;
-                    controller.replaceGatheredPoi(
+                    final result = controller.replaceGatheredPoi(
                       poiId: attraction.id,
                       dropIndex: dropIndex,
                     );
-                    onGathered?.call(material!, deltaHp);
+                    onGathered?.call(result.material, result.hpSpent);
                   }
                 }
               }

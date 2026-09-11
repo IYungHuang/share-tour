@@ -527,6 +527,102 @@ void main() {
   print('  boredomRatio: ${winnerD7.boredomRatio}%');
   print('  boredomThreshold: ${winnerD7.boredomThreshold} (for targetHype=30)');
   print('  triggerRate: ${(winnerD7.triggerRate * 100).toStringAsFixed(2)}%');
+
+  // --- Searching D8 (Stamina / HP Gathering Formula) ---
+  print('\n--- Searching D8 (HP Gathering Cost: baseHp + riskLevel * riskSlope) ---');
+  print('Domain: baseHp=0..15 (step 1), riskSlope=1..16 (step 1)');
+
+  List<TravelMaterial> getFittingCards(TravelPhilosophy phil) {
+    final list = allMats.where((m) {
+      final hitsPref = phil.preferredTags.any((t) => m.hasTag(t));
+      final hitsRep = phil.repelledTags.any((t) => m.hasTag(t));
+      return hitsPref && !hitsRep;
+    }).toList();
+    list.sort((a, b) {
+      final cmp = b.hypeValue.compareTo(a.hypeValue);
+      if (cmp != 0) return cmp;
+      return a.id.compareTo(b.id);
+    });
+    return list;
+  }
+
+  final foodFitting = getFittingCards(TravelPhilosophy.gourmet);
+  final chaosFitting = getFittingCards(TravelPhilosophy.chaos);
+
+  final lowRiskMats = allMats.where((m) => m.riskLevel <= 2).toList();
+  lowRiskMats.sort((a, b) => a.riskLevel.compareTo(b.riskLevel));
+
+  final highRiskMats = allMats.where((m) => m.riskLevel >= 3).toList();
+  highRiskMats.sort((a, b) => b.riskLevel.compareTo(a.riskLevel));
+
+  var totalTestedD8 = 0;
+  final feasibleD8 = <({int baseHp, int riskSlope, int foodRemainingHp, int chaosExcess})>[];
+
+  for (var baseHp = 0; baseHp <= 15; baseHp++) {
+    for (var slope = 1; slope <= 16; slope++) {
+      totalTestedD8++;
+
+      // 1. AC-A1-5.3: risk 5 成本至少為 risk 1 的 2 倍
+      if (baseHp + 5 * slope < 2 * (baseHp + 1 * slope)) continue;
+
+      int hpCost(TravelMaterial m) => baseHp + m.riskLevel * slope;
+
+      // 2. AC-A1-5.2a: Lv.1 裝備下，存在一條全低風險採集序列，使腰包先滿而體力仍有餘
+      final minLowCost6 = lowRiskMats.take(6).fold<int>(0, (s, m) => s + hpCost(m));
+      if (100 - minLowCost6 <= 0) continue;
+
+      // 3. AC-A1-5.2b: Lv.1 裝備下，存在一條全高風險採集序列，使體力先耗盡而腰包未滿
+      final maxHighCost5 = highRiskMats.take(5).fold<int>(0, (s, m) => s + hpCost(m));
+      if (maxHighCost5 < 100) continue;
+
+      // 4. AC-A1-5.6: 美食前 6 張契合卡全部收入腰包後 HP 仍 > 0
+      final foodNominalCost6 = foodFitting.take(6).fold<int>(0, (s, m) => s + hpCost(m));
+      final foodRemainingHp = 100 - foodNominalCost6;
+      if (foodRemainingHp <= 0) continue;
+
+      // 混亂最遲在第 5 張完成採集時 HP 歸零並進入 nightEditing，腰包尚未滿
+      final chaosNominalCost5 = chaosFitting.take(5).fold<int>(0, (s, m) => s + hpCost(m));
+      if (chaosNominalCost5 < 100) continue;
+
+      final chaosExcess = chaosNominalCost5 - 100;
+
+      feasibleD8.add((
+        baseHp: baseHp,
+        riskSlope: slope,
+        foodRemainingHp: foodRemainingHp,
+        chaosExcess: chaosExcess,
+      ));
+    }
+  }
+
+  print('Total D8 candidates tested: $totalTestedD8');
+  print('Feasible D8 candidates count: ${feasibleD8.length}');
+
+  if (feasibleD8.isEmpty) {
+    print('ERROR: No feasible D8 candidates found!');
+    return;
+  }
+
+  feasibleD8.sort((a, b) {
+    final cmpFood = b.foodRemainingHp.compareTo(a.foodRemainingHp);
+    if (cmpFood != 0) return cmpFood;
+
+    final cmpChaos = a.chaosExcess.compareTo(b.chaosExcess);
+    if (cmpChaos != 0) return cmpChaos;
+
+    final cmpBase = a.baseHp.compareTo(b.baseHp);
+    if (cmpBase != 0) return cmpBase;
+
+    return a.riskSlope.compareTo(b.riskSlope);
+  });
+
+  final winnerD8 = feasibleD8.first;
+  print('\nSelected D8 Winner:');
+  print('  baseHp: ${winnerD8.baseHp}');
+  print('  riskSlope: ${winnerD8.riskSlope}');
+  print('  formula: ${winnerD8.baseHp} + riskLevel * ${winnerD8.riskSlope}');
+  print('  foodRemainingHp (after 6 cards): ${winnerD8.foodRemainingHp}');
+  print('  chaosExcessHp (after 5 cards): ${winnerD8.chaosExcess}');
 }
 
 List<List<int>> _generateD5Ladders() {

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:share_tour/domain/core_loop/models/core_loop_exceptions.dart';
+import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
@@ -18,7 +19,7 @@ void main() {
       hypeValue: 20,
       storyValue: 2,
       cost: 500,
-      riskLevel: 2, // deltaHp = 10 + 2*2 = 14
+      riskLevel: 2, // deltaHp = 2 * 6 = 12
     );
 
     const testMaterialHighRisk = TravelMaterial(
@@ -30,7 +31,7 @@ void main() {
       isSpotlight: true,
       storyValue: 4,
       cost: 1500,
-      riskLevel: 4, // deltaHp = 10 + 4*2 = 18
+      riskLevel: 4, // deltaHp = 4 * 6 = 24
     );
 
     late CuratorRunState initialState;
@@ -44,13 +45,13 @@ void main() {
       ).copyWith(phase: CuratorRunPhase.fieldTrip);
     });
 
-    test('AC-M3-3.1 正常取材：扣除正確 HP (14 點)，預算扣除 500，素材入腰包，寫入 gatheredPoiIds', () {
+    test('AC-M3-3.1 正常取材：扣除正確 HP (12 點)，預算扣除 500，素材入腰包，寫入 gatheredPoiIds', () {
       final nextState = initialState.gatherPoiMaterial(
         poiId: 'poi_taipei_cafe',
         material: testMaterialLowRisk,
       );
 
-      expect(nextState.resources.currentHp, 86); // 100 - 14
+      expect(nextState.resources.currentHp, 88); // 100 - 12
       expect(nextState.resources.isExhausted, isFalse);
       expect(nextState.resources.currentBudget, 1500); // 2000 - 500
       expect(nextState.inventory.count, 1);
@@ -74,7 +75,7 @@ void main() {
       expect(state2.resources.isDeficit, isTrue);
     });
 
-    test('AC-M3-3.3 最後一搏 (Last Stand)：HP 剩餘 5 點，面對消耗 14 點取材，HP 截斷為 0，isExhausted=true，phase=nightEditing', () {
+    test('AC-M3-3.3 最後一搏 (Last Stand)：HP 剩餘 5 點，面對消耗 12 點取材，HP 截斷為 0，isExhausted=true，phase=nightEditing', () {
       // 人為構造 HP = 5
       final lowHpState = initialState.copyWith(
         resources: initialState.resources.consumeHp(95),
@@ -84,7 +85,7 @@ void main() {
 
       final exhaustedState = lowHpState.gatherPoiMaterial(
         poiId: 'poi_last_stand',
-        material: testMaterialLowRisk, // deltaHp = 14 > 5
+        material: testMaterialLowRisk, // deltaHp = 12 > 5
       );
 
       expect(exhaustedState.resources.currentHp, 0);
@@ -140,7 +141,7 @@ void main() {
       expect(nextState.inventory.items[2].id, 'mat_2');
       expect(nextState.inventory.items[2].name, '午夜怪談廢墟');
       expect(nextState.gatheredPoiIds.contains('poi_replace_spot'), isTrue);
-      expect(nextState.resources.currentHp, 82); // 100 - 18
+      expect(nextState.resources.currentHp, 76); // 100 - 24
       expect(nextState.resources.currentBudget, 500); // 2000 - 1500
     });
 
@@ -158,7 +159,7 @@ void main() {
         throwsA(isA<PoiAlreadyGatheredException>()),
       );
 
-      expect(state1.resources.currentHp, 86);
+      expect(state1.resources.currentHp, 88);
       expect(state1.inventory.count, 1);
     });
 
@@ -231,6 +232,88 @@ void main() {
       expect(attr1, equals(attr2));
       expect(attr1.hashCode, equals(attr2.hashCode));
       expect(attr1, isNot(equals(attr3)));
+    });
+
+    group('Amendment-01: 體力消耗與採集序列測試 (AC-A1-5)', () {
+      test('AC-A1-5.3: riskLevel 5 素材的體力代價至少為 riskLevel 1 素材的 2 倍', () {
+        const matRisk1 = TravelMaterial(
+          id: 'r1',
+          name: '低風險',
+          tags: ['#深夜'],
+          themeValue: 10,
+          hypeValue: 20,
+          riskLevel: 1,
+        );
+        const matRisk5 = TravelMaterial(
+          id: 'r5',
+          name: '高風險',
+          tags: ['#深夜'],
+          themeValue: 10,
+          hypeValue: 20,
+          riskLevel: 5,
+        );
+
+        final cost1 = gatheringHpCost(matRisk1);
+        final cost5 = gatheringHpCost(matRisk5);
+
+        expect(cost5 >= 2 * cost1, isTrue,
+            reason: 'riskLevel 5 代價 ($cost5) 需 >= 2 * riskLevel 1 代價 ($cost1)');
+      });
+
+      test('AC-A1-5.2a: Lv.1 裝備下，存在一條全低風險採集序列，使腰包先滿而體力仍有餘', () {
+        var state = CuratorRunState.initial(
+          initialHp: 100,
+          equipment: EquipmentInventory.initial(),
+        ).copyWith(phase: CuratorRunPhase.fieldTrip);
+
+        // 連續採集 6 張 risk 1 素材 (腰包上限 6)
+        for (var i = 0; i < 6; i++) {
+          final m = TravelMaterial(
+            id: 'low_risk_$i',
+            name: '低風險景點 $i',
+            tags: ['#散步'],
+            themeValue: 10,
+            hypeValue: 20,
+            riskLevel: 1,
+          );
+          state = state.gatherPoiMaterial(poiId: 'poi_$i', material: m);
+        }
+
+        expect(state.inventory.isFull, isTrue, reason: '腰包需先滿 (6 張)');
+        expect(state.resources.currentHp, greaterThan(0), reason: '體力仍需有餘');
+        expect(state.phase, CuratorRunPhase.fieldTrip);
+      });
+
+      test('AC-A1-5.2b: Lv.1 裝備下，存在一條全高風險採集序列，使體力先耗盡而腰包未滿', () {
+        var state = CuratorRunState.initial(
+          initialHp: 100,
+          equipment: EquipmentInventory.initial(),
+        ).copyWith(phase: CuratorRunPhase.fieldTrip);
+
+        // 採集高風險素材 (riskLevel 5) 直到體力耗盡
+        var gatheredCount = 0;
+        for (var i = 0; i < 6; i++) {
+          if (state.resources.isExhausted || state.resources.currentHp <= 0) {
+            break;
+          }
+          final m = TravelMaterial(
+            id: 'high_risk_$i',
+            name: '高風險景點 $i',
+            tags: ['#高風險'],
+            themeValue: 10,
+            hypeValue: 20,
+            riskLevel: 5,
+          );
+          state = state.gatherPoiMaterial(poiId: 'poi_high_$i', material: m);
+          gatheredCount++;
+        }
+
+        expect(state.resources.currentHp, 0, reason: '體力需先耗盡');
+        expect(state.resources.isExhausted, isTrue);
+        expect(gatheredCount, lessThan(6), reason: '腰包未滿 (< 6 張)');
+        expect(state.inventory.isFull, isFalse);
+        expect(state.phase, CuratorRunPhase.nightEditing, reason: '體力耗盡轉入 nightEditing');
+      });
     });
   });
 }

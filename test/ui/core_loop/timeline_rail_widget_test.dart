@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
+import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
+import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 import 'package:share_tour/state/core_loop/curator_run_controller.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
@@ -132,7 +134,10 @@ void main() {
       final upgradedEquip = state.equipment
           .addCoins(1000)
           .upgrade(EquipmentType.camera);
-      state = state.copyWith(equipment: upgradedEquip);
+      state = state.copyWith(
+        equipment: upgradedEquip,
+        equipmentSnapshot: upgradedEquip,
+      );
       await tester.pumpWidget(createSubject(state));
       expect(find.textContaining('📷 1.8x'), findsOneWidget);
     });
@@ -178,5 +183,45 @@ void main() {
       await tester.pumpWidget(createSubject(state));
       expect(find.text('刻意留白'), findsNothing);
     });
+
+    testWidgets(
+      'RED camera snapshot: 出發後局外裝備改變不影響本局黃昏顯示／評分；下一局才使用新倍率',
+      (tester) async {
+        tester.view.physicalSize = const Size(360, 640);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+
+        // 1. 本局初始為 Lv.1 相機出發
+        var state = CuratorRunState.create(
+          client: ClientSpec.budgetWorker,
+          philosophy: TravelPhilosophy.slow,
+          equipment: EquipmentInventory.initial(),
+        );
+        expect(state.equipmentSnapshot.camera.cameraMultiplier, 1.5);
+
+        // 2. 模擬局外裝備升級為 Lv.2 相機 (例如在商店升級)
+        final upgradedEquip = state.equipment
+            .addCoins(1000)
+            .upgrade(EquipmentType.camera);
+        state = state.copyWith(equipment: upgradedEquip);
+
+        // 裝備已升至 Lv.2，但快照仍為 Lv.1
+        expect(state.equipment.camera.level, 2);
+        expect(state.equipmentSnapshot.camera.level, 1);
+
+        // 3. 黃昏槽位卡片顯示必須嚴格依據快照 (仍顯示 1.5x，不得顯示 1.8x)
+        await tester.pumpWidget(createSubject(state));
+        expect(find.textContaining('📷 1.5x'), findsOneWidget);
+        expect(find.textContaining('📷 1.8x'), findsNothing);
+
+        // 4. 重啟新單局 (restartRun) 後，下一局才鎖定新倍率 1.8x
+        final nextRunState = state.restartRun(targetPhilosophy: TravelPhilosophy.slow);
+        expect(nextRunState.equipmentSnapshot.camera.level, 2);
+        expect(nextRunState.equipmentSnapshot.camera.cameraMultiplier, 1.8);
+
+        await tester.pumpWidget(createSubject(nextRunState));
+        expect(find.textContaining('📷 1.8x'), findsOneWidget);
+      },
+    );
   });
 }

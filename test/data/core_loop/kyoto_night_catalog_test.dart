@@ -1,7 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:share_tour/data/core_loop/kyoto_night_catalog.dart';
 import 'package:share_tour/domain/core_loop/material_catalog_audit.dart';
+import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
+import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
+import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 
 void main() {
   group('京都夜間 30 處特色旅行素材庫測試 (Data DLC)', () {
@@ -91,5 +94,77 @@ void main() {
         );
       }
     });
+
+    test(
+      'AC-A1-5.6 (美食補償): 美食朝聖前 6 張契合卡全部收入腰包後 HP 仍 > 0；混亂冒險最遲在第 5 張完成採集時 HP 歸零並進入 nightEditing，腰包尚未滿',
+      () {
+        // 1. 美食朝聖 (TravelPhilosophy.gourmet)
+        final foodFitting = kyotoNightMaterials.where((m) {
+          final pref = TravelPhilosophy.gourmet.preferredTags.any(m.hasTag);
+          final rep = TravelPhilosophy.gourmet.repelledTags.any(m.hasTag);
+          return pref && !rep;
+        }).toList();
+        foodFitting.sort((a, b) {
+          final cmp = b.hypeValue.compareTo(a.hypeValue);
+          if (cmp != 0) return cmp;
+          return a.id.compareTo(b.id);
+        });
+
+        var foodState = CuratorRunState.initial(
+          initialHp: 100,
+          equipment: EquipmentInventory.initial(),
+        ).copyWith(phase: CuratorRunPhase.fieldTrip);
+
+        for (var i = 0; i < 6; i++) {
+          final m = foodFitting[i];
+          foodState = foodState.gatherPoiMaterial(
+            poiId: 'food_poi_$i',
+            material: m,
+          );
+        }
+        expect(foodState.inventory.count, 6, reason: '美食前 6 張契合卡需全部收入腰包');
+        expect(foodState.inventory.isFull, isTrue);
+        expect(foodState.resources.currentHp, greaterThan(0),
+            reason: '美食採完 6 張後 HP 仍需 > 0');
+        expect(foodState.phase, CuratorRunPhase.fieldTrip);
+
+        // 2. 混亂冒險 (TravelPhilosophy.chaos)
+        final chaosFitting = kyotoNightMaterials.where((m) {
+          final pref = TravelPhilosophy.chaos.preferredTags.any(m.hasTag);
+          final rep = TravelPhilosophy.chaos.repelledTags.any(m.hasTag);
+          return pref && !rep;
+        }).toList();
+        chaosFitting.sort((a, b) {
+          final cmp = b.hypeValue.compareTo(a.hypeValue);
+          if (cmp != 0) return cmp;
+          return a.id.compareTo(b.id);
+        });
+
+        var chaosState = CuratorRunState.initial(
+          initialHp: 100,
+          equipment: EquipmentInventory.initial(),
+        ).copyWith(phase: CuratorRunPhase.fieldTrip);
+
+        var chaosCount = 0;
+        for (var i = 0; i < 5; i++) {
+          if (chaosState.resources.isExhausted ||
+              chaosState.resources.currentHp <= 0) {
+            break;
+          }
+          final m = chaosFitting[i];
+          chaosState = chaosState.gatherPoiMaterial(
+            poiId: 'chaos_poi_$i',
+            material: m,
+          );
+          chaosCount++;
+        }
+        expect(chaosState.resources.currentHp, 0,
+            reason: '混亂冒險最遲在第 5 張完成採集時 HP 歸零');
+        expect(chaosState.phase, CuratorRunPhase.nightEditing,
+            reason: 'HP 歸零轉入 nightEditing');
+        expect(chaosCount, lessThanOrEqualTo(5));
+        expect(chaosState.inventory.isFull, isFalse, reason: '腰包尚未滿 (< 6)');
+      },
+    );
   });
 }

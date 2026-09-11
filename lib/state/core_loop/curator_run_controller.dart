@@ -55,8 +55,8 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     _resolver = resolver;
   }
 
-  /// 踩線取材發動 (REQ-M3-03, AC-M3-3)
-  void gatherPoi(String poiId) {
+  /// 踩線取材發動 (REQ-M3-03, AC-M3-3, AC-A1-5.5)
+  ({TravelMaterial material, int hpSpent}) gatherPoi(String poiId) {
     final resolver = _resolver;
     if (resolver == null) {
       throw StateError('PoiMaterialResolver 尚未注入');
@@ -65,11 +65,17 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     if (material == null) {
       throw PoiUnavailableException(poiId);
     }
+    final hpBefore = state.resources.currentHp;
     state = state.gatherPoiMaterial(poiId: poiId, material: material);
+    final hpAfter = state.resources.currentHp;
+    return (material: material, hpSpent: hpBefore - hpAfter);
   }
 
-  /// 腰包滿額現場換牌發動 (REQ-M3-03, AC-M3-4)
-  void replaceGatheredPoi({required String poiId, required int dropIndex}) {
+  /// 腰包滿額現場換牌發動 (REQ-M3-03, AC-M3-4, AC-A1-5.5)
+  ({TravelMaterial material, int hpSpent}) replaceGatheredPoi({
+    required String poiId,
+    required int dropIndex,
+  }) {
     final resolver = _resolver;
     if (resolver == null) {
       throw StateError('PoiMaterialResolver 尚未注入');
@@ -78,11 +84,14 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     if (material == null) {
       throw PoiUnavailableException(poiId);
     }
+    final hpBefore = state.resources.currentHp;
     state = state.replaceGatheredMaterial(
       poiId: poiId,
       dropIndex: dropIndex,
       newMaterial: material,
     );
+    final hpAfter = state.resources.currentHp;
+    return (material: material, hpSpent: hpBefore - hpAfter);
   }
 
   /// 行前選定旅行哲學

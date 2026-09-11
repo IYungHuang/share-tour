@@ -13,6 +13,11 @@ import '../models/travel_philosophy.dart';
 import '../review/client_spec.dart';
 import 'curator_run_phase.dart';
 
+/// 景點踩線與換牌之名目體力代價共用函式 (D8 規則: 0 + riskLevel * 6)
+int gatheringHpCost(TravelMaterial material) {
+  return material.riskLevel * 6;
+}
+
 /// 單局旅行策展人完整狀態實體 (不可變領域狀態機)
 class CuratorRunState {
   CuratorRunState({
@@ -266,7 +271,7 @@ class CuratorRunState {
       throw InventoryFullException(inventory.capacity);
     }
 
-    final deltaHp = 10 + (material.riskLevel * 2);
+    final deltaHp = gatheringHpCost(material);
     final nextHp = resources.currentHp - deltaHp;
     final bool isNowExhausted = nextHp <= 0;
     final consumedHp = isNowExhausted ? resources.currentHp : deltaHp;
@@ -299,7 +304,7 @@ class CuratorRunState {
       throw const CuratorExhaustedException();
     }
 
-    final deltaHp = 10 + (newMaterial.riskLevel * 2);
+    final deltaHp = gatheringHpCost(newMaterial);
     final nextHp = resources.currentHp - deltaHp;
     final bool isNowExhausted = nextHp <= 0;
     final consumedHp = isNowExhausted ? resources.currentHp : deltaHp;

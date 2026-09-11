@@ -154,10 +154,13 @@ void main() {
 
     test('AC-M3-3.1 Controller.gatherPoi 成功取材：扣除 HP 與 Budget，狀態躍遷為 alreadyGathered', () {
       final controller = container.read(curatorRunControllerProvider.notifier);
-      controller.gatherPoi('poi_101');
+      final result = controller.gatherPoi('poi_101');
+
+      expect(result.material.id, 'mat_101');
+      expect(result.hpSpent, 12); // riskLevel 2: 2 * 6 = 12
 
       final runState = container.read(curatorRunControllerProvider);
-      expect(runState.resources.hp, 86); // 100 - 14
+      expect(runState.resources.hp, 88); // 100 - 12
       expect(runState.inventory.count, 1);
       expect(runState.gatheredPoiIds.contains('poi_101'), isTrue);
 
@@ -183,7 +186,9 @@ void main() {
         controller.drawSampleMaterial();
       }
 
-      controller.replaceGatheredPoi(poiId: 'poi_101', dropIndex: 1);
+      final result = controller.replaceGatheredPoi(poiId: 'poi_101', dropIndex: 1);
+      expect(result.material.id, 'mat_101');
+      expect(result.hpSpent, 12);
 
       final runState = container.read(curatorRunControllerProvider);
       expect(runState.inventory.count, 6);
@@ -193,18 +198,19 @@ void main() {
 
     test('AC-M3-6.1 體力透支後，canExploreProvider 變為 false，資格變為 exhausted', () {
       final controller = container.read(curatorRunControllerProvider.notifier);
-      final risk5Material = sampleMaterial.copyWith(riskLevel: 5); // deltaHp = 10 + 5*2 = 20 HP
+      final risk4Material = sampleMaterial.copyWith(riskLevel: 4); // deltaHp = 4 * 6 = 24 HP
 
-      // 4 次取材 (80 HP, 剩餘 20 HP)
+      // 4 次取材 (96 HP, 剩餘 4 HP)
       for (int i = 0; i < 4; i++) {
-        fakeResolver.mapping['poi_step_$i'] = risk5Material.copyWith(id: 'mat_$i');
+        fakeResolver.mapping['poi_step_$i'] = risk4Material.copyWith(id: 'mat_$i');
         controller.gatherPoi('poi_step_$i');
       }
-      expect(container.read(curatorRunControllerProvider).resources.hp, 20); // 100 - 20*4 = 20
+      expect(container.read(curatorRunControllerProvider).resources.hp, 4); // 100 - 24*4 = 4
 
-      // 第 5 次取材 (消耗 20 HP -> 恰好 0 HP，容量 5/6 未滿)
-      fakeResolver.mapping['poi_step_last'] = risk5Material.copyWith(id: 'mat_last');
-      controller.gatherPoi('poi_step_last');
+      // 第 5 次取材 (消耗 24 HP，實扣剩餘 4 HP -> 0 HP，容量 5/6 未滿)
+      fakeResolver.mapping['poi_step_last'] = risk4Material.copyWith(id: 'mat_last');
+      final resultLast = controller.gatherPoi('poi_step_last');
+      expect(resultLast.hpSpent, 4, reason: '最後一搏實扣量為剩餘 4 HP');
 
       final runState = container.read(curatorRunControllerProvider);
       expect(runState.resources.hp, 0);
@@ -227,6 +233,30 @@ void main() {
       fakeResolver.mapping['poi_unused'] = sampleMaterial;
       final eligibility = container.read(attractionEligibilityProvider(unusedAttraction));
       expect(eligibility, GatheringEligibility.exhausted);
+    });
+
+    test('AC-A1-5.5: Controller 取材回傳實扣 HP，足額與最後一搏實扣量精確自洽', () {
+      final controller = container.read(curatorRunControllerProvider.notifier);
+      final risk2Mat = sampleMaterial.copyWith(riskLevel: 2); // 12 HP
+      fakeResolver.mapping['poi_a'] = risk2Mat;
+
+      // 足額扣除
+      final r1 = controller.gatherPoi('poi_a');
+      expect(r1.hpSpent, 12);
+      expect(container.read(curatorRunControllerProvider).resources.hp, 88);
+
+      // 人為設定剩餘 5 HP
+      controller.state = controller.state.copyWith(
+        resources: controller.state.resources.consumeHp(83),
+      );
+      expect(container.read(curatorRunControllerProvider).resources.hp, 5);
+
+      // 最後一搏：面對 12 HP 代價，實扣 5 HP
+      fakeResolver.mapping['poi_b'] = risk2Mat.copyWith(id: 'mat_b');
+      final r2 = controller.gatherPoi('poi_b');
+      expect(r2.hpSpent, 5);
+      expect(container.read(curatorRunControllerProvider).resources.hp, 0);
+      expect(container.read(curatorRunControllerProvider).phase, CuratorRunPhase.nightEditing);
     });
   });
 }
