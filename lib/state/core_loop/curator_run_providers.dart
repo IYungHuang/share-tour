@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_tour/domain/core_loop/models/gathering_eligibility.dart';
 import 'package:share_tour/domain/core_loop/models/persistence_repository.dart';
 import 'package:share_tour/domain/core_loop/models/poi_material_resolver.dart';
 import 'package:share_tour/domain/core_loop/models/timeline_itinerary.dart';
@@ -7,6 +8,8 @@ import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 import 'package:share_tour/domain/location/models/district_attraction.dart';
 import 'package:share_tour/state/location/location_providers.dart';
+
+export 'package:share_tour/domain/core_loop/models/gathering_eligibility.dart';
 
 import 'curator_run_controller.dart';
 import 'persistence_providers.dart';
@@ -60,16 +63,6 @@ final canExploreProvider = Provider<bool>((ref) {
       !state.resources.isExhausted;
 });
 
-/// 景點取材資格 6 態枚舉
-enum GatheringEligibility {
-  ready,            // 範圍內且資源足夠 -> 亮綠色
-  inventoryFull,    // 範圍內但腰包已滿 -> 亮橘色換牌
-  alreadyGathered,  // 本局已採線 -> 灰色已採
-  outOfRange,       // 超出 50m 感應半徑 -> 灰色超距
-  exhausted,        // 體力透支 -> 灰色透支
-  unavailable,      // 該景點無素材配置 -> 灰色不可採
-}
-
 /// 單一景點取材資格 Family Provider
 final attractionEligibilityProvider =
     Provider.family<GatheringEligibility, DistrictAttraction>((ref, attraction) {
@@ -84,31 +77,15 @@ final attractionEligibilityProvider =
       }
 
       final material = resolver.resolveMaterialFor(attraction.id);
-      if (material == null) {
-        return GatheringEligibility.unavailable;
-      }
-
       final runState = ref.watch(curatorRunControllerProvider);
-      if (runState.gatheredPoiIds.contains(attraction.id)) {
-        return GatheringEligibility.alreadyGathered;
-      }
-      if (runState.resources.isExhausted || runState.resources.currentHp <= 0) {
-        return GatheringEligibility.exhausted;
-      }
-
       final locationState = ref.watch(locationControllerProvider);
       final manifest = ref.watch(mapManifestProvider);
-      final playerPixel = locationState.renderedPixel;
-      final distPx = (attraction.pixel - playerPixel).length;
-      final distM = distPx * manifest.metersPerPixelAt(playerPixel);
 
-      if (distM > attraction.triggerRadiusMeters) {
-        return GatheringEligibility.outOfRange;
-      }
-
-      if (runState.inventory.isFull) {
-        return GatheringEligibility.inventoryFull;
-      }
-
-      return GatheringEligibility.ready;
+      return evaluateAttractionEligibility(
+        attraction: attraction,
+        run: runState,
+        material: material,
+        playerPixel: locationState.renderedPixel,
+        manifest: manifest,
+      );
     });
