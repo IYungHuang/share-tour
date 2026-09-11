@@ -9,6 +9,11 @@ typedef D2Candidate = ({
   int repelledCoeff,
 });
 
+typedef D3Candidate = ({
+  int themeWeight,
+  int floor,
+});
+
 void main() {
   print('=== Share Tour MVP Amendment 01 Balance Search Tool ===');
 
@@ -20,7 +25,7 @@ void main() {
   print('\n--- Searching D2 (Theme Alignment Coefficients) ---');
   print('Domain: oneTag=40..55 (step 1), twoTag=85..90 (step 1), threePlus=91..93 (step 1), repelled=70..100 (step 1)');
 
-  var totalTested = 0;
+  var totalTestedD2 = 0;
   final feasibleD2 = <D2Candidate>[];
 
   for (var one = 40; one <= 55; one++) {
@@ -29,7 +34,7 @@ void main() {
       for (var three = 91; three <= 93; three++) {
         if (three <= two) continue;
         for (var rep = 70; rep <= 100; rep++) {
-          totalTested++;
+          totalTestedD2++;
           final cand = (
             oneTagCoeff: one,
             twoTagCoeff: two,
@@ -45,8 +50,8 @@ void main() {
     }
   }
 
-  print('Total candidates tested: $totalTested');
-  print('Feasible candidates count: ${feasibleD2.length}');
+  print('Total D2 candidates tested: $totalTestedD2');
+  print('Feasible D2 candidates count: ${feasibleD2.length}');
 
   if (feasibleD2.isEmpty) {
     print('ERROR: No feasible D2 candidates found! STOPPING per PLAN specification.');
@@ -71,17 +76,101 @@ void main() {
     return a.repelledCoeff.compareTo(b.repelledCoeff);
   });
 
-  final winner = feasibleD2.first;
+  final winnerD2 = feasibleD2.first;
   print('\nSelected D2 Winner:');
-  print('  oneTagCoeff: ${winner.oneTagCoeff}%');
-  print('  twoTagCoeff: ${winner.twoTagCoeff}%');
-  print('  threePlusCoeff: ${winner.threePlusCoeff}%');
-  print('  repelledCoeff: ${winner.repelledCoeff}%');
+  print('  oneTagCoeff: ${winnerD2.oneTagCoeff}%');
+  print('  twoTagCoeff: ${winnerD2.twoTagCoeff}%');
+  print('  threePlusCoeff: ${winnerD2.threePlusCoeff}%');
+  print('  repelledCoeff: ${winnerD2.repelledCoeff}%');
 
-  print('\nFeasible D2 sample (first 5):');
-  for (final c in feasibleD2.take(5)) {
-    print('  $c');
+  // 3. D3 候選域搜尋 (社畜 Theme 權重 50..60, 網紅 floor 40..80)
+  print('\n--- Searching D3 (Client Theme Mapping Parameters) ---');
+  print('Domain: themeWeight=50..60 (step 1), floor=40..80 (step 1)');
+
+  var totalTestedD3 = 0;
+  final feasibleD3 = <D3Candidate>[];
+
+  for (var tw = 50; tw <= 60; tw++) {
+    for (var fl = 40; fl <= 80; fl++) {
+      totalTestedD3++;
+      final cand = (themeWeight: tw, floor: fl);
+      if (_satisfiesD3Constraints(cand)) {
+        feasibleD3.add(cand);
+      }
+    }
   }
+
+  print('Total D3 candidates tested: $totalTestedD3');
+  print('Feasible D3 candidates count: ${feasibleD3.length}');
+
+  if (feasibleD3.isEmpty) {
+    print('ERROR: No feasible D3 candidates found! STOPPING per PLAN specification.');
+    return;
+  }
+
+  // 先取兩客戶 Theme 90 參考分最接近 90，再取 Theme 30 降幅最接近 25，再依 (themeWeight, floor) 排序
+  feasibleD3.sort((a, b) {
+    // 1. 兩客戶 Theme 90 參考分最接近 90
+    final diff90A = _diffFrom90(a);
+    final diff90B = _diffFrom90(b);
+    if (diff90A != diff90B) return diff90A.compareTo(diff90B);
+
+    // 2. Theme 30 降幅最接近 25
+    final dropDiffA = _dropDiffFrom25(a);
+    final dropDiffB = _dropDiffFrom25(b);
+    if (dropDiffA != dropDiffB) return dropDiffA.compareTo(dropDiffB);
+
+    // 3. (themeWeight, floor) 字典序
+    final cmpTw = a.themeWeight.compareTo(b.themeWeight);
+    if (cmpTw != 0) return cmpTw;
+    return a.floor.compareTo(b.floor);
+  });
+
+  final winnerD3 = feasibleD3.first;
+  print('\nSelected D3 Winner:');
+  print('  themeWeight: ${winnerD3.themeWeight}%');
+  print('  floor: ${winnerD3.floor}%');
+
+  print('\nFeasible D3 sample (first 5):');
+  for (final c in feasibleD3.take(5)) {
+    print('  $c (diff90: ${_diffFrom90(c)}, dropDiff: ${_dropDiffFrom25(c)})');
+  }
+}
+
+int _diffFrom90(D3Candidate c) {
+  // 社畜：sat90 = (100 - tw) + round(tw * 90 / 100)
+  final sat90Bw = (100 - c.themeWeight) + (c.themeWeight * 90 / 100).round();
+  // 網紅：sat90 = round(100.0 * (fl + (100 - fl) * 0.90) / 100)
+  final sat90Hi = (100.0 * (c.floor + (100 - c.floor) * 90 / 100) / 100).round();
+  return (sat90Bw - 90).abs() + (sat90Hi - 90).abs();
+}
+
+int _dropDiffFrom25(D3Candidate c) {
+  final sat90Bw = (100 - c.themeWeight) + (c.themeWeight * 90 / 100).round();
+  final sat30Bw = (100 - c.themeWeight) + (c.themeWeight * 30 / 100).round();
+  final dropBw = sat90Bw - sat30Bw;
+
+  final sat90Hi = (100.0 * (c.floor + (100 - c.floor) * 90 / 100) / 100).round();
+  final sat30Hi = (100.0 * (c.floor + (100 - c.floor) * 30 / 100) / 100).round();
+  final dropHi = sat90Hi - sat30Hi;
+
+  return (dropBw - 25).abs() + (dropHi - 25).abs();
+}
+
+bool _satisfiesD3Constraints(D3Candidate c) {
+  // AC-A1-1.7 社畜:
+  final sat90Bw = (100 - c.themeWeight) + (c.themeWeight * 90 / 100).round();
+  if (sat90Bw < 85 || sat90Bw > 95) return false;
+  final sat30Bw = (100 - c.themeWeight) + (c.themeWeight * 30 / 100).round();
+  if (sat90Bw - sat30Bw < 20) return false;
+
+  // AC-A1-1.7 網紅:
+  final sat90Hi = (100.0 * (c.floor + (100 - c.floor) * 90 / 100) / 100).round();
+  if (sat90Hi < 85 || sat90Hi > 95) return false;
+  final sat30Hi = (100.0 * (c.floor + (100 - c.floor) * 30 / 100) / 100).round();
+  if (sat90Hi - sat30Hi < 20) return false;
+
+  return true;
 }
 
 String _computeCatalogFingerprint() {
@@ -97,42 +186,24 @@ String _computeCatalogFingerprint() {
 }
 
 bool _satisfiesD2Constraints(D2Candidate c) {
-  // AC-A1-1.1: 中性素材貢獻 0 -> baseline = 50
-  // (自動滿足，因中性不加減)
-
-  // AC-A1-1.2: themeValue = 45
-  // 命中 2 個標籤: baseline 介於 88 與 92
   final twoTagBonus = (45 * c.twoTagCoeff / 100).round();
   final baselineTwo = 50 + twoTagBonus;
   if (baselineTwo < 88 || baselineTwo > 92) return false;
 
-  // 命中 3 個標籤: baseline 介於 88 與 92
   final threeTagBonus = (45 * c.threePlusCoeff / 100).round();
   final baselineThree = 50 + threeTagBonus;
   if (baselineThree < 88 || baselineThree > 92) return false;
 
-  // 命中 1 個標籤: baseline <= 75
   final oneTagBonus = (45 * c.oneTagCoeff / 100).round();
   final baselineOne = 50 + oneTagBonus;
   if (baselineOne > 75) return false;
 
-  // AC-A1-1.3: 對每一種旅行哲學，存在四槽全排斥使 baseline <= 20
-  // themeValue = 45 排斥扣分
   final repelledPenalty = (45 * c.repelledCoeff / 100).round();
   final baselineRepelled = 50 - repelledPenalty;
   if (baselineRepelled > 20) return false;
 
-  // AC-A1-1.4: 存在素材使兩哲學 baseline 差 >= 25
   final diff = baselineTwo - baselineRepelled;
   if (diff < 25) return false;
-
-  // AC-A1-1.5: 疲勞前 40~80, finalTheme = 疲勞前 - 10
-  // 例如 baseline 60, 疲勞 -10 -> 50 (50 == 60 - 10)
-  // 自動滿足，只要 clamp(0, 100) 作用於 (themeBeforeFatigue - 10)
-
-  // AC-A1-1.6: baseline >= 88, 疲勞前 90~100, finalTheme = 疲勞前 - 10
-  // 例如 baseline 90, 疲勞 -10 -> 80 (80 == 90 - 10)
-  // 亦由流水線架構保證
 
   return true;
 }

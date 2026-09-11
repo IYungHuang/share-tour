@@ -22,22 +22,21 @@ class ClientReviewEngine {
     ClientSpec client,
     ItineraryStats stats,
   ) {
-    // 1. 預算得分 (滿分 70): 不超支得 70，超支每 10 円扣 2 分
+    final themeWeight = client.themeWeight;
+    final maxBudgetScore = 100 - themeWeight;
+
+    // 1. 預算得分 (滿分 100 - themeWeight = 44): 不超支得滿分，超支每 10 円扣 2 分
     final int budgetScore;
     if (stats.totalCost <= client.targetBudget) {
-      budgetScore = 70;
+      budgetScore = maxBudgetScore;
     } else {
       final overspent = stats.totalCost - client.targetBudget;
       final penalty = (overspent ~/ 10) * 2;
-      budgetScore = (70 - penalty).clamp(0, 70);
+      budgetScore = (maxBudgetScore - penalty).clamp(0, maxBudgetScore);
     }
 
-    // 2. 主題得分 (滿分 30): 依 minTheme (60) 等比例映射
-    final double themeRatio = (stats.finalTheme / client.minTheme).clamp(
-      0.0,
-      1.0,
-    );
-    final int themeScore = (themeRatio * 30).round();
+    // 2. 主題得分 (滿分 themeWeight = 56): round(themeWeight * finalTheme / 100)
+    final int themeScore = (themeWeight * stats.finalTheme / 100).round();
 
     // 3. 反無聊懲罰 (Boredom Penalty): Hype < 30 扣 25 分
     final int boredomPenalty = (stats.totalHype < 30) ? 25 : 0;
@@ -106,8 +105,10 @@ class ClientReviewEngine {
     final spotlightMultiplier = stats.hasSpotlight ? 1.0 : 0.5;
     final effectiveHype = (netHype * spotlightMultiplier).round();
 
-    // 3. 主題加權係數: 0.7 + 0.3 * (Theme / 100)
-    final themeFactor = 0.7 + 0.3 * (stats.finalTheme / 100.0);
+    // 3. 主題加權係數: (floor + (100 - floor) * (Theme / 100)) / 100
+    final floor = client.themeFloor;
+    final themeFactor =
+        (floor + (100 - floor) * (stats.finalTheme / 100.0)) / 100.0;
 
     // 4. 滿意度計算
     final rawScore = (effectiveHype / client.targetHype) * 100.0 * themeFactor;

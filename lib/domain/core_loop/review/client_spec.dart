@@ -14,6 +14,8 @@ class ClientSpec {
     required this.minTheme,
     required this.targetHype,
     required this.baseCommission,
+    this.themeWeight = 56,
+    this.themeFloor = 44,
   });
 
   final ClientType type;
@@ -23,6 +25,8 @@ class ClientSpec {
   final int minTheme;
   final int targetHype;
   final int baseCommission;
+  final int themeWeight;
+  final int themeFloor;
 
   /// 客戶 A：極限窮遊社畜
   static const budgetWorker = ClientSpec(
@@ -33,6 +37,7 @@ class ClientSpec {
     minTheme: 60,
     targetHype: 30,
     baseCommission: 1000,
+    themeWeight: 56,
   );
 
   /// 客戶 B：IG 網紅
@@ -44,6 +49,7 @@ class ClientSpec {
     minTheme: 50,
     targetHype: 150,
     baseCommission: 1500,
+    themeFloor: 44,
   );
 
   @override
