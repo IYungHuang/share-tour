@@ -238,3 +238,13 @@
 - `ClientSpec.operator ==` 只比對 `type`，新增欄位不影響相等語意，無需同步修改。
 - `ClientSpec` 為手寫純類別，不涉 `freezed`／`json_serializable`，不需重跑 codegen。
 - 人名屬世界觀文案，**不得**出現具名城市（架構約束第 2 條）。
+
+---
+
+## 增修註記 02 —— 提交門檻與結算公式同步註記（2026-09-12）
+
+**上游**：`SPEC_MVP_AMENDMENT_01.md`（AC-A1-3.7/3.8）、`SPEC_MVP_TIMELINE_UI.md` 附錄 A
+**生效狀態**：已於程式碼落實。
+
+1. **提交門檻**：`AC-ML-4.1`（少於 4 槽不可提交）已被 `SPEC_MVP_AMENDMENT_01` 的連續 3 槽或 4 槽提交規則取代（`live_preview_hud.dart:171-172`，`canSubmit` 在連續 3 槽時即為 true）。
+2. **結算公式與係數**：`AC-ML-5.3/5.5/5.6` 中的固定數字（如 `/ 70`、`/ 30`、Hype < 30、無絕景打五折）已被 `client_review_engine.dart` 與 `SPEC_MVP_TIMELINE_UI.md §2.3` 現行公式取代（動態分母 `/ 44`、`/ 56`、反無聊門檻 `Hype < 168`、絕景階梯 `[0.70, 0.75, 0.80, 0.85, 1.00]`）。本體文字保留作為里程碑紀錄，現行行為一律以最新增修與引擎實作為準。

@@ -86,8 +86,8 @@ stateDiagram-v2
   - **預估熱度 (Effective Hype)**：含黃昏相機倍率與連鎖加成之最終熱度。
   - **主題滿意 (Theme)**：當前主題分數（0~100），含哲學加權與疲勞扣分。
 - **呈送審查按鈕 (Submit Button)**：
-  - 4 槽位未滿時為 Disabled，顯示「請填滿 4 個時段」。
-  - 4 槽位填滿時高亮啟用，標記 `Key('submit_itinerary_button')`，點擊彈出審查彈窗。
+  - 未達 3 槽或不連續時為 Disabled，顯示「素材需連續排列」（`live_preview_hud.dart:171-172`，依 `SPEC_MVP_AMENDMENT_01` `AC-A1-3.7/3.8`）。
+  - 3 或 4 槽連續時高亮啟用，標記 `Key('submit_itinerary_button')`，點擊彈出審查彈窗。
 
 #### D. 底部阿導腰包素材抽屜 (Waist Bag Drawer)
 - 網格/水平滾動展示阿導持有之卡牌。

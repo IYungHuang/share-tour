@@ -2,16 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUBSKILL: 以 `superpowers:executing-plans` 逐任務執行。動碼前用 `superpowers:using-git-worktrees`；每個行為變更用 `superpowers:test-driven-development`；每次宣告完成前用 `superpowers:verification-before-completion`。
 
-**狀態**：v3 待簽核；**前置閘門未清償前不得啟動 T1**
-**上位文件**：`SPEC_MVP_CAUSAL_FEEDBACK.md` (v4)、`PLAN_MVP_CAUSAL_FEEDBACK.md` (v4)
+**狀態**：v4 已簽核；**前置閘門 G1~G5 全數清償，准予啟動 T1 施工**
+**上位文件**：`SPEC_MVP_CAUSAL_FEEDBACK.md` (v5 已簽核)、`PLAN_MVP_CAUSAL_FEEDBACK.md` (v5 已簽核)
 **工程約束**：`CLAUDE.md`、`CROSS_CUTTING_CONSTRAINTS.md`
 
-> **v3 修訂摘要（相對 v2）**
-> 1. **T0 的既成事實誠實標記**：v2 把 T0 列為待執行的 Commit 01，但 `cd69d93` 已在三份文件仍為「待簽核」時將附錄提交 —— T0 自己滿足了 G5，閘門空轉。v3 標記為「已於簽核前執行，待追認」並改寫查核方式。
-> 2. **守門測試改端到端**並移出 `test/architecture/`。
-> 3. **`tweakItinerary` 示範碼修正**：v2 的範例會保留上一輪焦點，正踩了它自己宣告要擋的坑。
-> 4. **撞車檔案清單補齊**（v2 漏列 6 支，其中 `review_settlement_widget_test.dart` 與本案 T6 直接衝突）。
-> 5. T1 擴至 14 條 reasonCode；新增 T6 的結算數字修正。
+> **v4 修訂摘要（相對 v3，第二輪雙軌覆核修訂）**
+> 1. **修正 T7 示範程式碼型別錯誤**（覆核 P0-1）：`curatorRunControllerProvider.overrideWith` 改回傳 `CuratorRunController` 實例而非 State，解決編譯報錯。
+> 2. **`facts` 排序鍵修正為全序**（覆核 P0-3）：納入 `pairIndices`，排序鍵為 `domain → (slotIndex ?? pairIndices?.$1 ?? 99) → (pairIndices?.$2 ?? 99) → reasonCode`，避免多組相鄰疲勞對發生平手未定義行為。
+> 3. **T4 硬約束釐清邊界**（覆核 P0-4）：明確豁免看板基礎屬性（成本、預算、絕景計數、相機倍率），使 HUD 4 格 pip 與硬約束自洽。
+> 4. **刪除產品碼內置 build 計數器殘留**（覆核 P0-6 / 覆核 P1-4）：清除 T5 `ClientExpressionTile` 內的測試點說明，統一改在測試側以 `container.listen` 驗證。
+> 5. **`itineraryCausalReportProvider` 細粒度 `.select` 訂閱**（覆核 P1-1）：改為訂閱 itinerary/philosophy/client，避免阿導在大地圖走動扣 HP 觸發全量無效重算。
+> 6. **T6 補齊既有測試改寫指示**（覆核 P1-2）：明定同步改寫 `review_settlement_widget_test.dart:221` 斷言與 mock report。
+> 7. **T2 Files 清單補列 `curator_briefing_modal.dart`**（覆核 P1-8）。
 
 ---
 
@@ -19,13 +21,13 @@
 
 ### 0.1 施工前置（逐項查核，未過不得啟動 T1）
 
-| # | 條件 | 查核方式 |
-|---|---|---|
-| G1 | `SPEC_MVP_CAUSAL_FEEDBACK.md` v4 經使用者簽核 | 文件狀態列改為「已覆核」 |
-| G2 | `PLAN_MVP_CAUSAL_FEEDBACK.md` v4 經使用者簽核 | 同上 |
-| G3 | 本執行計劃 v3 經使用者簽核 | 同上 |
-| G4 | `SPEC_MVP_AMENDMENT_01.md` 的數值修訂已完成 | `EXECUTION_PLAN_MVP_AMENDMENT_01.md` 的最末 Commit 已提交且全套測試綠燈 |
-| G5 | T0 文件增修完成並經追認 | **已清償**：`cd69d93` 經使用者追認（2026-09-12）；其缺口已於 `7790b30` 補齊 |
+| # | 條件 | 查核方式 | 狀態 |
+|---|---|---|:---:|
+| G1 | `SPEC_MVP_CAUSAL_FEEDBACK.md` v5 經使用者簽核 | 文件狀態列標記已簽核 | ✅ **已清償**（2026-09-12 簽核） |
+| G2 | `PLAN_MVP_CAUSAL_FEEDBACK.md` v5 經使用者簽核 | 文件狀態列標記已簽核 | ✅ **已清償**（2026-09-12 簽核） |
+| G3 | 本執行計劃 v4 經使用者簽核 | 文件狀態列標記已簽核 | ✅ **已清償**（2026-09-12 簽核） |
+| G4 | `SPEC_MVP_AMENDMENT_01.md` 的數值修訂已完成 | `EXECUTION_PLAN_MVP_AMENDMENT_01.md` 的最末 Commit 已提交且全套測試綠燈 | ✅ **已清償**（Commit 16 `0b9a30a` 已合入，全套 483 測試綠燈） |
+| G5 | T0 文件增修完成並經追認 | `cd69d93` 經使用者追認（2026-09-12）；其缺口已於 `7790b30` 補齊 | ✅ **已清償** |
 
 > **T0 的既成事實（已追認）**
 > commit `cd69d93` 於 G1~G3 全部未清償時，將附錄寫進 `SPEC_MVP_TIMELINE_UI.md` 與 `SPEC_MVP_CORE_LOOP.md` 並提交，違反 `CLAUDE.md` §1「每一關都必須等使用者明確點頭」。當時的自我豁免理由是「A 節屬事實更正，與待審規格無關」—— 該理由已收回：**判定某段修改是不是純事實更正，本身就是該被覆核的判斷**。
@@ -218,7 +220,7 @@ bool get hasFatigueRisk => riskLevel >= 3;
 | `tag_synergy` | `stats.comboActiveSlots`（intensity **major**） |
 | `ambient_slot_affinity` | `stats.slotThemeBonuses` 的每一個 key（涵蓋 Slot 0/1/3） |
 
-**`facts` 排序鍵**：`domain → slotIndex（null 排最後）→ reasonCode`。不得依賴 `Set`／`Map` 的插入序 —— 目前雖然是決定性的，但那是撿到的，`AC-CF-1.8/1.9` 不該隱性依賴實作細節。
+**`facts` 排序鍵**：`domain → (slotIndex ?? pairIndices?.$1 ?? 99) → (pairIndices?.$2 ?? 99) → reasonCode`。把單槽位事實與相鄰對事實（如多組相鄰疲勞對）全部納入嚴格全序，不得依賴 `Set`／`Map` 的插入序 —— 目前雖然是決定性的，但那是撿到的，`AC-CF-1.8/1.9` 不該隱性依賴實作細節。
 
 `clientImpression`：
 ```dart
@@ -228,7 +230,7 @@ final report = ClientReviewEngine
 // 否則依 report.outcome：perfect→ecstatic / pass→pleased / nearMiss→neutral
 //   rejected → report.satisfaction >= 30 ? stressed : furious
 ```
-> 以 `outcome` 而非 `satisfaction` 分桶是硬性要求：社畜退件門檻 60、網紅 50（`client_review_engine.dart:58,138`），統一門檻會讓社畜 50~59 分顯示 Near Miss 表情而實際被退件 —— 那正是本 SPEC 要消滅的「畫面說謊」。
+> 以 `outcome` 而非 `satisfaction` 分桶是硬性要求：社畜退件門檻 60、網紅 50（`client_review_engine.dart:58,136,145`），統一門檻會讓社畜 50~59 分顯示 Near Miss 表情而實際被退件 —— 那正是本 SPEC 要消滅的「畫面說謊」。
 
 ### Steps
 1. **RED**：`causal_feedback_test.dart` 覆蓋 AC-CF-1.1~1.13，測試名即 AC 編號。
@@ -258,6 +260,7 @@ final report = ClientReviewEngine
 - Modify: `lib/domain/core_loop/review/client_spec.dart`（新增 `personaName`）
 - Modify: `lib/ui/core_loop/field/attraction_detail_card.dart`
 - Modify: `lib/ui/core_loop/field/gathering_replace_bottom_sheet.dart`
+- Modify: `lib/ui/core_loop/curator_briefing_modal.dart`（委託客戶改具名稱呼）
 - Modify: `test/ui/core_loop/attraction_gathering_ui_test.dart`
 
 ### Interface Signatures
@@ -346,12 +349,15 @@ void tweakItinerary({int? culpritSlot}) {
 
 // curator_run_providers.dart
 final itineraryCausalReportProvider = Provider<ItineraryCausalReport>((ref) {
-  final s = ref.watch(curatorRunControllerProvider);
+  // 細粒度訂閱，避免阿導在大地圖走動扣 HP 或取材進背包時觸發無效重算
+  final itinerary = ref.watch(curatorRunControllerProvider.select((s) => s.itinerary));
+  final philosophy = ref.watch(curatorRunControllerProvider.select((s) => s.philosophy));
+  final client = ref.watch(curatorRunControllerProvider.select((s) => s.client));
   // 複用既有 memoized provider；s.currentStats 是 getter，每次重跑 calculateStats
   final stats = ref.watch(itineraryStatsProvider);
   return CausalReportBuilder.build(
-    itinerary: s.itinerary, stats: stats,
-    philosophy: s.philosophy, client: s.client,
+    itinerary: itinerary, stats: stats,
+    philosophy: philosophy, client: client,
   );
 });
 ```
@@ -388,11 +394,11 @@ final itineraryCausalReportProvider = Provider<ItineraryCausalReport>((ref) {
 
 ### Key Implementations
 
-**硬約束（先寫這條，否則 T7 永遠轉不綠）**：編排期所有因果符號一律只從 `itineraryCausalReportProvider` 的 `facts` 渲染。`timeline_rail.dart:15` 與 `compact_slot_card.dart` 目前都是 `ref.watch(itineraryStatsProvider)` 驅動，符號是從 stats 現場算出來的 —— 只要保留這條路徑，T7 注入任何報告都不會讓符號出現。牌面屬性、成本、相機倍率不在此限。
+**硬約束（先寫這條，否則 T7 永遠轉不綠）**：編排期所有因果符號（徽章、光軌、警告）一律只從 `itineraryCausalReportProvider` 的 `facts` 渲染。`timeline_rail.dart:15` 目前是 `ref.watch(itineraryStatsProvider)` 驅動，符號是從 stats 現場算出來的 —— 只要保留這條路徑，T7 注入任何報告都不會讓符號出現。牌面屬性、成本、預算、相機倍率與看板基礎計數（如 `stats.spotlightCount`）不在此限。
 
 - `CausalBadge`：承載 `reasonCode`、`sourceSignifier`、`intensity`；可點擊（T5 接 Tooltip）。
 - `TimelineRail`：
-  - 相鄰軸三態**同軌同階**：`💀 拉車疲勞`（負）／`🎵 節奏互補`（正）／`⚡ 驚險連段`（正，網紅 × 混亂冒險）。同尺寸、同層級，僅色彩與符號不同。
+  - 相鄰軸四態**同軌同階**：`💀 拉車疲勞`（社畜/一般負面）／`💀 脫妝暴跌`（網紅 Hype 負面）／`🎵 節奏互補`（正）／`⚡ 驚險連段`（正，網紅 × 混亂冒險）。同尺寸、同層級，僅色彩與符號不同。
   - **移除** `'$i-$next +20% Combo'`（`:98`），改渲染 `[共鳴]`。保留既有 `Key('combo_indicator_...')` / `Key('fatigue_warning_...')` 以免既有測試大面積失效。
 - `CompactSlotCard`：
   - 階梯徽章 `★` / `★★` / `💢` / `⚠️` / `🚨`；`[時段契合]` 金色微光（**Slot 0/1/3 三槽皆需**）。
@@ -403,7 +409,7 @@ final itineraryCausalReportProvider = Provider<ItineraryCausalReport>((ref) {
   - **刪除** `🎯 ${stats.finalTheme} / 100`（`:133`）與 `🔥 ${stats.totalHype}`（`:111`）。
   - **刪除** 客群視角切換器（`_buildClientTab`，`:60,:65,:187`）。
   - **`targetBudget` 改由 run state 取得**：`ref.watch(curatorRunControllerProvider.select((s) => s.client.targetBudget))`。原本 `:30-33` 的 `targetBudget` 完全由 `_selectedClientView` 決定，刪掉切換器後會沒有來源。該元件是 `ConsumerStatefulWidget`（`:8`），拿得到 `ref`。
-  - **新增** 絕景 4 格 pip（`spotlight_shortfall` / `spotlight_full`，不顯示乘數）與社畜 `boredom_risk` 定性警示。
+  - **新增** 絕景 4 格 pip（`spotlight_shortfall` / `spotlight_full`，第 4 格以冠狀星芒 `★` 高亮，不顯示乘數）與社畜 `boredom_risk` 階梯張力警示（極度乏味／稍嫌平淡／消褪）。
   - **保留** 成本／預算上限與超支紅字、提交鈕。
 
 ### Steps
@@ -436,8 +442,8 @@ final itineraryCausalReportProvider = Provider<ItineraryCausalReport>((ref) {
 - `ClientExpressionTile`：
   - `Key('client_expression')`，**只有一位客戶**（`state.client`）。
   - `ref.watch(itineraryCausalReportProvider.select((r) => r.clientImpression))`。
-  - 五態靜態圖示切換（不引入動畫套件）；點擊出定性氣泡，文案以 `ClientSpec.displayName` 稱呼。
-  - 內置 build 計數器測試點：換一張不改變心態的卡 → build 次數不增加。
+  - 六態靜態圖示切換（含 `idle`，不引入動畫套件）；點擊出定性氣泡，文案以 `ClientSpec.personaName` 稱呼。
+  - 測試側以 `container.listen` 驗證：換一張不改變心態的卡 → 監聽回呼不觸發（不把 build 計數器寫入產品碼）。
 - `CodexTooltip`：點擊 `CausalBadge` → 依 `reasonCode` 查 `CuratorCodex` → 彈出 `title` / `explanation` / `guideNote`；點擊空白關閉。
 
 ### Steps
@@ -475,7 +481,7 @@ final itineraryCausalReportProvider = Provider<ItineraryCausalReport>((ref) {
 | `:529` | `'反無聊懲罰 (Hype<30)'` | `反無聊懲罰 (Hype<${client.boredomThreshold})` → **168** |
 | `:553` | `'絕景打折提醒　無絕景打五折'` | 依 `spotlightCount` 呈現階梯與缺口張數 |
 
-`:553` 尤其嚴重：`hasNoSpotlight = spotlightMultiplier < 1.0`（`:551`）在持有 1~3 張絕景時同樣成立，所以它會在**有**絕景時說「無絕景」，而且係數是 `×0.70` 不是五折。這條同時是網紅端最大的槓桿（mean |Δ| 17.44）。
+`:553` 尤其嚴重：`hasNoSpotlight = spotlightMultiplier < 1.0`（實際於 `:546`）在持有 1~3 張絕景時同樣成立，所以它會在**有**絕景時說「無絕景」，而且係數是 `×0.70` 不是五折。這條同時是網紅端最大的槓桿（mean |Δ| 17.44）。
 
 **2. 局域歸因**：超支元兇槽位與金額、疲勞時段對、絕景缺口張數。
 
@@ -487,7 +493,7 @@ final itineraryCausalReportProvider = Provider<ItineraryCausalReport>((ref) {
 
 ### Steps
 1. **RED**：驗四處分母取自資料、歸因內容、頁籤切換時歸因行為、微調傳參。
-2. **GREEN**：修改結算彈窗。
+2. **GREEN**：修改結算彈窗，並**同步更新既有測試 `review_settlement_widget_test.dart:221`**：該測試原以 mock 報告斷言 `'無絕景'` 且未帶 `spotlightCount`；改動後於 mock 補齊 `spotlightCount`，並將斷言調整為符合新階梯規格（如 `find.textContaining('缺口')`），確保既有測試不爆紅。
 3. **VERIFY**：`flutter test test/ui/core_loop/`
 4. **COMMIT**：
    ```text
@@ -526,7 +532,10 @@ final itineraryCausalReportProvider = Provider<ItineraryCausalReport>((ref) {
 testWidgets('AC-CF-2.1: 每個因果代碼都必須由真實行程走到畫面上', (tester) async {
   for (final scenario in _wiringScenarios) {   // 14 個，每個含 itinerary/philosophy/client
     final container = ProviderContainer(overrides: [
-      curatorRunControllerProvider.overrideWith((_) => _stateOf(scenario)),
+      curatorRunControllerProvider.overrideWith((ref) => CuratorRunController(
+        materialPool: sampleMaterials,
+        initialState: _stateOf(scenario),
+      )),
     ]);
     addTearDown(container.dispose);
 

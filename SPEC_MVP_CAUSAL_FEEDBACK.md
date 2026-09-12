@@ -1,20 +1,18 @@
 # SPEC — 《Share Tour：奇葩旅行策展人》MVP 玩法因果可視化與架構接線契約
 
-狀態：**Draft v4（雙軌覆核後修訂）** — 待簽核
-流程位置：`spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核`
+狀態：**已簽核（v5，2026-09-12 由使用者明確簽核）**
+流程位置：`spec (已簽核) → plan (已簽核) → 執行計劃 (已簽核) → 待 G4 清償後實作`
 上位文件：`CROSS_CUTTING_CONSTRAINTS.md`、`CLAUDE.md`、`SPEC_MVP_CORE_LOOP.md`（牴觸時以其為準）
 相關文件：`SPEC_MVP_TIMELINE_UI.md`（**必須先完成增修，見 §6 前置條件**）、`SPEC_MVP_AMENDMENT_01.md`
 
-> **v4 修訂摘要（相對 v3）**
-> v3 送資深遊戲企劃與資深工程師雙軌覆核，兩線獨立指出同一個致命點（守門測試證不到它宣稱的事），企劃線另以消融實驗推翻了 v3 的因果軸選擇。修訂如下：
-> 1. **補上兩條量級最大的規則**（覆核 P0-1）。v3 的 11 條 reasonCode 漏掉絕景階梯（網紅端 mean |Δ| **17.44** 分、觸發率 84.2%，全系統最大單一槓桿）與反無聊門檻（社畜端 **25 分斷崖**、觸發率 22.1%），卻把疲勞 Theme 側（0.71）列為主動軸第一位。
-> 2. **節奏互補升格為主動軸**（覆核 P1-4）。它與疲勞在 `timeline_itinerary.dart:254-264` 是同一個 `if/else` 的正反面，+10 判為「不標數字的環境微光」、−10 判為「主動演繹軸」沒有依據，且社畜端實測 5.95 比疲勞的 0.71 大一個量級。
-> 3. **守門測試改為端到端**（覆核 P0-3 / 工程 P0-1、P0-2）。v3 以人工建構的報告泵進 UI，只證明「UI 會畫交到它手上的事實」，不證明 builder 會從 `rhythmActivePairs` 產出該事實 —— 與它要消滅的病灶同型。
-> 4. **納入現役結算面板的四處錯誤數字**（覆核 P0-2）。本案立案原則是「畫面不得與計分分歧」，而 `review_settlement_modal.dart:525,526,529,553` 上有四個寫死的錯誤分母與係數。v3 只更正了文件，沒有排程修畫面。
-> 5. **結算頁客群頁籤明文保留，但歸因區塊限定指派客戶**（工程 P0-3）。頁籤本身有教學價值且不影響佣金，但歸因與元兇槽位恆以指派客戶計算，混在一起會產生新的「畫面說謊」。
-> 6. **改寫 `purity_bonus` 的保留理由**（覆核 P1-5）。v3 宣稱刪除它會使 `AC-A1-3.2` 失去機制，經窮舉反證為假（`purityBonus = 0` 時仍有 4792 個見證組，`AC-A1-3.6` 五哲學結果一字不變）。結論不變，理由改引 `AC-A1-3.4/3.5`。
-> 7. **牌面 `🎯themeValue` 取消**（覆核 P2-14）。它是未經哲學係數換算的 base 值（實際係數 40%/90%/92%/**−70%**），保留一個會誤導的數字比不給數字更糟。
-> 8. 新增第六態 `idle`（未達提交門檻），不再與 `nearMiss` 共用 `neutral`；修正 §2.4 的自我矛盾；補上白天 `[💀 拉車隱患]` 的 AC；刪除三條偏空的 AC；修正行號誤植。
+> **v5 修訂摘要（相對 v4，第二輪雙軌覆核修訂）**
+> 第二輪企劃與工程雙軌覆核指出了 v4 的殘留矛盾與接線盲區，修訂如下：
+> 1. **消除 `fatigue_hype_penalty` 孤兒代碼與軌道接線盲區**（覆核 P0-2）。相鄰軸軌道明確定義為四態同軌同階（社畜/一般負面 `💀 拉車疲勞`、網紅 Hype 負面 `💀 脫妝暴跌`、正面 `🎵 節奏互補`、混亂冒險 `⚡ 驚險連段`），確保 14 個 reasonCode 在 UI 皆有坑位可尋，杜絕 T7 守門測試必紅。
+> 2. **修補 §2.4 最嚴重失分槽位邊界缺陷**（覆核 P0-5）。第 4 款新增邊界防護：遇「3 槽連續且全為絕景」時取第一個空槽位提示補足缺口；第 2 款明訂多疲勞對時取所有疲勞涉及槽位中最高 riskLevel 者。
+> 3. **反無聊門檻引入階梯張力反饋**（覆核 P1-3）。編排期 HUD 雖不顯示總 Hype 數字，但提交列提供定性階梯（`< 120` 極度乏味、`120~167` 稍嫌平淡、`>= 168` 警示消褪），避免玩家在 168 門檻無預警墜落 25 分斷崖。
+> 4. **六態表情具體視覺與氣泡文案定稿**（覆核 P1-6）。補齊六態（ecstatic 🤩 / pleased 😊 / neutral 😐 / stressed 😰 / furious 😡 / idle 💤）的 Icon/Emoji 規格與定性心態氣泡台詞。
+> 5. **補齊 4 項玩家可見行為的驗收條件**（覆核 P1-7）。補足點擊頭像氣泡（`AC-CF-3.1`）、絕景 4 格 pip 動態亮燈（`AC-CF-3.2`）、反無聊警示越線消褪（`AC-CF-3.2`）、腰包抽屜清除 `🎯` 數值（`AC-CF-3.2`）。
+> 6. **絕景階梯 4 格 pip 冠狀星芒與長按詳情規範**。第 4 格 pip 特別標記為冠狀星芒 `★`（暗示 +15% 暴擊躍升）；素材長按詳情（Inspect Sheet）保留原始 `🎯themeValue` 供進階比牌，卡面則維持純階梯符號防誤導。
 
 ---
 
@@ -129,11 +127,11 @@ class ItineraryCausalReport {
 - `overrunRatio = (totalCost - client.targetBudget) / client.targetBudget`，`targetBudget` 一律取**本局指派客戶**（社畜 2000 / 網紅 8000），禁止硬編碼。
 - **`philosophy_repelled` 與 `philosophy_matched_*` 互斥**：`travel_philosophy.dart:58` 命中排斥標籤即短路返回，同一素材不可能同時產出兩者。UI 不得同時渲染。
 - 素材命中 0 個 `preferredTags` 且未命中 `repelledTags` 時**不產出事實**（該素材貢獻為 0，畫面留白即是誠實）。
-- `spotlight_shortfall` 只呈現**還差幾張**（以 4 格 pip 表示 `spotlightCount`），**不得**呈現乘數數值。卡面既有的 `⭐` 標記（`compact_slot_card.dart:158`、`waist_bag_drawer.dart:159`）維持不變，本條是把它接到後果上。
-- `boredom_risk` 是**斷崖而非斜坡**（固定 −25），故只有觸發／未觸發兩態，不分階梯。
+- `spotlight_shortfall` 只呈現**還差幾張**（以 4 格 pip 表示 `spotlightCount`，第 4 格標記冠狀星芒暗示大滿貫爆點），**不得**呈現乘數數值。卡面既有的 `⭐` 標記（`compact_slot_card.dart:158`、`waist_bag_drawer.dart:159`）維持不變，本條是把它接到後果上。
+- `boredom_risk` 領域層是**斷崖而非斜坡**（固定 −25），故事實本身只有觸發／未觸發兩態；但為守護策展掌控感、避免無預警斷崖，編排期提交列提供前置階梯張力警示（見 §3.1.2）。
 - `ambient_slot_affinity` 必須涵蓋 Slot 0（低風險 + `#散步`/`#早餐`）、Slot 1（低風險 + `#美食`/`#老街`/`#銅板美食`）、Slot 3（高風險或 `#深夜`/`#小酌`）。**只做 Slot 0 不算完成**：另外兩槽的 +5 會繼續黑箱。
 - Slot 2（黃昏）無固定 Theme 加成，其相機倍率屬裝備資訊而非排列因果，不產出 `CausalFact`。
-- **相鄰槽位軸的三態必須共用同一視覺階級**：`fatigue_spike`（負）、`rhythm_complement`（正）、`chaotic_combo`（正，混亂冒險）源自同一個 `if/else`。把負面做成醒目骷髏、正面做成微光，會讓玩家系統性高估疲勞、低估節奏 —— 那是另一種形式的畫面說謊。
+- **相鄰槽位軸的四態必須共用同一視覺階級**：`fatigue_spike`（社畜/一般負面，`💀 拉車疲勞`）、`fatigue_hype_penalty`（網紅負面，`💀 脫妝暴跌`）、`rhythm_complement`（正面，`🎵 節奏互補`）、`chaotic_combo`（正面，`⚡ 驚險連段`）源自同一個相鄰關係與哲學檢定，四態同軌同階（同尺寸、同層級，僅符號與色彩不同）。把負面做成醒目骷髏、正面做成微光，會讓玩家系統性高估疲勞、低估節奏 —— 那是另一種形式的畫面說謊。
 
 ### 2.3 客戶即時心態（禁止第二套計分）
 
@@ -145,15 +143,16 @@ satisfaction = ClientReviewEngine.evaluate(
 ).satisfaction
 ```
 
-分桶**必須以 `report.outcome` 為準，不得以 `satisfaction` 自訂門檻**：兩位客戶的評等分界不同（社畜 Rejected `< 60`、網紅 `< 50`，見 `client_review_engine.dart:58,138`），照統一門檻切會讓社畜 55 分時表情顯示 Near Miss 而實際是退件。
+分桶**必須以 `report.outcome` 為準，不得以 `satisfaction` 自訂門檻**：兩位客戶的評等分界不同（社畜 Rejected `< 60`、網紅 `< 50`，見 `client_review_engine.dart:58,136,145`），照統一門檻切會讓社畜 55 分時表情顯示 Near Miss 而實際是退件。
 
-| `ReviewOutcome` | ClientImpression |
-|---|---|
-| `perfect` | `ecstatic` |
-| `pass` | `pleased` |
-| `nearMiss` | `neutral` |
-| `rejected` 且 `satisfaction >= 30` | `stressed` |
-| `rejected` 且 `satisfaction < 30` | `furious` |
+| `ReviewOutcome` | ClientImpression | 視覺圖示 (Icon) | 定性心態氣泡台詞範例 |
+|---|---|:---:|---|
+| `perfect` | `ecstatic` | 🤩 | 「太棒了！這簡直是為我量身打造的完美行程！」 |
+| `pass` | `pleased` | 😊 | 「很不錯呢，有打中我的期待，通過！」 |
+| `nearMiss` | `neutral` | 😐 | 「還行吧，但總覺得差了那麼一點點...」 |
+| `rejected` 且 `satisfaction >= 30` | `stressed` | 😰 | 「這真的不行...雖然有些亮點，但整體問題太大。」 |
+| `rejected` 且 `satisfaction < 30` | `furious` | 😡 | 「完全不知所云！這是在整我嗎？立刻重排！」 |
+| `canSubmit == false` | `idle` | 💤 | 「阿導，行程還沒排完呢，我先瞇一下...」 |
 
 `rejected` 拆兩態是為了湊滿五態表情，兩者都落在「會被退件」的語意內，不會讓表情暗示比實際更好的結果。
 
@@ -171,12 +170,12 @@ satisfaction = ClientReviewEngine.evaluate(
 決定性優先序。**通則：任何平手一律取索引較小者**，全條無例外。
 
 1. 若超支：取已填槽位中 `cost` 最高者（平手取索引較小者）。
-2. 否則若有疲勞對：取該對中 `riskLevel` 較高者（平手取索引較小者）。
+2. 否則若有疲勞對：取所有疲勞對涉及之槽位中 `riskLevel` 最高者（平手取索引較小者）。
 3. 否則若有 `philosophy_repelled`：取索引最小的命中槽位。
-4. 否則若客戶為 `hypeInfluencer` 且 `spotlight_shortfall` 成立：取索引最小的非絕景已填槽位。
+4. 否則若客戶為 `hypeInfluencer` 且 `spotlight_shortfall` 成立：取索引最小的非絕景已填槽位；若已填槽位全為絕景，則取第一個空槽位（提示填滿第 4 槽以補足絕景缺口）；若皆無則為 `null`。
 5. 否則為 `null`。
 
-> v3 在通則寫「同分取索引最小者」卻在第 2 條寫「同值取後者」，兩者直接衝突，而 `AC-CF-1.8` 正是要驗這個順序。v4 統一為索引較小者。
+> v4 統一為平手取索引較小者；v5 補齊第 4 款「3 槽全為絕景」時的邊界防護，避免 `.firstWhere` 無元素拋出例外，並給出合理解法。
 
 ---
 
@@ -184,16 +183,17 @@ satisfaction = ClientReviewEngine.evaluate(
 
 ### 3.1 編排期（`CuratorStudioModal`）
 
-1. **客戶意圖頭像（單一）**：工作台頂部呈現**本局指派客戶**頭像，`Key('client_expression')`，依 `clientImpression` 六態切換，點擊彈出定性心態氣泡。**不得**在編排期呈現未指派客戶的表情 —— 客戶於開局隨機指派（`curator_run_state.dart:89-90`），玩家不選，另一位的反應不驅動任何決策。
+1. **客戶意圖頭像（單一）**：工作台頂部呈現**本局指派客戶**頭像，`Key('client_expression')`，依 `clientImpression` 六態切換，點擊彈出定性心態氣泡（以 `personaName` 稱呼，點擊空白消褪）。**不得**在編排期呈現未指派客戶的表情 —— 客戶於開局隨機指派（`curator_run_state.dart:89-90`），玩家不選，另一位的反應不驅動任何決策。
 2. **符號光軌**：
-   - 相鄰槽位軸三態同軌同階：`💀 拉車疲勞`（負）／`🎵 節奏互補`（正）／`⚡ 驚險連段`（正，限網紅 × 混亂冒險）。
+   - 相鄰槽位軸四態同軌同階：`💀 拉車疲勞`（社畜/一般負面）／`💀 脫妝暴跌`（網紅 Hype 負面）／`🎵 節奏互補`（正）／`⚡ 驚險連段`（正，限網紅 × 混亂冒險）。
    - 槽位卡片階梯徽章：`★ 契合` / `★★ 強烈共鳴` / `💢 排斥` / `⚠️ 超支·輕度` / `🚨 超支·爆表`。
-   - 絕景階梯以 **4 格 pip** 呈現當前 `spotlightCount`，附 `🌟` 或 `📉` 記號；**不得顯示乘數**。
-   - 社畜局 `boredom_risk` 成立時，提交列呈現定性警示（如「太平淡了」），不顯示 −25。
+   - 絕景階梯以 **4 格 pip** 呈現當前 `spotlightCount`，第 4 格以冠狀星芒 `★` 呈現（暗示達成 1.00 之大滿貫暴擊跳升）；未達 4 格時附 `📉` 記號，全滿時附 `🌟` 記號；**不得顯示乘數**。
+   - 社畜局 `boredom_risk` 階梯張力警示：提交列呈現定性警示 —— `totalHype < 120` 時顯示 `🚨 極度乏味`，`120 <= totalHype < 168` 時顯示 `⚠️ 稍嫌平淡`，`>= 168` 時警示即時消褪；不顯示 −25 數字。
    - 環境層（不標數字）：`[共鳴]`（同標籤）、`[時段契合]` 金色微光（Slot 0/1/3）。
 3. **數字揭露邊界**：編排期不得顯示 Theme／Hype 的**計分結果**數值與加減量。
    - **允許保留**：`🔥hypeValue`（base 值確實會進 `slotEffectiveHypes`，是誠實的比較基準）、相機倍率膠囊、成本與預算上限。
-   - **必須移除** `🎯themeValue`（`compact_slot_card.dart:191`）：它是未經哲學係數換算的 base 值，實際貢獻為 `40% / 90% / 92% / −70%`（`travel_philosophy.dart:62,72,78,84`）。玩家看到 `🎯35` 的卡在錯的哲學下實際貢獻是 −25 —— 保留一個會誤導的數字，比不給數字更糟。改以 `★ / ★★ / 💢` 定性階梯取代。
+   - **必須移除** 卡面 `🎯themeValue`（`compact_slot_card.dart:191`、`waist_bag_drawer.dart:159`）：它是未經哲學係數換算的 base 值，實際貢獻為 `40% / 90% / 92% / −70%`（`travel_philosophy.dart:62,72,78,84`）。玩家看到 `🎯35` 的卡在錯的哲學下實際貢獻是 −25 —— 保留一個會誤導的數字，比不給數字更糟。改以 `★ / ★★ / 💢` 定性階梯取代。
+   - **長按詳情（Inspect Sheet）**：長按素材卡彈出的詳情抽屜保留原始 `🎯themeValue` 與哲學係數計算說明，兼顧卡面防誤導與深度比牌需求。
 
 ### 3.2 結算面板（`ReviewSettlementModal`）
 
@@ -249,10 +249,10 @@ satisfaction = ClientReviewEngine.evaluate(
 
 ### 4.3 編排期 UI（AC-CF-3）
 
-- [ ] **AC-CF-3.1**：編排介面渲染帶 `Key('client_expression')` 的單一客戶頭像，且畫面上**不存在**第二位客戶的表情元件。
-- [ ] **AC-CF-3.2**：編排期不得出現計分結果文字 —— 具體斷言：`LivePreviewHUD` 不含 `finalTheme` / `totalHype` 之渲染，光軌不含 `+20% Combo` 字樣，槽位卡片不含 `🎯` 數值，畫面無 `+N` / `-N` 形式的加減分文字，絕景區不含乘數數值。（`🔥hypeValue`、相機倍率、成本／預算不在此限，見 §3.1.3）
+- [ ] **AC-CF-3.1**：編排介面渲染帶 `Key('client_expression')` 的單一客戶頭像，畫面上**不存在**第二位客戶的表情元件；點擊頭像彈出符合當前 `clientImpression` 之定性心態氣泡，點擊空白消褪。
+- [ ] **AC-CF-3.2**：編排期不得出現計分結果文字 —— 具體斷言：`LivePreviewHUD` 不含 `finalTheme` / `totalHype` 之渲染，光軌不含 `+20% Combo` 字樣，槽位卡片與腰包卡面不含 `🎯` 數值，畫面無 `+N` / `-N` 形式的加減分文字，絕景區不含乘數數值；絕景 4 格 pip 依 `spotlightCount` 動態點亮對應格數；社畜反無聊警示在 `totalHype >= 168` 時即時消褪。（`🔥hypeValue`、相機倍率、成本／預算不在此限，見 §3.1.3）
 - [ ] **AC-CF-3.3**：點擊任一因果徽章，彈出對應 `reasonCode` 的 Codex 詞條 Tooltip。
-- [ ] **AC-CF-3.4**：相鄰槽位軸的三態（`fatigue_spike` / `rhythm_complement` / `chaotic_combo`）渲染於同一軌道位置且視覺階級相同（同尺寸、同層級，僅色彩與符號不同）。
+- [ ] **AC-CF-3.4**：相鄰槽位軸的四態（`fatigue_spike` / `fatigue_hype_penalty` / `rhythm_complement` / `chaotic_combo`）渲染於同一軌道位置且視覺階級相同（同尺寸、同層級，僅色彩與符號不同）。
 
 ### 4.4 結算與微調（AC-CF-4）
 
