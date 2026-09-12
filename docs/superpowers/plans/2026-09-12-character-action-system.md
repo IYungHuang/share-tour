@@ -96,10 +96,10 @@ Use these files unless implementation evidence requires a narrower equivalent; k
 
 ### Task 1.3 — Implement deterministic resolver
 
-- [ ] Add RED tests for exact character/action/direction lookup, resolved metadata completeness, stable animation key, asset kind enforcement, and no time/random/global-state dependency.
-- [ ] Implement resolver as a pure lookup over validated manifest data. It returns no frame advancement; controller supplies current frame index.
+- [x] Add RED tests for exact character/action/direction lookup, resolved metadata completeness, stable animation key, asset kind enforcement, and no time/random/global-state dependency.
+- [x] Implement resolver as a pure lookup over validated manifest data. It returns no frame advancement; controller supplies current frame index.
 - [ ] Add controller-path tests proving unregistered canonical actions do not decompose into locomotion or special descriptors and use the character idle fallback; resolver tests remain exact lookup only.
-- [ ] Run `flutter test test/domain/character_action/character_animation_resolver_test.dart`; commit `feat: resolve character animations deterministically`.
+- [x] Run `flutter test test/domain/character_action/character_animation_resolver_test.dart`; commit `feat: resolve character animations deterministically`.
 
 ### Task 1.4 — Implement state machine and single clock
 
