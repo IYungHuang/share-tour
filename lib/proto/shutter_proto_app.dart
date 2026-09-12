@@ -311,7 +311,7 @@ class _ShutterProtoPageState extends State<ShutterProtoPage>
           child: Text(
             _spotlightMode
                 ? '按住畫面拖曳取景框對準中心，\n框線收合到與內圈重合的瞬間放開'
-                : '按住畫面任何位置，\n外圈收縮到與內圈重合的瞬間放開',
+                : '按住畫面任何位置，\n外圈收縮到與內圈重合的瞬間放開\n（圈變紅＝已過頭，縮到 0 就逾時）',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,
@@ -443,13 +443,17 @@ class _StagePainter extends CustomPainter {
       // 而同心收縮是唯一能讓「吻合」看得出來的呈現。
       if (progress != null) {
         final r = _radiusAt(progress!);
+        // 通過吻合時刻之後轉紅 —— 上一版沒有任何東西告訴玩家「有時限」，
+        // 觀光客（普通窗無上限）因此出現 24/45 次逾時。這是**事後**的資訊，
+        // 不影響吻合前的預測，所以不會把技巧退化成反應測驗。
+        final late = progress! > matchFraction;
         canvas.drawCircle(
           center,
           r.clamp(1.0, double.infinity),
           Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = 3
-            ..color = Colors.white,
+            ..color = late ? Colors.redAccent : Colors.white,
         );
       }
     } else {
@@ -458,6 +462,7 @@ class _StagePainter extends CustomPainter {
       final ok = (framePos! - center).distance / targetRadius <=
           framingTolerance;
       final t = progress ?? 0;
+      final late = t > matchFraction;
       final scale = _radiusAt(t) / targetRadius;
       canvas.drawRect(
         Rect.fromCenter(
@@ -468,7 +473,9 @@ class _StagePainter extends CustomPainter {
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 3
-          ..color = ok ? Colors.greenAccent : Colors.orangeAccent,
+          ..color = late
+              ? Colors.redAccent
+              : (ok ? Colors.greenAccent : Colors.orangeAccent),
       );
       // 構圖容差圈：告訴玩家「框心要落在這裡面」。
       canvas.drawCircle(
@@ -483,7 +490,26 @@ class _StagePainter extends CustomPainter {
 
     // 放開後凍結一瞬：把「你差了多少」畫出來，否則玩家學不到東西。
     if (freeze != null && progress == null) {
-      _paintMiss(canvas, center, freeze!);
+      if (freeze!.timedOut) {
+        _paintLabel(canvas, center, '逾時 —— 沒放開', Colors.redAccent);
+      } else {
+        _paintMiss(canvas, center, freeze!);
+        _paintLabel(
+          canvas,
+          center,
+          switch (freeze!.tier) {
+            ShutterTier.perfect => '完美',
+            ShutterTier.normal => '普通',
+            ShutterTier.failed =>
+              freeze!.heldMs < matchMs ? '太早' : '太晚',
+          },
+          switch (freeze!.tier) {
+            ShutterTier.perfect => Colors.amberAccent,
+            ShutterTier.normal => Colors.lightBlueAccent,
+            ShutterTier.failed => Colors.redAccent,
+          },
+        );
+      }
     }
 
     if (showTimeline) _paintTimeline(canvas, size);
@@ -506,6 +532,21 @@ class _StagePainter extends CustomPainter {
         (startRadiusFactor - 1);
     final r = early ? targetRadius + delta : targetRadius - delta;
     _dashedCircle(canvas, center, r.clamp(4.0, targetRadius * 2.5), colour);
+  }
+
+  void _paintLabel(Canvas canvas, Offset center, String text, Color colour) {
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: colour,
+          fontSize: 22,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
   }
 
   void _dashedCircle(Canvas canvas, Offset c, double r, Color colour) {

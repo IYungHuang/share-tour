@@ -30,13 +30,26 @@ class LatencyStats {
   final int capacity;
   final List<double> _samples = [];
 
+  /// 第一筆的絕對差值，當作基準扣掉。
+  ///
+  /// 指標時戳的 epoch 是**裝置開機時間**，本地 `Stopwatch` 的 epoch 是 App
+  /// 啟動 —— 兩者相差整個開機時長（可達數億毫秒）。σ 與 epoch 無關，但若不
+  /// 先扣掉基準，任何以絕對值為界的濾波都會把全部樣本丟掉。
+  double? _baseline;
+
   void add(double millis) {
-    if (millis < 0 || millis > 1000) return; // 明顯是量測雜訊，丟棄
-    _samples.add(millis);
+    _baseline ??= millis;
+    final centred = millis - _baseline!;
+    // 扣掉基準後仍離群的才是真雜訊（例如 App 被切出去又切回來）。
+    if (centred.abs() > 1000) return;
+    _samples.add(centred);
     if (_samples.length > capacity) _samples.removeAt(0);
   }
 
-  void clear() => _samples.clear();
+  void clear() {
+    _samples.clear();
+    _baseline = null;
+  }
 
   int get count => _samples.length;
 
