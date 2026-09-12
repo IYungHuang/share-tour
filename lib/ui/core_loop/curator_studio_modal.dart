@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 
+import 'components/client_expression_tile.dart';
 import 'components/live_preview_hud.dart';
 import 'components/timeline_rail.dart';
 import 'components/waist_bag_drawer.dart';
@@ -69,8 +70,13 @@ class CuratorStudioModal extends ConsumerWidget {
                       ),
                     ],
                   ),
-                  GestureDetector(
-                    key: const Key('studio_close_button'),
+                  Row(
+                    children: [
+                      // 客戶意圖表情頭像（AC-CF-3.1）
+                      const ClientExpressionTile(),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        key: const Key('studio_close_button'),
                     onTap: () {
                       if (onClose != null) {
                         onClose!();
@@ -93,7 +99,9 @@ class CuratorStudioModal extends ConsumerWidget {
                   ),
                 ],
               ),
-            ),
+            ],
+          ),
+        ),
 
             // 四幕劇時間線軌道
             const TimelineRail(),

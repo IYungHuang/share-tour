@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:share_tour/domain/core_loop/causal/causal_fact.dart';
 
+import 'codex_tooltip.dart';
+
 /// 因果回饋定性徽章組件 (CausalBadge)
 /// 承載 reasonCode、sourceSignifier、intensity、direction，點擊可彈出 Codex 詞條 Tooltip
 class CausalBadge extends StatelessWidget {
@@ -37,7 +39,7 @@ class CausalBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final (bgColor, borderColor, textColor) = _resolveColors();
 
-    Widget badge = Container(
+    final badge = Container(
       padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
       decoration: BoxDecoration(
         color: bgColor,
@@ -54,15 +56,13 @@ class CausalBadge extends StatelessWidget {
       ),
     );
 
-    if (onTap != null) {
-      badge = GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: badge,
-      );
-    }
+    final tapHandler = onTap ?? () => CodexTooltip.show(context, reasonCode);
 
-    return badge;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: tapHandler,
+      child: badge,
+    );
   }
 
   (Color, Color, Color) _resolveColors() {
