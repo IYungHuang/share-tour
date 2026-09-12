@@ -6,7 +6,7 @@
 
 **Architecture:** Small channel enums compose one immutable `CharacterAction`. A pure-Dart catalog, capability registry, controller, and resolver own action selection, fallback, interruption, resume, elapsed time, normalized progress, and frame index. A typed manifest and pure validator own sheet geometry. `CharacterComponent` is the only Flame adapter and renders the controller-selected frame from a `SpriteAnimation` without a second ticker. `PlayerComponent` remains world-position owner and façade; `UniversalOverworldGame` remains lifecycle, position, and camera owner.
 
-**Tech Stack:** Dart 3.11, Flutter, Flame 1.38.2, `dart test` for domain, `flutter test` for Flame smoke tests. No new package.
+**Tech Stack:** Dart 3.11, Flutter, Flame 1.38.2, `flutter test` for targeted domain and Flame smoke tests (repository has no direct `package:test` dependency). No new package.
 
 **Spec:** `SPEC_MVP_CHARACTER_ACTION.md` (Approved v6)
 
@@ -53,15 +53,15 @@ Use these files unless implementation evidence requires a narrower equivalent; k
 
 ### Task 0.2 — Add manifest value objects and geometry tests
 
-- [ ] Add RED tests for `AssetKind`, row/column direction axes, positive dimensions/count/FPS/render size, normalized anchor, non-negative source origin/padding/spacing, canonical animation key, and immutable record equality.
-- [ ] Implement manifest value objects in `lib/domain/character_action/character_animation_manifest.dart`.
-- [ ] Add table-driven RED tests for region formulas:
+- [x] Add RED tests for `AssetKind`, row/column direction axes, positive dimensions/count/FPS/render size, normalized anchor, non-negative source origin/padding/spacing, canonical animation key, and immutable record equality.
+- [x] Implement manifest value objects in `lib/domain/character_action/character_animation_manifest.dart`.
+- [x] Add table-driven RED tests for region formulas:
   - row: `width = left + count*frameWidth + (count-1)*horizontal + right`; `height = top + 4*frameHeight + 3*vertical + bottom`;
   - column: `width = left + 4*frameWidth + 3*horizontal + right`; `height = top + count*frameHeight + (count-1)*vertical + bottom`;
   - first frame origin is `sourceOrigin + (left, top)`;
   - direction index is `front=0,left=1,back=2,right=3`, vertical for row and horizontal for column.
-- [ ] Implement pure geometry helpers returning frame origins; reject negative or overflow arithmetic inputs.
-- [ ] Run `dart test test/domain/character_action/character_animation_manifest_test.dart` and commit `feat: define character animation manifest contract`.
+- [x] Implement pure geometry helpers returning frame origins; reject negative or overflow arithmetic inputs.
+- [x] Run `flutter test test/domain/character_action/character_animation_manifest_test.dart` and commit `feat: define character animation manifest contract`.
 
 ### Task 0.3 — Add pure manifest validator
 
@@ -85,7 +85,7 @@ Use these files unless implementation evidence requires a narrower equivalent; k
 - [ ] Add RED tests for defaults, equality across all channels, exact canonical field order/casing, `sit`, `drink`, `sit + drink`, `walk + oneHand`, and `run + guide.point`.
 - [ ] Add RED tests proving duplicate values in one channel are rejected instead of last-write-wins; unknown shorthand and invalid special namespace are rejected.
 - [ ] Implement small channel enums plus immutable `CharacterAction`, `canonicalKey`, and `fromShorthand(Iterable<String>)`; represent absent special as canonical `special=none`.
-- [ ] Run `dart test test/domain/character_action/character_action_test.dart`; commit `feat: add composable character actions`.
+- [ ] Run `flutter test test/domain/character_action/character_action_test.dart`; commit `feat: add composable character actions`.
 
 ### Task 1.2 — Implement descriptors and capability registry
 
@@ -99,7 +99,7 @@ Use these files unless implementation evidence requires a narrower equivalent; k
 - [ ] Add RED tests for exact character/action/direction lookup, resolved metadata completeness, stable animation key, asset kind enforcement, and no time/random/global-state dependency.
 - [ ] Implement resolver as a pure lookup over validated manifest data. It returns no frame advancement; controller supplies current frame index.
 - [ ] Add controller-path tests proving unregistered canonical actions do not decompose into locomotion or special descriptors and use the character idle fallback; resolver tests remain exact lookup only.
-- [ ] Run `dart test test/domain/character_action/character_animation_resolver_test.dart`; commit `feat: resolve character animations deterministically`.
+- [ ] Run `flutter test test/domain/character_action/character_animation_resolver_test.dart`; commit `feat: resolve character animations deterministically`.
 
 ### Task 1.4 — Implement state machine and single clock
 
@@ -107,7 +107,7 @@ Use these files unless implementation evidence requires a narrower equivalent; k
 - [ ] Add RED interruption tests: sleep rejects walk; jump overrides lower priority; same-priority special cannot bypass non-interruptible action; eat can replace same-priority interruptible action; rejected command preserves state.
 - [ ] Add RED resume tests for `walk → dash → jump → walk`, single resume snapshot under nested one-shots, invalid resume fallback, and `stop()` clearing resume state in `walk → dash → stop → jump → idle`.
 - [ ] Implement `CharacterActionState` and `CharacterActionController`. `update(dt)` is only elapsed/frame/completion mutator; loop wraps, non-loop clamps; completion restores one resume snapshot or valid fallback/idle.
-- [ ] Run all pure core tests, then `dart test test/domain/character_action/`; commit `feat: add single-clock character action controller`.
+- [ ] Run all pure core tests, then `flutter test test/domain/character_action/`; commit `feat: add single-clock character action controller`.
 
 ### Task 1.5 — Enforce pure-domain boundary
 
