@@ -403,10 +403,10 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
           'CuratorHUD',
           'RetroHUD',
           'DistrictDiscovery',
-          'AttractionDetail',
-          'FloatingFeedback',
           'DPad',
           'ModeToggle',
+          'AttractionDetail',
+          'FloatingFeedback',
         ],
       ),
     );
