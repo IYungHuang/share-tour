@@ -82,6 +82,8 @@ class FakeMapManifest implements OverworldMapManifest {
   @override
   int get oceanColorArgb => 0xFF000080;
   @override
+  bool get hasOceanWaves => false;
+  @override
   Vector2 get defaultSpawnPixel => Vector2(10, 10);
   @override
   double get dpadSpeedPixelsPerSecond => 40;

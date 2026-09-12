@@ -67,9 +67,11 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
     );
     await mapWorld.add(mapComponent);
 
-    // 2. 加入動態水波組件 (Option B: Dynamic JRPG Ocean Waves)
-    final waveImage = await images.load('ocean_wave_sheet.png');
-    await mapWorld.add(OceanWavesComponent(waveImage: waveImage));
+    // 2. 加入動態水波組件 (Option B: Dynamic JRPG Ocean Waves，僅限含海域圖資)
+    if (manifest.hasOceanWaves) {
+      final waveImage = await images.load('ocean_wave_sheet.png');
+      await mapWorld.add(OceanWavesComponent(waveImage: waveImage));
+    }
 
     // 3. 加入玩家佔位圖標 (像素紅點小人)
     playerComponent =

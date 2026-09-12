@@ -14,10 +14,10 @@ class KyotoNightMapManifest implements OverworldMapManifest {
   static Future<KyotoNightMapManifest> load() async =>
       const KyotoNightMapManifest();
 
-  static const double minLat = 34.9800;
-  static const double maxLat = 35.0200;
-  static const double minLng = 135.7400;
-  static const double maxLng = 135.7800;
+  static const double minLat = 34.8800;
+  static const double maxLat = 35.0800;
+  static const double minLng = 135.6600;
+  static const double maxLng = 135.8200;
 
   @override
   String get mapId => 'kyoto_night_block';
@@ -30,6 +30,9 @@ class KyotoNightMapManifest implements OverworldMapManifest {
 
   @override
   int get oceanColorArgb => 0xFF10141E;
+
+  @override
+  bool get hasOceanWaves => false;
 
   @override
   Vector2 get defaultSpawnPixel => kyotoSpawnPixel.clone();
@@ -47,10 +50,38 @@ class KyotoNightMapManifest implements OverworldMapManifest {
   @override
   List<AdministrativeDistrict> get administrativeDistricts => [
         AdministrativeDistrict(
-          code: 'kyoto_central',
-          name: '京都夜間街區',
-          centerGeo: const GeoPoint(35.0000, 135.7600),
-          centerPixel: Vector2(512, 512),
+          code: 'kyoto_nakagyo',
+          name: '洛中・河原町街區',
+          centerGeo: const GeoPoint(35.0060, 135.7680),
+          centerPixel: Vector2(665.0, 395.0),
+          minZoomForSpots: 0.5,
+        ),
+        AdministrativeDistrict(
+          code: 'kyoto_higashiyama',
+          name: '洛東・祇園清水街區',
+          centerGeo: const GeoPoint(35.0000, 135.7780),
+          centerPixel: Vector2(725.0, 415.0),
+          minZoomForSpots: 0.5,
+        ),
+        AdministrativeDistrict(
+          code: 'kyoto_sakyo',
+          name: '洛東北・左京大文字街區',
+          centerGeo: const GeoPoint(35.0300, 135.7850),
+          centerPixel: Vector2(780.0, 275.0),
+          minZoomForSpots: 0.5,
+        ),
+        AdministrativeDistrict(
+          code: 'kyoto_arashiyama',
+          name: '洛西・嵐山嵯峨街區',
+          centerGeo: const GeoPoint(35.0200, 135.6800),
+          centerPixel: Vector2(145.0, 340.0),
+          minZoomForSpots: 0.5,
+        ),
+        AdministrativeDistrict(
+          code: 'kyoto_fushimi_uji',
+          name: '洛南・伏見宇治街區',
+          centerGeo: const GeoPoint(34.9400, 135.7700),
+          centerPixel: Vector2(700.0, 680.0),
           minZoomForSpots: 0.5,
         ),
       ];
@@ -75,5 +106,5 @@ class KyotoNightMapManifest implements OverworldMapManifest {
   }
 
   @override
-  double metersPerPixelAt(Vector2 pixel) => 4.0;
+  double metersPerPixelAt(Vector2 pixel) => 20.0;
 }

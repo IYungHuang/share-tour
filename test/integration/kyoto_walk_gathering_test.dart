@@ -41,7 +41,7 @@ void main() {
 
           // 否則依方向前進一個 tick
           final dir = diff.normalized();
-          await driver.tick(direction: dir, autoGather: true);
+          await driver.tick(direction: dir, autoGather: false);
 
           if (driver.runState.gatheredPoiIds.contains(expectedPoiId)) {
             break;

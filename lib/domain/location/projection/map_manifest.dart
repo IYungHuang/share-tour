@@ -36,6 +36,9 @@ abstract class OverworldMapManifest {
   Vector2 get mapDimensions;
   int get oceanColorArgb;
 
+  /// 此圖資是否包含海洋海浪效果（預設為 false，內陸城市如京都為 false，海島如台灣為 true）
+  bool get hasOceanWaves => false;
+
   /// 冷啟動的起始顯示點。不查詢平台的最後已知位置。
   Vector2 get defaultSpawnPixel;
 

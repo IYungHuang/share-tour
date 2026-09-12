@@ -42,6 +42,9 @@ class TaiwanMapManifest implements OverworldMapManifest {
   @override
   int get oceanColorArgb => 0xFF1E6F9F;
 
+  @override
+  bool get hasOceanWaves => true;
+
   /// 自通用引擎搬來（PRE-7）：降落點是圖資的一部分，不是引擎的常數。
   @override
   Vector2 get defaultSpawnPixel => Vector2(1162, 148);
