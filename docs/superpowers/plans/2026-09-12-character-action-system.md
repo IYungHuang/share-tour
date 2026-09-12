@@ -82,10 +82,10 @@ Use these files unless implementation evidence requires a narrower equivalent; k
 
 ### Task 1.1 — Implement action channels and canonicalization
 
-- [ ] Add RED tests for defaults, equality across all channels, exact canonical field order/casing, `sit`, `drink`, `sit + drink`, `walk + oneHand`, and `run + guide.point`.
-- [ ] Add RED tests proving duplicate values in one channel are rejected instead of last-write-wins; unknown shorthand and invalid special namespace are rejected.
-- [ ] Implement small channel enums plus immutable `CharacterAction`, `canonicalKey`, and `fromShorthand(Iterable<String>)`; represent absent special as canonical `special=none`.
-- [ ] Run `flutter test test/domain/character_action/character_action_test.dart`; commit `feat: add composable character actions`.
+- [x] Add RED tests for defaults, equality across all channels, exact canonical field order/casing, `sit`, `drink`, `sit + drink`, `walk + oneHand`, and `run + guide.point`.
+- [x] Add RED tests proving duplicate values in one channel are rejected instead of last-write-wins; unknown shorthand and invalid special namespace are rejected.
+- [x] Implement small channel enums plus immutable `CharacterAction`, `canonicalKey`, and `fromShorthand(Iterable<String>)`; represent absent special as canonical `special=none`.
+- [x] Run `flutter test test/domain/character_action/character_action_test.dart`; commit `feat: add composable character actions`.
 
 ### Task 1.2 — Implement descriptors and capability registry
 
