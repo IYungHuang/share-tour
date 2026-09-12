@@ -63,7 +63,8 @@ class _ShutterProtoPageState extends State<ShutterProtoPage>
   var _showTimeline = false;
 
   late final AnimationController _ring;
-  final _latency = LatencyStats();
+  final _jitter = JitterStats();
+  var _jitterDropped = 0;
   final _stopwatch = Stopwatch()..start();
 
   /// 按下瞬間的指標時戳（判定的唯一權威時間軸，v4 REQ-M5-01.3）。
@@ -93,11 +94,13 @@ class _ShutterProtoPageState extends State<ShutterProtoPage>
   }
 
   void _onDown(PointerDownEvent e) {
-    // 指標時戳的抖動量測：本地單調時鐘與事件時戳的差，其 σ 即輸入管線抖動。
-    // 兩者 epoch 不同，故只取 σ，絕對值無意義。
-    _latency.add(
-      (_stopwatch.elapsed - e.timeStamp).inMicroseconds / 1000.0,
+    // 時鐘要在這個函式**最前面**讀 —— 之後的任何工作都會把排程延遲算進量測。
+    final now = _stopwatch.elapsed;
+    final accepted = _jitter.add(
+      (now - e.timeStamp).inMicroseconds / 1000.0,
+      now,
     );
+    if (!accepted) _jitterDropped++;
 
     _downStamp = e.timeStamp;
     _framingTrail
@@ -186,6 +189,8 @@ class _ShutterProtoPageState extends State<ShutterProtoPage>
 
   int get _sessionElapsedMs => _stopwatch.elapsedMilliseconds - _sessionStartMs;
 
+  int get _timeouts => _shots.where((s) => s.timedOut).length;
+
   Map<ShutterTier, int> get _tally {
     final m = {for (final t in ShutterTier.values) t: 0};
     for (final s in _shots) {
@@ -253,7 +258,8 @@ class _ShutterProtoPageState extends State<ShutterProtoPage>
                   onPressed: () => setState(() {
                     _shots.clear();
                     _last = null;
-                    _latency.clear();
+                    _jitter.clear();
+                    _jitterDropped = 0;
                     _sessionStartMs = _stopwatch.elapsedMilliseconds;
                   }),
                   child: const Text('重設'),
@@ -325,17 +331,19 @@ class _ShutterProtoPageState extends State<ShutterProtoPage>
   Widget _readout() {
     final t = _tally;
     final n = _shots.length;
-    final v = _latency.verdict;
+    final v = _jitter.verdictFor(_params.perfectWindowMs.toDouble());
     final verdictText = switch (v) {
-      LatencyVerdict.insufficientData =>
-        '樣本不足（需 ${LatencyStats.minSamplesForVerdict}）',
-      LatencyVerdict.trainable => '可練的技巧',
-      LatencyVerdict.lottery => '★ 抽獎 —— 完美窗被裝置抖動主導',
+      JitterVerdict.insufficientData =>
+        '樣本不足（需 ${JitterStats.minSamplesForVerdict}）',
+      JitterVerdict.comfortable => '充裕 —— 窗寬有 25% 以上餘裕',
+      JitterVerdict.marginal => '臨界 —— 剛好夠用，沒有餘裕',
+      JitterVerdict.lottery => '★ 抽獎 —— 窗寬低於抖動要求',
     };
     final verdictColour = switch (v) {
-      LatencyVerdict.insufficientData => Colors.white54,
-      LatencyVerdict.trainable => Colors.greenAccent,
-      LatencyVerdict.lottery => Colors.redAccent,
+      JitterVerdict.insufficientData => Colors.white54,
+      JitterVerdict.comfortable => Colors.greenAccent,
+      JitterVerdict.marginal => Colors.amberAccent,
+      JitterVerdict.lottery => Colors.redAccent,
     };
 
     return Container(
@@ -363,14 +371,24 @@ class _ShutterProtoPageState extends State<ShutterProtoPage>
               const Text('上次  —— 按住畫面，在環與目標吻合時放開'),
             Text(
               '累計  $n 次'
-              '${n > 0 ? '  P ${t[ShutterTier.perfect]} / N ${t[ShutterTier.normal]} / F ${t[ShutterTier.failed]}' : ''}'
-              '  總耗時 ${(_sessionElapsedMs / 1000).toStringAsFixed(1)} s'
-              '${n > 0 ? '  每次 ${(_sessionElapsedMs / n / 1000).toStringAsFixed(1)} s' : ''}',
+              '${n > 0 ? '  P ${t[ShutterTier.perfect]} / N ${t[ShutterTier.normal]}'
+                  ' / F ${t[ShutterTier.failed]}（其中逾時 $_timeouts）' : ''}',
             ),
             Text(
-              '抖動  σ ${_latency.sigma.toStringAsFixed(1)} ms'
-              '  (n=${_latency.count}，上限 ${LatencyStats.jitterCeilingMs.toStringAsFixed(0)})'
-              '  建議最小完美窗 ${_latency.recommendedMinWindowMs.toStringAsFixed(0)} ms',
+              '節奏  總耗時 ${(_sessionElapsedMs / 1000).toStringAsFixed(1)} s'
+              '${n > 0 ? '  每次 ${(_sessionElapsedMs / n / 1000).toStringAsFixed(1)} s'
+                  '  儀式上限 ${(_params.ceremonyMs / 1000).toStringAsFixed(1)} s' : ''}',
+            ),
+            Text(
+              '抖動  MAD ${_jitter.mad.toStringAsFixed(1)}'
+              '  穩健σ ${_jitter.robustSigma.toStringAsFixed(1)}'
+              '  (原始σ ${_jitter.sigma.toStringAsFixed(1)})'
+              '  p95 ${_jitter.p95Abs.toStringAsFixed(1)} ms',
+            ),
+            Text(
+              '      n=${_jitter.count}  丟棄 $_jitterDropped'
+              '（閒置 > ${JitterStats.idleGap.inMilliseconds} ms）'
+              '  建議窗寬 ${_jitter.recommendedWindowMs.toStringAsFixed(0)} ms',
             ),
             Text('裁決  $verdictText', style: TextStyle(color: verdictColour)),
           ],
