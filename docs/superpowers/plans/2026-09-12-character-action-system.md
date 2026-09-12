@@ -30,7 +30,7 @@ Use these files unless implementation evidence requires a narrower equivalent; k
 - `lib/domain/character_action/character_action.dart`: channel enums and immutable `CharacterAction`; canonical key format; shorthand normalization; same-channel conflict exception. Default action is `idle + standing + none + none + none`.
 - `lib/domain/character_action/character_action_descriptor.dart`: immutable `CharacterActionDescriptor` with action, `loop`, `priority`, `canInterrupt`, `fallbackAction`, and `animationKey`; `CharacterActionDescriptorRegistry` keyed by canonical action key.
 - `lib/domain/character_action/character_animation_manifest.dart`: pure manifest records, `AssetKind`, `DirectionAxis`, `PixelPoint`, `PixelPadding`, `PixelSpacing`, and `CharacterAnimationManifest`.
-- `lib/domain/character_action/character_animation_resolver.dart`: deterministic exact-action/direction lookup and `ResolvedCharacterAnimation`; no capability checks, clock, or frame advancement.
+- `lib/domain/character_action/character_animation_resolver.dart`: deterministic exact-action/direction lookup and `ResolvedCharacterAnimation`; no fallback ownership, capability checks, clock, or frame advancement.
 - `lib/domain/character_action/character_action_state.dart`: immutable `CharacterActionState`, normalized resume snapshot, resolved animation, elapsed, frame index, and completion flag.
 - `lib/domain/character_action/character_capability_registry.dart`: pure character capability lookup for special canonical keys; absent capability rejects special action before fallback resolution.
 - `lib/domain/character_action/character_action_controller.dart`: sole playback clock; `play`, `setDirection`, `stop`, `update`; exposes current state and resolved animation; owns one resume snapshot only.
@@ -47,7 +47,7 @@ Use these files unless implementation evidence requires a narrower equivalent; k
 ### Task 0.1 — Establish clean baseline evidence
 
 - [ ] Record `git status --short --branch`, `git worktree list`, and current test blockers in branch notes or task log; do not alter unrelated files.
-- [ ] Run codegen, then targeted existing player/game tests. Preserve evidence that clean checkout is blocked by missing `assets/audio/` and that generated artifacts are environment outputs.
+- [ ] Run codegen, then `flutter test test/game/player_component_test.dart test/game/universal_overworld_game_test.dart`. Preserve evidence that clean checkout is blocked by missing `assets/audio/` and that generated artifacts are environment outputs.
 - [ ] Inspect any supplied character sheets with an image metadata tool before adding manifest records. If no valid RGBA sheets exist, keep real-asset integration gated and use synthetic decoded sheet metadata only in validator tests.
 - [ ] Commit only if a small baseline note is needed; otherwise leave no code change.
 
@@ -89,7 +89,7 @@ Use these files unless implementation evidence requires a narrower equivalent; k
 
 ### Task 1.2 — Implement descriptors and capability registry
 
-- [ ] Add RED tests for fixed priorities/fallbacks of `idle`, `walk`, `run`, `eat`, `drink`, `sleep`, `dash`, and `jump`; special descriptors require explicit priority/loop/canInterrupt/fallback.
+- [ ] Add RED tests for fixed priority/loop/canInterrupt/fallback values of `idle`, `walk`, `run`, `eat`, `drink`, `sleep`, `dash`, and `jump`; special descriptors require explicit priority/loop/canInterrupt/fallback.
 - [ ] Add RED tests proving no implicit special priority, no descriptor inheritance for unregistered combinations, capability denial, and fallback target existence.
 - [ ] Implement `CharacterActionDescriptor`, registry lookup by canonical key, and `CharacterCapabilityRegistry` keyed by character id and special canonical key.
 - [ ] Run descriptor/capability tests; commit `feat: add character action descriptors`.
@@ -98,15 +98,15 @@ Use these files unless implementation evidence requires a narrower equivalent; k
 
 - [ ] Add RED tests for exact character/action/direction lookup, resolved metadata completeness, stable animation key, asset kind enforcement, and no time/random/global-state dependency.
 - [ ] Implement resolver as a pure lookup over validated manifest data. It returns no frame advancement; controller supplies current frame index.
-- [ ] Add tests proving unregistered canonical actions do not decompose into locomotion or special descriptors and resolve directly through character idle fallback policy.
+- [ ] Add controller-path tests proving unregistered canonical actions do not decompose into locomotion or special descriptors and use the character idle fallback; resolver tests remain exact lookup only.
 - [ ] Run `dart test test/domain/character_action/character_animation_resolver_test.dart`; commit `feat: resolve character animations deterministically`.
 
 ### Task 1.4 — Implement state machine and single clock
 
-- [ ] Add RED table-driven tests for duration `frameCount/fps`, first frame, loop after one/two durations, non-loop last frame and one-time completion, normalized direction progress, same-action no reset, and action-switch reset.
+- [ ] Add RED table-driven tests for duration `frameCount/fps`, first frame, loop after one/two durations, non-loop last frame and one-time completion, normalized direction progress including a completed one-shot, same-action no reset, and action-switch reset.
 - [ ] Add RED interruption tests: sleep rejects walk; jump overrides lower priority; same-priority special cannot bypass non-interruptible action; eat can replace same-priority interruptible action; rejected command preserves state.
 - [ ] Add RED resume tests for `walk → dash → jump → walk`, single resume snapshot under nested one-shots, invalid resume fallback, and `stop()` clearing resume state in `walk → dash → stop → jump → idle`.
-- [ ] Implement `CharacterActionState` and `CharacterActionController`. `update(dt)` is only elapsed/frame/completion mutator; reject non-finite/negative `dt`; loop wraps, non-loop clamps; completion restores one resume snapshot or valid fallback/idle.
+- [ ] Implement `CharacterActionState` and `CharacterActionController`. `update(dt)` is only elapsed/frame/completion mutator; loop wraps, non-loop clamps; completion restores one resume snapshot or valid fallback/idle.
 - [ ] Run all pure core tests, then `dart test test/domain/character_action/`; commit `feat: add single-clock character action controller`.
 
 ### Task 1.5 — Enforce pure-domain boundary
@@ -118,9 +118,9 @@ Use these files unless implementation evidence requires a narrower equivalent; k
 
 ### Task 2.1 — Add asset loader and manual SpriteAnimation frame adapter
 
-- [ ] Add RED component tests around a synthetic in-memory/fixture RGBA sheet: exact relative asset path, row/column frame source positions, no duplicate `assets/images/` prefix, normalized anchor, logical render size, and `FilterQuality.none`.
+- [ ] Add RED component tests around a synthetic in-memory/fixture RGBA sheet: exact relative asset path, row/column frame source positions, no duplicate `assets/images/` prefix, normalized anchor, logical render size, `FilterQuality.none`, and missing/undecodable asset failure.
 - [ ] Implement `CharacterAssetLoader` outside domain. Use Flame image loading once; construct `Sprite` frames from manifest source origins/padding/spacing and store them in a `SpriteAnimation` with manifest FPS/loop metadata.
-- [ ] Implement `CharacterComponent` as a `PositionComponent` with a local-zero `SpriteComponent` child. On every `update(dt)`, call controller exactly once, select controller frame index, and render; do not attach a ticker or let `SpriteAnimation` advance itself.
+- [ ] Implement `CharacterComponent` as a `PositionComponent` with a local-zero `SpriteComponent` child. On every `update(dt)`, call controller exactly once, assign `SpriteAnimation.frames[controller.frameIndex].sprite` to the child, and render with manifest anchor/logical size; do not attach a ticker or let `SpriteAnimation` advance itself.
 - [ ] Keep unloaded/no-manifest compatibility renderer as existing red placeholder so old constructor can instantiate without synchronous image decode.
 - [ ] Run `flutter test test/game/character_component_test.dart`; commit `feat: add manifest-driven character component`.
 
