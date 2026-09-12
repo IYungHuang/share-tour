@@ -80,10 +80,10 @@ class TimelineRail extends ConsumerWidget {
     for (final fact in pairFacts) {
       final (i, next) = fact.pairIndices!;
       final key = switch (fact.reasonCode) {
-        'fatigue_spike' || 'fatigue_hype_penalty' =>
-          Key('fatigue_warning_${i}_$next'),
-        'chaotic_combo' || 'tag_synergy' =>
-          Key('combo_indicator_${i}_$next'),
+        'fatigue_spike' => Key('fatigue_warning_${i}_$next'),
+        'fatigue_hype_penalty' => Key('fatigue_hype_warning_${i}_$next'),
+        'tag_synergy' => Key('combo_indicator_${i}_$next'),
+        'chaotic_combo' => Key('chaotic_combo_indicator_${i}_$next'),
         _ => Key('rail_indicator_${fact.reasonCode}_${i}_$next'),
       };
 

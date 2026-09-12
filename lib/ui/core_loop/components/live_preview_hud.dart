@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_tour/domain/core_loop/causal/causal_fact.dart';
 import 'package:share_tour/domain/core_loop/models/timeline_itinerary.dart';
 import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
+
+import 'causal_badge.dart';
 
 /// 即時數值看板組件 (LivePreviewHUD)
 /// 遵循 AC-CF-3.2：不含 finalTheme / totalHype 之渲染，絕景區以 4 格 pip 呈現，社畜局呈現階梯張力警示
@@ -26,6 +29,10 @@ class LivePreviewHUD extends ConsumerWidget {
 
     final targetBudget = client.targetBudget;
     final isOverspent = stats.totalCost > targetBudget;
+    final causalReport = ref.watch(itineraryCausalReportProvider);
+    final budgetFact = causalReport.facts
+        .where((f) => f.domain == CausalDomain.budgetConstraint)
+        .firstOrNull;
 
     return RepaintBoundary(
       child: Container(
@@ -83,6 +90,13 @@ class LivePreviewHUD extends ConsumerWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      if (budgetFact != null) ...[
+                        const SizedBox(height: 2),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: CausalBadge.fromFact(budgetFact),
+                        ),
+                      ],
                     ],
                   ),
                 ),
