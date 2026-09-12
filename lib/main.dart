@@ -329,7 +329,7 @@ class _RetroHudOverlay extends ConsumerWidget {
               children: [
                 Text(
                   manifest.mapId == 'kyoto_night_block'
-                      ? 'KYOTO: NIGHT BLOCK'
+                      ? 'KYOTO: BASIN OVERWORLD'
                       : 'TAIWAN: OVERWORLD',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,

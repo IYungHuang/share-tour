@@ -23,13 +23,13 @@ class KyotoNightMapManifest implements OverworldMapManifest {
   String get mapId => 'kyoto_night_block';
 
   @override
-  String get assetPath => 'kyoto_night_block.png';
+  String get assetPath => 'kyoto_basin_overworld.png';
 
   @override
   Vector2 get mapDimensions => Vector2(1024, 1024);
 
   @override
-  int get oceanColorArgb => 0xFF10141E;
+  int get oceanColorArgb => 0xFF141E16;
 
   @override
   bool get hasOceanWaves => false;

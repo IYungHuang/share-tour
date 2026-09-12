@@ -17,7 +17,7 @@ void main() {
 
     test('1. 基礎屬性契約：mapId, assetPath, 1024x1024 尺寸, 空 poiNodes', () {
       expect(manifest.mapId, 'kyoto_night_block');
-      expect(manifest.assetPath, 'kyoto_night_block.png');
+      expect(manifest.assetPath, 'kyoto_basin_overworld.png');
       expect(manifest.mapDimensions, Vector2(1024, 1024));
       expect(manifest.poiNodes, isEmpty);
       expect(manifest.oceanColorArgb, isNonZero);
@@ -90,7 +90,7 @@ void main() {
       }
     });
 
-    test('8. 底圖資產可解碼：kyoto_night_block.png 存在且為 1024x1024 圖像', () async {
+    test('8. 底圖資產可解碼：kyoto_basin_overworld.png 存在且為 1024x1024 圖像', () async {
       final file = File('assets/images/${manifest.assetPath}');
       expect(file.existsSync(), isTrue, reason: '底圖資產檔案必須存在於 assets/images/');
 
