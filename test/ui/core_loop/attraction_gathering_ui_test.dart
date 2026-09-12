@@ -12,6 +12,7 @@ import 'package:share_tour/state/location/location_controller.dart';
 import 'package:share_tour/domain/location/models/location_status.dart';
 import 'package:share_tour/state/location/location_providers.dart';
 import 'package:share_tour/ui/core_loop/field/attraction_detail_card.dart';
+import 'package:share_tour/ui/core_loop/field/gathering_replace_bottom_sheet.dart';
 import 'package:vector_math/vector_math.dart';
 
 import '../../fakes/fake_wakelock_control.dart';
@@ -136,6 +137,7 @@ void main() {
       void Function(TravelMaterial, int)? onGathered,
     }) {
       return ProviderScope(
+        key: UniqueKey(),
         overrides: [
           mapManifestProvider.overrideWithValue(FakeSimpleManifest()),
           locationControllerProvider.overrideWith(() => FakeLocationNotifier(Vector2(100, 100))),
@@ -354,6 +356,90 @@ void main() {
 
       expect(find.text('距玩家: 40 px'), findsOneWidget);
       expect(find.text('太遠 (需<35px)'), findsOneWidget);
+    });
+
+    testWidgets('AC-CF-2.4: material.hasFatigueRisk 為真時取材卡面與替換清單皆渲染 [💀 拉車隱患]，為假時不渲染', (tester) async {
+      // 1. 卡面測試：hasFatigueRisk == false (riskLevel: 2)
+      final lowRiskPoi = DistrictAttraction(
+        id: 'poi_low_risk',
+        title: '低風險景點',
+        districtCode: 'taipei',
+        districtName: '台北',
+        geo: const GeoPoint(25.0, 121.5),
+        pixel: Vector2(100, 110),
+        rating: 4.5,
+        reviewCount: 100,
+        category: AttractionCategory.landmark,
+        triggerRadiusMeters: 50.0,
+      );
+      fakeResolver.map['poi_low_risk'] = sampleMaterial.copyWith(
+        id: 'mat_low_risk',
+        riskLevel: 2,
+      );
+
+      final selected = ValueNotifier<DistrictAttraction?>(lowRiskPoi);
+      final normalState = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);
+      await tester.pumpWidget(buildTestWidget(selected: selected, state: normalState));
+      await tester.pumpAndSettle();
+
+      expect(find.text('[💀 拉車隱患]'), findsNothing);
+
+      // 2. 卡面測試：hasFatigueRisk == true (riskLevel: 3)
+      final highRiskPoi = DistrictAttraction(
+        id: 'poi_high_risk',
+        title: '高風險景點',
+        districtCode: 'taipei',
+        districtName: '台北',
+        geo: const GeoPoint(25.0, 121.5),
+        pixel: Vector2(100, 110),
+        rating: 4.5,
+        reviewCount: 100,
+        category: AttractionCategory.landmark,
+        triggerRadiusMeters: 50.0,
+      );
+      final highRiskMaterial = sampleMaterial.copyWith(
+        id: 'mat_high_risk',
+        riskLevel: 3,
+      );
+      fakeResolver.map['poi_high_risk'] = highRiskMaterial;
+
+      selected.value = highRiskPoi;
+      await tester.pumpAndSettle();
+
+      expect(find.text('[💀 拉車隱患]'), findsOneWidget);
+
+      // 3. 換牌抽屜測試：當腰包滿且新素材有疲勞隱患時，抽屜呈現 [💀 拉車隱患]
+      var fullState = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);
+      for (int i = 0; i < 6; i++) {
+        fullState = fullState.copyWith(
+          inventory: fullState.inventory.add(
+            sampleMaterial.copyWith(
+              id: 'mat_old_$i',
+              name: '舊卡 $i',
+              riskLevel: i == 0 ? 3 : 1,
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(buildTestWidget(
+        selected: selected,
+        state: fullState,
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('👝 踩線換牌'));
+      await tester.pumpAndSettle();
+
+      // 新素材（highRiskMaterial）有疲勞隱患，舊卡 0 也有疲勞隱患，抽屜內共 2 個，全畫面含底層卡面共 3 個
+      expect(find.text('[💀 拉車隱患]'), findsNWidgets(3));
+      expect(
+        find.descendant(
+          of: find.byType(GatheringReplaceBottomSheet),
+          matching: find.text('[💀 拉車隱患]'),
+        ),
+        findsNWidgets(2),
+      );
     });
   });
 }

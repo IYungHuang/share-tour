@@ -98,6 +98,17 @@ class GatheringReplaceBottomSheet extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (newMaterial.hasFatigueRisk) ...[
+                    const SizedBox(width: 6),
+                    const Text(
+                      '[💀 拉車隱患]',
+                      style: TextStyle(
+                        color: Color(0xFFFC8181),
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -129,10 +140,27 @@ class GatheringReplaceBottomSheet extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  item.name,
-                                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                  overflow: TextOverflow.ellipsis,
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        item.name,
+                                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (item.hasFatigueRisk) ...[
+                                      const SizedBox(width: 6),
+                                      const Text(
+                                        '[💀 拉車隱患]',
+                                        style: TextStyle(
+                                          color: Color(0xFFFC8181),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                                 Text(
                                   item.tags.join(' '),

@@ -8,6 +8,7 @@ enum ClientType {
 class ClientSpec {
   const ClientSpec({
     required this.type,
+    required this.personaName,
     required this.displayName,
     required this.description,
     required this.targetBudget,
@@ -21,6 +22,7 @@ class ClientSpec {
   });
 
   final ClientType type;
+  final String personaName;
   final String displayName;
   final String description;
   final int targetBudget;
@@ -42,6 +44,7 @@ class ClientSpec {
   /// 客戶 A：極限窮遊社畜
   static const budgetWorker = ClientSpec(
     type: ClientType.budgetWorker,
+    personaName: '小林',
     displayName: '極限窮遊社畜',
     description: '預算極低、精打細算，極度痛恨超支，但也拒絕坐牢般的無聊行程。',
     targetBudget: 2000,
@@ -56,6 +59,7 @@ class ClientSpec {
   /// 客戶 B：IG 網紅
   static const hypeInfluencer = ClientSpec(
     type: ClientType.hypeInfluencer,
+    personaName: '安娜',
     displayName: 'IG 網紅',
     description: '預算無上限，追求爆點絕景打卡照，絕不能有疲勞脫妝的拉車行程。',
     targetBudget: 8000,

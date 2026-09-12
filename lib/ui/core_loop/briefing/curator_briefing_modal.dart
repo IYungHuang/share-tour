@@ -254,15 +254,21 @@ class CuratorBriefingModal extends ConsumerWidget {
             children: [
               Icon(iconData, color: accentColor, size: 18),
               const SizedBox(width: 6),
-              Text(
-                '委託客戶：${client.displayName}',
-                style: TextStyle(
-                  color: accentColor,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '委託客戶：${client.personaName}（${client.displayName}）',
+                    style: TextStyle(
+                      color: accentColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 6),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(

@@ -15,8 +15,10 @@ void main() {
   Widget createSubject({
     CuratorRunState? initialState,
     VoidCallback? onOpenGearShop,
+    Key? key,
   }) {
     return ProviderScope(
+      key: key ?? UniqueKey(),
       overrides: [
         persistenceRepositoryProvider
             .overrideWithValue(FakePersistenceRepository()),
@@ -153,6 +155,32 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(gearShopOpened, isTrue);
+    });
+
+    testWidgets('委託客戶標題顯示客戶 personaName 與 displayName 具名格式', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final stateWorker = CuratorRunState.createBriefing(
+        equipment: EquipmentInventory.initial(),
+        client: ClientSpec.budgetWorker,
+      );
+
+      await tester.pumpWidget(createSubject(initialState: stateWorker));
+      await tester.pumpAndSettle();
+
+      expect(find.text('委託客戶：小林（極限窮遊社畜）'), findsOneWidget);
+
+      final stateInfluencer = CuratorRunState.createBriefing(
+        equipment: EquipmentInventory.initial(),
+        client: ClientSpec.hypeInfluencer,
+      );
+
+      await tester.pumpWidget(createSubject(initialState: stateInfluencer));
+      await tester.pumpAndSettle();
+
+      expect(find.text('委託客戶：安娜（IG 網紅）'), findsOneWidget);
     });
   });
 }

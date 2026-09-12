@@ -140,6 +140,21 @@ class AttractionDetailCard extends ConsumerWidget {
                           ),
                         ),
                       ],
+                      if (material != null && material.hasFatigueRisk) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          color: const Color(0xFFFFF5F5),
+                          child: const Text(
+                            '[💀 拉車隱患]',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFE53E3E),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
 
