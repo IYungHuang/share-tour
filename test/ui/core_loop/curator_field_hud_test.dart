@@ -49,15 +49,15 @@ void main() {
       expect(find.text('🌅'), findsOneWidget);
     });
 
-    testWidgets('HP 扣減即時反應與赤字預算呈現紅色警告，且時段切換至深夜', (tester) async {
+    testWidgets('HP 扣減即時反應與赤字預算呈現紅色警告，體力耗盡切換至深夜', (tester) async {
       final state = CuratorRunState.initial(
         client: ClientSpec.budgetWorker,
         initialBudget: 2000,
         initialHp: 100,
       );
-      // 人為扣除 HP 至 15 (紅色警戒)，預算扣至 -500 (赤字)
+      // 人為扣除 HP 至 0 (體力耗盡)，預算扣至 -500 (赤字)
       final damagedState = state.copyWith(
-        resources: state.resources.consumeHp(85).spendBudget(2500),
+        resources: state.resources.consumeHp(100).spendBudget(2500),
         inventory: state.inventory.add(
           const TravelMaterial(
             id: 'mat_1',
@@ -71,27 +71,41 @@ void main() {
 
       await tester.pumpWidget(buildTestWidget(state: damagedState));
 
-      expect(find.textContaining('15/100'), findsOneWidget);
+      expect(find.textContaining('0/100'), findsOneWidget);
       expect(find.textContaining('-500'), findsOneWidget);
       expect(find.textContaining('1/6'), findsOneWidget);
-      expect(find.textContaining('19:00+'), findsOneWidget);
+      expect(find.textContaining('24:00'), findsOneWidget);
       expect(find.text('🌙'), findsOneWidget);
     });
 
-    testWidgets('HP 扣至黃昏 (40 HP) 呈現琥珀高光與相機 1.5x 加成提醒', (tester) async {
+    testWidgets('推進至黃昏時段呈現琥珀高光與相機 1.5x 加成提醒', (tester) async {
       final state = CuratorRunState.initial(
         client: ClientSpec.budgetWorker,
         initialBudget: 2000,
         initialHp: 100,
       );
-      final duskState = state.copyWith(
-        resources: state.resources.consumeHp(60), // 剩 40 HP -> 黃昏
+      // 扣除 50 HP 並收集 3 張卡 -> t = 0.50 (15:00 黃昏起點)
+      var duskState = state.copyWith(
+        resources: state.resources.consumeHp(50),
       );
+      for (var i = 0; i < 3; i++) {
+        duskState = duskState.copyWith(
+          inventory: duskState.inventory.add(
+            TravelMaterial(
+              id: 'mat_$i',
+              name: '卡片$i',
+              tags: const ['#散步'],
+              themeValue: 10,
+              hypeValue: 10,
+            ),
+          ),
+        );
+      }
 
       await tester.pumpWidget(buildTestWidget(state: duskState));
 
-      expect(find.textContaining('40/100'), findsOneWidget);
-      expect(find.textContaining('16:00 📷'), findsOneWidget);
+      expect(find.textContaining('50/100'), findsOneWidget);
+      expect(find.textContaining('15:00 📷'), findsOneWidget);
       expect(find.text('🌇'), findsOneWidget);
     });
 

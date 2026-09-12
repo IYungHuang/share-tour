@@ -42,7 +42,7 @@ void main() {
         normalizedProgress: 0.0,
         virtualHour: 6.0,
         period: TourPeriod.dawn,
-        ambientColor: Color(0x30A5C9E8),
+        ambientColorArgb: 0x30A5C9E8,
         lanternIntensity: 0.0,
       );
 
@@ -64,7 +64,7 @@ void main() {
         normalizedProgress: 0.60,
         virtualHour: 16.8,
         period: TourPeriod.dusk,
-        ambientColor: Color(0x55F59E0B),
+        ambientColorArgb: 0x55F59E0B,
         lanternIntensity: 0.40,
       );
 
@@ -77,7 +77,7 @@ void main() {
         normalizedProgress: 1.0,
         virtualHour: 24.0,
         period: TourPeriod.night,
-        ambientColor: Color(0x800B132B),
+        ambientColorArgb: 0x800B132B,
         lanternIntensity: 1.0,
       );
       component.update(0.5);

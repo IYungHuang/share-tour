@@ -64,7 +64,7 @@ class TimeOfDayLightingComponent extends Component {
     double lanternIntensity;
 
     if (snapshot != null) {
-      ambientColor = snapshot.ambientColor;
+      ambientColor = Color(snapshot.ambientColorArgb);
       lanternIntensity = snapshot.lanternIntensity;
     } else {
       final tod = timeOfDayGetter!();

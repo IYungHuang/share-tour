@@ -264,6 +264,7 @@ class CuratorRunState {
   CuratorRunState gatherPoiMaterial({
     required String poiId,
     required TravelMaterial material,
+    int? overrideHpCost,
   }) {
     if (gatheredPoiIds.contains(poiId)) {
       throw PoiAlreadyGatheredException(poiId);
@@ -275,7 +276,7 @@ class CuratorRunState {
       throw InventoryFullException(inventory.capacity);
     }
 
-    final deltaHp = gatheringHpCost(material);
+    final deltaHp = overrideHpCost ?? gatheringHpCost(material);
     final nextHp = resources.currentHp - deltaHp;
     final bool isNowExhausted = nextHp <= 0;
     final consumedHp = isNowExhausted ? resources.currentHp : deltaHp;
@@ -300,6 +301,7 @@ class CuratorRunState {
     required String poiId,
     required int dropIndex,
     required TravelMaterial newMaterial,
+    int? overrideHpCost,
   }) {
     if (gatheredPoiIds.contains(poiId)) {
       throw PoiAlreadyGatheredException(poiId);
@@ -308,7 +310,7 @@ class CuratorRunState {
       throw const CuratorExhaustedException();
     }
 
-    final deltaHp = gatheringHpCost(newMaterial);
+    final deltaHp = overrideHpCost ?? gatheringHpCost(newMaterial);
     final nextHp = resources.currentHp - deltaHp;
     final bool isNowExhausted = nextHp <= 0;
     final consumedHp = isNowExhausted ? resources.currentHp : deltaHp;

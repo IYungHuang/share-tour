@@ -31,15 +31,15 @@ void main() {
   group('Task 1: AmbientLightingProfile 色溫連續漸變測試', () {
     test('錨點數值與預設值完全一致', () {
       final dawn = AmbientLightingProfile.evaluate(0.0);
-      expect(dawn.color.toARGB32(), 0x30A5C9E8);
+      expect(dawn.colorArgb, 0x30A5C9E8);
       expect(dawn.lanternIntensity, 0.0);
 
       final dusk = AmbientLightingProfile.evaluate(0.60);
-      expect(dusk.color.toARGB32(), 0x55F59E0B);
+      expect(dusk.colorArgb, 0x55F59E0B);
       expect(dusk.lanternIntensity, closeTo(0.40, 0.001));
 
       final night = AmbientLightingProfile.evaluate(1.00);
-      expect(night.color.toARGB32(), 0x800B132B);
+      expect(night.colorArgb, 0x800B132B);
       expect(night.lanternIntensity, 1.0);
     });
 
@@ -48,7 +48,7 @@ void main() {
       for (var i = 0; i <= 100; i++) {
         final t = i / 100.0;
         final res = AmbientLightingProfile.evaluate(t);
-        final alpha = (res.color.a * 255.0).round();
+        final alpha = (res.colorArgb >> 24) & 0xFF;
         if (prevAlpha != -1) {
           // 相鄰步進 Alpha 差異不超過 10 (平滑過渡)
           expect((alpha - prevAlpha).abs(), lessThanOrEqualTo(10));

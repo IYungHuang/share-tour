@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
+import 'package:share_tour/domain/core_loop/time/diurnal_resonance_rule.dart';
 import 'package:share_tour/domain/location/models/district_attraction.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
+import 'package:share_tour/state/core_loop/game_time_controller.dart';
 import 'package:share_tour/state/location/location_providers.dart';
 
 import 'gathering_replace_bottom_sheet.dart';
@@ -42,6 +44,17 @@ class AttractionDetailCard extends ConsumerWidget {
         );
         final bool isPhilosophyMatch = material != null &&
             material.tags.any((t) => currentPhilosophy.preferredTags.contains(t));
+
+        final timeSnapshot = ref.watch(gameTimeProvider);
+        final baseHp = material != null ? gatheringHpCost(material) : 0;
+        final actualHpCost = material != null
+            ? DiurnalResonanceRule.calculateActualCost(
+                baseHpCost: baseHp,
+                currentPeriod: timeSnapshot.period,
+                material: material,
+              )
+            : 0;
+        final resonanceDiscount = baseHp - actualHpCost;
 
         return SafeArea(
           child: Align(
@@ -187,29 +200,45 @@ class AttractionDetailCard extends ConsumerWidget {
                         color: const Color(0xFFF7FAFC),
                         border: Border.all(color: Colors.grey.shade300),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '⚡ 消耗: -${gatheringHpCost(material)} HP',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFFE53E3E),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '⚡ 消耗: -$actualHpCost HP',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFE53E3E),
+                                ),
+                              ),
+                              Text(
+                                '💰 花費: ¥${material.cost}',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFD69E2E),
+                                ),
+                              ),
+                              Text(
+                                '⭐ 風險: ${material.riskLevel}★',
+                                style: const TextStyle(fontSize: 10, color: Colors.black54),
+                              ),
+                            ],
+                          ),
+                          if (resonanceDiscount > 0) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              '🌿 時段共鳴 -$resonanceDiscount HP (契合${timeSnapshot.period.label}節奏)',
+                              style: const TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF16A34A),
+                              ),
                             ),
-                          ),
-                          Text(
-                            '💰 花費: ¥${material.cost}',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFFD69E2E),
-                            ),
-                          ),
-                          Text(
-                            '⭐ 風險: ${material.riskLevel}★',
-                            style: const TextStyle(fontSize: 10, color: Colors.black54),
-                          ),
+                          ],
                         ],
                       ),
                     ),
@@ -400,12 +429,15 @@ class _AttractionGatherActionButton extends ConsumerWidget {
               final effectiveAttraction = nearest?.attraction ?? attraction;
               final effectiveMaterial = nearest?.material ?? material;
 
+              final currentPeriod = ref.read(gameTimeProvider).period;
+
               if (eligibility == GatheringEligibility.ready) {
                 if (effectiveMaterial != null) {
                   final result = controller.gatherPoi(
                     effectiveAttraction.id,
                     manifest: manifest,
                     playerPixel: playerPixel,
+                    period: currentPeriod,
                   );
                   onGathered?.call(result.material, result.hpSpent);
                 }
@@ -426,6 +458,7 @@ class _AttractionGatherActionButton extends ConsumerWidget {
                       manifest: manifest,
                       playerPixel: playerPixel,
                       expectedPoiId: effectiveAttraction.id,
+                      period: currentPeriod,
                     );
                     if (result != null) {
                       onGathered?.call(result.material, result.hpSpent);

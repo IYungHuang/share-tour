@@ -25,7 +25,7 @@ class CuratorRunProgressionDriver implements GameTimeDriver {
         normalizedProgress: 1.0,
         virtualHour: 24.0,
         period: TourPeriod.night,
-        ambientColor: lighting.color,
+        ambientColorArgb: lighting.colorArgb,
         lanternIntensity: lighting.lanternIntensity,
       );
     }
@@ -48,7 +48,7 @@ class CuratorRunProgressionDriver implements GameTimeDriver {
       normalizedProgress: t,
       virtualHour: virtualHour,
       period: period,
-      ambientColor: lighting.color,
+      ambientColorArgb: lighting.colorArgb,
       lanternIntensity: lighting.lanternIntensity,
     );
   }

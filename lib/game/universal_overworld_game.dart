@@ -60,7 +60,10 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
   Color backgroundColor() {
     final baseColor = Color(manifest.oceanColorArgb);
     if (timeSnapshotGetter != null) {
-      return Color.alphaBlend(timeSnapshotGetter!().ambientColor, baseColor);
+      return Color.alphaBlend(
+        Color(timeSnapshotGetter!().ambientColorArgb),
+        baseColor,
+      );
     }
     final time = timeOfDayGetter?.call() ?? TourTimeOfDay.dawn;
     switch (time) {

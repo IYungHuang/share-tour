@@ -20,6 +20,7 @@ import 'game/map_module/manifests/kyoto_night_map_manifest.dart';
 import 'game/map_module/manifests/kyoto_street_block_manifest.dart';
 import 'game/universal_overworld_game.dart';
 import 'state/core_loop/curator_run_providers.dart';
+import 'state/core_loop/game_time_controller.dart';
 import 'state/core_loop/persistence_providers.dart';
 import 'state/location/location_providers.dart';
 import 'ui/core_loop/briefing/curator_briefing_modal.dart';
@@ -276,6 +277,7 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
       ),
       onAttractionSelected: (a) => _selectedAttraction.value = a,
       onDistrictRevealed: (d, count) => _focusedDistrict.value = (d, count),
+      timeSnapshotGetter: () => ref.read(gameTimeProvider),
       timeOfDayGetter: () {
         final runState = ref.read(curatorRunControllerProvider);
         return TourTimeOfDay.fromHpAndPhase(

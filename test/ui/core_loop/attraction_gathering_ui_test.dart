@@ -239,6 +239,55 @@ void main() {
       expect(hpCost, 5, reason: '最後一搏實扣量必須為 5 HP 而非名目 12 HP');
     });
 
+    testWidgets('Task 4: 晨曦時段契合素材顯示綠色折讓文案 (時段共鳴 -3 HP) 且實扣 9 HP', (tester) async {
+      const resonanceMaterial = TravelMaterial(
+        id: 'mat_resonance',
+        name: '清水寺晨間散步',
+        tags: ['#散步', '#寺院'],
+        themeValue: 30,
+        hypeValue: 80,
+        cost: 300,
+        riskLevel: 2, // base 12 HP -> discount 3 HP = 9 HP
+      );
+      final attractionResonance = DistrictAttraction(
+        id: 'poi_resonance',
+        title: '清水寺',
+        districtCode: 'kyoto',
+        districtName: '京都',
+        geo: const GeoPoint(34.9949, 135.7850),
+        pixel: Vector2(100, 120),
+        rating: 4.8,
+        reviewCount: 50000,
+        category: AttractionCategory.landmark,
+        triggerRadiusMeters: 50.0,
+      );
+
+      fakeResolver.map['poi_resonance'] = resonanceMaterial;
+      final selected = ValueNotifier<DistrictAttraction?>(attractionResonance);
+      final state = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);
+      TravelMaterial? gatheredItem;
+      int? hpCost;
+
+      await tester.pumpWidget(buildTestWidget(
+        selected: selected,
+        state: state,
+        onGathered: (m, hp) {
+          gatheredItem = m;
+          hpCost = hp;
+        },
+      ));
+
+      // 檢查折讓文案與實際扣額預覽
+      expect(find.textContaining('-9 HP'), findsOneWidget);
+      expect(find.textContaining('時段共鳴 -3 HP'), findsOneWidget);
+
+      await tester.tap(find.text('📸 踩線取材'));
+      await tester.pumpAndSettle();
+
+      expect(gatheredItem, isNotNull);
+      expect(hpCost, 9, reason: '共鳴折讓 3 HP 後實扣 9 HP');
+    });
+
     testWidgets('AC-M3-4.1 & 4.3: 腰包滿額時顯示「👝 踩線換牌」，點擊彈出換牌抽屜', (tester) async {
       final selected = ValueNotifier<DistrictAttraction?>(attractionReady);
       var state = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);

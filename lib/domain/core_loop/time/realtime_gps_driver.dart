@@ -50,7 +50,7 @@ class RealtimeGpsDriver implements GameTimeDriver {
       normalizedProgress: progress,
       virtualHour: virtualHour,
       period: period,
-      ambientColor: lighting.color,
+      ambientColorArgb: lighting.colorArgb,
       lanternIntensity: lighting.lanternIntensity,
     );
   }
