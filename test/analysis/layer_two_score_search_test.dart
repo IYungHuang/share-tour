@@ -174,5 +174,8 @@ void main() {
       // ignore: avoid_print
       print('');
     }
-  }, timeout: const Timeout(Duration(minutes: 30)));
+  },
+      timeout: const Timeout(Duration(minutes: 30)),
+      // 分析腳本，不是驗收條件。要重跑就拿掉這行。
+      skip: '分析腳本，需要時手動解除 skip 重跑');
 }
