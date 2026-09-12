@@ -143,7 +143,8 @@ spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
 | `SPEC_MVP_TIMELINE_UI.md` / `PLAN_MVP_TIMELINE_UI.md` | M2 4 槽位時間線編輯器、雙客戶 Review 彈窗、狀態接線，SPEC v2，已實作 |
 | `SPEC_MVP_POI_GATHERING.md` / `PLAN_MVP_POI_GATHERING.md` | M3 大世界 POI 踩線取材、野外 HUD、體力透支返程，SPEC v2 簽核，已實作 |
 | `SPEC_MVP_META_PROGRESSION.md` / `PLAN_MVP_META_PROGRESSION.md` | M4 行前委託、黑市裝備升級、`PersistenceRepository` 本機存檔。SPEC v2 / PLAN v1，**未提交版控、待覆核** |
-| `HANDOFF.md` | 交接紀錄，跨對話的進度快照，會隨每次交接改寫。**目前內容停在 2026-09-07 任務 C 階段，已過期** |
+| `SPEC_MVP_MICRO_ACTION.md` | M5 快門微動作與三態取材。**Draft v2，經兩輪雙軌覆核未過，待出 v3**（待辦見 `HANDOFF.md` §3） |
+| `HANDOFF.md` | 交接紀錄，跨對話的進度快照，會隨每次交接改寫。**接手時先讀這份** |
 | `TASK_D_LOCAL_TIER_PROPOSAL.md` | 任務 D（地方層地圖）提案 |
 | `ARCHITECTURE_DESIGN.md` | 早期設計文件，**參考素材，非權威** |
 
@@ -156,7 +157,7 @@ spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
 規格檔頭的 `狀態：待覆核`／`流程位置：待 X 清償後實作` 是寫下當刻的快照，施工完成後常常沒人回頭改。已知踩過的坑：
 
 - `SPEC_MVP_AMENDMENT_01.md` 檔頭長期寫「v7 草案，待覆核」，實際 T0~T14 共 16 個 commit 早已執行並驗收（`MVP_AMENDMENT_01_VERIFICATION.md` §6、commit `0b9a30a`）。照檔頭判讀會得出「閘門未開」的相反結論。
-- 本檔 §7 自述 `HANDOFF.md` 已過期；§0 的「316 passed」實測為 462。
+- §0 的「316 passed」實測為 462。
 
 判讀順序：`git log --oneline -- <spec 檔>` → 對應的 `*_VERIFICATION.md` 結論節 → 實際程式碼 → 最後才是檔頭。
 
