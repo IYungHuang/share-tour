@@ -1,11 +1,11 @@
 # SPEC — Share Tour 角色動作與動畫系統
 
-狀態：**Draft v4 — 待第四輪覆核**
+狀態：**Draft v5 — 待第五輪覆核**
 流程位置：`spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核`
 上位文件：`CLAUDE.md`、`CROSS_CUTTING_CONSTRAINTS.md`
 相關現況：`lib/game/components/player_component.dart`、`lib/game/universal_overworld_game.dart`
 
-> v4 修訂：依第三輪 peer review 補上 Game pre-load 命令時機、相容 constructor 依賴規則、special priority 單一來源、loop 邊界 AC、無 padding 透明例外、`expression` assetKind，並移除 spec 對固定 package path 與實作算法的綁定。
+> v5 修訂：依第四輪 peer review 補上未註冊組合的統一 idle fallback、Game initial state 覆寫規則、`stop()` 清除 resumeState、duration 派生契約與對應 AC。
 
 ## 1. 目的
 
@@ -106,7 +106,7 @@ locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<va
 - 動畫資產鍵 `animationKey`
 
 播放契約只描述視覺行為，不得包含物品扣除、數值變化、任務完成或其他 domain 命令。
-每個 canonical action key 對應一個完整 descriptor；組合 action 不使用局部通道 precedence。`run + guide.point` 若要播放，必須註冊完整 canonical key 與自己的 priority、loop、canInterrupt、fallback、animationKey；未註冊組合直接按 unsupported action fallback，不得自動拆成 `run` 或 `guide.point`。組合 descriptor 不繼承或平均各通道 descriptor 欄位。
+每個 canonical action key 對應一個完整 descriptor；組合 action 不使用局部通道 precedence。`run + guide.point` 若要播放，必須註冊完整 canonical key 與自己的 priority、loop、canInterrupt、fallback、animationKey；未註冊組合不具 descriptor，統一直接 fallback 至該角色四方向 `idle`，不得自動拆成 `run` 或 `guide.point`。組合 descriptor 不繼承或平均各通道 descriptor 欄位。
 
 ### 3.4 特殊動作
 
@@ -143,8 +143,8 @@ locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<va
 3. 方向改變會切換到新方向動畫，但保留目前 action 的 normalized playback progress。loop action 在每個完整 duration 後回到第一 frame；非 loop action 到達 duration 後停在最後 frame。新方向以相同 normalized progress 映射；一次性 action 的完成狀態不因轉向重置。
 4. 新 action 若被目前 action 阻擋，控制器維持目前播放，不偷偷改成 walk 或 idle。
 5. 先解析能力與 manifest candidate，再做中斷判定。若目前 action `canInterrupt == true`，candidate 可切換；否則只有 `candidate.priority > current.priority` 可切換。高優先級可繞過目前 action 的 `canInterrupt`；同優先級不可繞過。
-6. `stop()` 不會改變角色位置，也不會改變外部 domain 狀態。
-7. 不支援 action 時，控制器必須使用該 action 的 `fallbackAction`；fallback 仍無法解析時，使用 idle。
+6. `stop()` 不會改變角色位置，也不會改變外部 domain 狀態，且必須清除 `resumeState`。
+7. 不支援但有 descriptor 的 action 使用該 action 的 `fallbackAction`；未註冊 canonical key 沒有 descriptor，直接 fallback 至 idle；任一 fallback 仍無法解析時，使用 idle。
 8. fallback 解析不得無限循環；循環或缺失 fallback 視為無效，直接落到 idle。
 
 ### 4.3 一次性動作
@@ -195,7 +195,7 @@ locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<va
 - logical render width / height（Flame world units）
 - current frame index（由 controller 輸出，不由 Flame 自行推進）
 
-可觀察播放契約：播放開始顯示第一 frame；loop action 到達一個完整 duration 後重新顯示第一 frame；非 loop action 到達 duration 後顯示最後 frame 並完成。相同 normalized progress 在方向切換後對應新方向相同位置；具體 frame 計算留給 plan。
+可觀察播放契約：`duration` 是 manifest `frameCount / fps` 的派生值；播放開始顯示第一 frame；loop action 到達一個完整 duration 後重新顯示第一 frame；非 loop action 到達 duration 後顯示最後 frame 並完成。相同 normalized progress 在方向切換後對應新方向相同位置；具體 frame 計算留給 plan。
 
 首版不把 locomotion、posture、activity、held item 分別渲染後再合成。若某組合沒有對應資產，依 action 契約 fallback。
 
@@ -252,7 +252,7 @@ locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<va
 
 載入期驗證與播放期 fallback 分開處理。
 
-載入期驗證針對 manifest 結構與已宣告資產；失敗必須明確報錯，不得繼續載入該角色。每個角色的 `idle` 必須具備四方向有效 record。已宣告的 action 也必須具備四方向完整 record；未宣告的可選 action 不算載入錯誤，播放時走 fallback。
+載入期驗證針對 manifest 結構與已宣告資產；失敗必須明確報錯，不得繼續載入該角色。每個角色的 `idle` 必須具備四方向有效 record。已宣告的 action 也必須具備四方向完整 record；未宣告的可選 action 不算載入錯誤，播放時統一 fallback 至 idle。
 
 載入期至少拒絕：
 
@@ -273,7 +273,7 @@ locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<va
 
 RGBA 是必要格式；無 padding 且 frame 內容填滿畫布時，允許 frame 全部不透明。`expression`、`dialogue`、`halfbody`、`portrait` 均不可作為 overworld action fallback。
 
-播放期只處理合法 manifest 中「未宣告的 action」或「能力 registry 拒絕的特殊 action」：依 fallback chain 解析，無有效結果時使用該角色四方向 idle。不得把 dialogue、halfbody 或其他語意不同的 asset 當 fallback。合法 manifest 不允許已宣告 action 只缺單一方向；這類資料在載入期拒絕。
+播放期只處理合法 manifest 中「有 descriptor 但資產不可用的 action」或「能力 registry 拒絕的特殊 action」：依 descriptor fallback chain 解析；未註冊 canonical key 沒有 descriptor，直接使用該角色四方向 idle。不得把 dialogue、halfbody 或其他語意不同的 asset 當 fallback。合法 manifest 不允許已宣告 action 只缺單一方向；這類資料在載入期拒絕。
 
 資產存在性測試同時檢查 manifest `assetPath` 對應 `assets/images/<assetPath>` 的檔案，並檢查 Flutter asset bundle 可載入該相對路徑。`loadSprite` 與 `loadSpriteAnimation` 均不得再加第二次 `assets/images/` 前綴。
 
@@ -316,7 +316,7 @@ RGBA 是必要格式；無 padding 且 frame 內容填滿畫布時，允許 fram
 - `syncTo(Vector2 renderedPixel)` 繼續可用。
 - `syncTo` 只複製位置值，不取得或保存位置來源的可變引用。
 - 提供玩家專用的 `play(action)` 與 `setDirection(direction)` façade，兩者只轉送至共用播放核心。
-- 初始 action 固定為 `idle + standing + none`，初始 direction 固定為 `front`。
+- 初始 action 預設為 `idle + standing + none`，初始 direction 預設為 `front`；Game 傳入有效 `initialAction`／`initialDirection` 時可覆寫，無效值依 fallback 規則處理。
 - 玩家元件仍可被 `UniversalOverworldGame` 以目前方式加入 world。
 - 對既有位置同步與 camera follow 的行為不得產生回歸。
 
@@ -327,7 +327,7 @@ RGBA 是必要格式；無 padding 且 frame 內容填滿畫布時，允許 fram
 - 建立角色元件。
 - 將 domain 已算出的 rendered pixel 傳給 `syncTo`。
 - 提供 `playPlayerAction(action)` 與 `setPlayerDirection(direction)`，轉送 action/direction 命令給 `PlayerComponent`；不得另存第二份播放狀態。
-- 上述 Game 命令只保證在 `onLoad` 完成後可呼叫；`onLoad` 前所需狀態必須由建構參數 `initialAction`／`initialDirection` 提供，預設為 idle/front。Game 不得在 `playerComponent` 尚未建立時直接解參考。
+- 上述 Game 命令只保證在 `onLoad` 完成後可呼叫；`onLoad` 前所需狀態可由建構參數 `initialAction`／`initialDirection` 提供，預設為 idle/front。有效初始值覆寫預設，無效初始值依 fallback 規則處理。Game 不得在 `playerComponent` 尚未建立時直接解參考。
 - 推進角色元件生命週期。
 - 保持目前相機跟隨、縮放、地圖切換與位置同步流程。
 
@@ -432,7 +432,7 @@ action 或 direction 任一改變時，resolved animation key 必須改變；方
 
 ### AC-CA-07 fallback
 
-載入期拒絕 malformed manifest；播放期遇到未宣告 action 或能力不允許特殊動作時，結果明確落到 idle 或契約指定的有效 fallback。已宣告 action 缺方向不得進入播放期，因為載入期已拒絕；不得拋出未處理例外，也不得選用相鄰但語意不同的資產。
+載入期拒絕 malformed manifest；播放期遇到未註冊 canonical key 時直接落到 idle，遇到已註冊但資產不可用 action 或能力不允許特殊動作時才使用契約指定的有效 fallback。已宣告 action 缺方向不得進入播放期，因為載入期已拒絕；不得拋出未處理例外，也不得選用相鄰但語意不同的資產。
 
 ### AC-CA-08 決定性解析
 
@@ -466,11 +466,19 @@ controller 是唯一更新 elapsed、frame index 與完成狀態的元件；Char
 
 ### AC-CA-15 公開命令與狀態單一來源
 
-外部呼叫 `UniversalOverworldGame.playPlayerAction(action)` 或 `setPlayerDirection(direction)` 後，命令只經 `PlayerComponent` façade 進入共用 controller；game、PlayerComponent、controller 不得各自保存互相矛盾的 action 狀態。未提供命令時，初始狀態為 `idle + standing + none + front`。
+外部呼叫 `UniversalOverworldGame.playPlayerAction(action)` 或 `setPlayerDirection(direction)` 後，命令只經 `PlayerComponent` façade 進入共用 controller；game、PlayerComponent、controller 不得各自保存互相矛盾的 action 狀態。未提供命令或初始值時，初始狀態為 `idle + standing + none + front`；有效初始值必須在首次 render 生效，無效初始值必須落到 idle/front。
 
-### AC-CA-16 播放邊界
+### AC-CA-16 未註冊組合 fallback
 
-固定 frameCount、FPS 與 dt 的 table-driven 測試必須驗證：播放起點顯示第一 frame；loop action 經過一個 duration 後回第一 frame，經過兩個 duration 後仍回第一 frame；非 loop action 在 duration 前顯示中間或最後有效 frame，恰好到達 duration 時顯示最後 frame 並只完成一次；方向切換不改變 normalized progress。
+未註冊的 canonical action key（例如未註冊的 `run + guide.point`）不得拆解、繼承或平均局部 descriptor；控制器直接使用角色四方向 idle。已註冊但資產不可用的 action 才使用其 descriptor fallback chain。
+
+### AC-CA-17 播放邊界
+
+固定 frameCount、FPS 與 dt 的 table-driven 測試必須驗證：`duration` 是 manifest 的 `frameCount / fps` 派生值；播放起點顯示第一 frame；loop action 經過一個 duration 後回第一 frame，經過兩個 duration 後仍回第一 frame；非 loop action 在 duration 前顯示中間或最後有效 frame，恰好到達 duration 時顯示最後 frame 並只完成一次；方向切換不改變 normalized progress。
+
+### AC-CA-18 stop 清理恢復狀態
+
+`walk → dash → stop → jump` 中，`stop()` 清除 dash 遺留的 `resumeState`；jump 完成後回 idle，不恢復 walk。`stop()` 不改變角色位置或外部 domain 狀態。
 
 ## 10. 完成定義
 
