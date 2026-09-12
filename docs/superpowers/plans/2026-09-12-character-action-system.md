@@ -103,11 +103,11 @@ Use these files unless implementation evidence requires a narrower equivalent; k
 
 ### Task 1.4 — Implement state machine and single clock
 
-- [ ] Add RED table-driven tests for duration `frameCount/fps`, first frame, loop after one/two durations, non-loop last frame and one-time completion, normalized direction progress including a completed one-shot, same-action no reset, and action-switch reset.
-- [ ] Add RED interruption tests: sleep rejects walk; jump overrides lower priority; same-priority special cannot bypass non-interruptible action; eat can replace same-priority interruptible action; rejected command preserves state.
-- [ ] Add RED resume tests for `walk → dash → jump → walk`, single resume snapshot under nested one-shots, invalid resume fallback, and `stop()` clearing resume state in `walk → dash → stop → jump → idle`.
-- [ ] Implement `CharacterActionState` and `CharacterActionController`. `update(dt)` is only elapsed/frame/completion mutator; loop wraps, non-loop clamps; completion restores one resume snapshot or valid fallback/idle.
-- [ ] Run all pure core tests, then `flutter test test/domain/character_action/`; commit `feat: add single-clock character action controller`.
+- [x] Add RED table-driven tests for duration `frameCount/fps`, first frame, loop after one/two durations, non-loop last frame and one-time completion, normalized direction progress including a completed one-shot, same-action no reset, and action-switch reset.
+- [x] Add RED interruption tests: sleep rejects walk; jump overrides lower priority; same-priority special cannot bypass non-interruptible action; eat can replace same-priority interruptible action; rejected command preserves state.
+- [x] Add RED resume tests for `walk → dash → jump → walk`, single resume snapshot under nested one-shots, invalid resume fallback, and `stop()` clearing resume state in `walk → dash → stop → jump → idle`.
+- [x] Implement `CharacterActionState` and `CharacterActionController`. `update(dt)` is only elapsed/frame/completion mutator; loop wraps, non-loop clamps; completion restores one resume snapshot or valid fallback/idle.
+- [x] Run all pure core tests, then `flutter test test/domain/character_action/`; commit `feat: add single-clock character action controller`.
 
 ### Task 1.5 — Enforce pure-domain boundary
 
