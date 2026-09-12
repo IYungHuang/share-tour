@@ -89,10 +89,10 @@ Use these files unless implementation evidence requires a narrower equivalent; k
 
 ### Task 1.2 — Implement descriptors and capability registry
 
-- [ ] Add RED tests for fixed priority/loop/canInterrupt/fallback values of `idle`, `walk`, `run`, `eat`, `drink`, `sleep`, `dash`, and `jump`; special descriptors require explicit priority/loop/canInterrupt/fallback.
-- [ ] Add RED tests proving no implicit special priority, no descriptor inheritance for unregistered combinations, capability denial, and fallback target existence.
-- [ ] Implement `CharacterActionDescriptor`, registry lookup by canonical key, and `CharacterCapabilityRegistry` keyed by character id and special canonical key.
-- [ ] Run descriptor/capability tests; commit `feat: add character action descriptors`.
+- [x] Add RED tests for fixed priority/loop/canInterrupt/fallback values of `idle`, `walk`, `run`, `eat`, `drink`, `sleep`, `dash`, and `jump`; special descriptors require explicit priority/loop/canInterrupt/fallback.
+- [x] Add RED tests proving no implicit special priority, no descriptor inheritance for unregistered combinations, capability denial, and fallback target existence.
+- [x] Implement `CharacterActionDescriptor`, registry lookup by canonical key, and `CharacterCapabilityRegistry` keyed by character id and special canonical key.
+- [x] Run descriptor/capability tests; commit `feat: add character action descriptors`.
 
 ### Task 1.3 — Implement deterministic resolver
 
