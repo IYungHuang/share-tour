@@ -45,9 +45,11 @@ void main() {
       expect(find.textContaining('100/100'), findsOneWidget);
       expect(find.textContaining('2000'), findsOneWidget);
       expect(find.textContaining('0/6'), findsOneWidget);
+      expect(find.textContaining('06:00'), findsOneWidget);
+      expect(find.text('🌅'), findsOneWidget);
     });
 
-    testWidgets('HP 扣減即時反應與赤字預算呈現紅色警告', (tester) async {
+    testWidgets('HP 扣減即時反應與赤字預算呈現紅色警告，且時段切換至深夜', (tester) async {
       final state = CuratorRunState.initial(
         client: ClientSpec.budgetWorker,
         initialBudget: 2000,
@@ -72,6 +74,25 @@ void main() {
       expect(find.textContaining('15/100'), findsOneWidget);
       expect(find.textContaining('-500'), findsOneWidget);
       expect(find.textContaining('1/6'), findsOneWidget);
+      expect(find.textContaining('19:00+'), findsOneWidget);
+      expect(find.text('🌙'), findsOneWidget);
+    });
+
+    testWidgets('HP 扣至黃昏 (40 HP) 呈現琥珀高光與相機 1.5x 加成提醒', (tester) async {
+      final state = CuratorRunState.initial(
+        client: ClientSpec.budgetWorker,
+        initialBudget: 2000,
+        initialHp: 100,
+      );
+      final duskState = state.copyWith(
+        resources: state.resources.consumeHp(60), // 剩 40 HP -> 黃昏
+      );
+
+      await tester.pumpWidget(buildTestWidget(state: duskState));
+
+      expect(find.textContaining('40/100'), findsOneWidget);
+      expect(find.textContaining('16:00 📷'), findsOneWidget);
+      expect(find.text('🌇'), findsOneWidget);
     });
 
     testWidgets('在 360dp 寬度手機螢幕下自適應，零 RenderFlex Overflow', (tester) async {

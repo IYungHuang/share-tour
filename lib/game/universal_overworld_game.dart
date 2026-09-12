@@ -2,11 +2,13 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import '../domain/core_loop/models/tour_time_of_day.dart';
 import '../domain/location/camera/camera_follow.dart';
 import '../domain/location/models/district_attraction.dart';
 import 'components/attraction_layer_component.dart';
 import 'components/ocean_waves_component.dart';
 import 'components/player_component.dart';
+import 'components/time_of_day_lighting_component.dart';
 import 'map_module/overworld_map_manifest.dart';
 
 class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks {
@@ -17,6 +19,7 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
     required this.cameraFollow,
     this.onAttractionSelected,
     this.onDistrictRevealed,
+    this.timeOfDayGetter,
   });
 
   final OverworldMapManifest manifest;
@@ -36,19 +39,34 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
   /// 縮放聚焦行政區變更回調
   final void Function(AdministrativeDistrict? district, int visibleCount)?
       onDistrictRevealed;
+  final TourTimeOfDay Function()? timeOfDayGetter;
 
   late final World mapWorld;
   late final CameraComponent cameraComponent;
   late final SpriteComponent mapComponent;
   late final PlayerComponent playerComponent;
   late final AttractionLayerComponent attractionLayer;
+  late final TimeOfDayLightingComponent lightingComponent;
 
   double _baseZoom = 1.0;
   final double minZoom = 0.5;
   final double maxZoom = 4.0;
 
   @override
-  Color backgroundColor() => Color(manifest.oceanColorArgb);
+  Color backgroundColor() {
+    final baseColor = Color(manifest.oceanColorArgb);
+    final time = timeOfDayGetter?.call() ?? TourTimeOfDay.dawn;
+    switch (time) {
+      case TourTimeOfDay.dawn:
+        return Color.alphaBlend(const Color(0x33BBE1FA), baseColor);
+      case TourTimeOfDay.midday:
+        return Color.alphaBlend(const Color(0x15FFFBEB), baseColor);
+      case TourTimeOfDay.dusk:
+        return Color.alphaBlend(const Color(0x40F59E0B), baseColor);
+      case TourTimeOfDay.night:
+        return baseColor;
+    }
+  }
 
   @override
   Future<void> onLoad() async {
@@ -89,7 +107,18 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
     );
     await mapWorld.add(attractionLayer);
 
-    // 5. 初始化視口相機
+    // 5. 加入動態四幕光照與環境燈火圖層 (晨曦／午後／黃昏／深夜)
+    lightingComponent = TimeOfDayLightingComponent(
+      mapSize: manifest.mapDimensions,
+      timeOfDayGetter: timeOfDayGetter ?? () => TourTimeOfDay.dawn,
+      playerPositionGetter: () => playerComponent.position,
+      lightPositionsGetter: () =>
+          manifest.districtAttractions.map((a) => a.pixel).toList(),
+      priority: 25,
+    );
+    await mapWorld.add(lightingComponent);
+
+    // 6. 初始化視口相機
     cameraComponent.viewfinder.anchor = Anchor.center;
     cameraComponent.viewfinder.position = playerComponent.position;
     cameraComponent.viewfinder.zoom = 1.0;

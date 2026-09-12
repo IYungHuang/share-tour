@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_tour/domain/core_loop/models/tour_time_of_day.dart';
+import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 
 /// 大世界漫步時頂部常駐的極簡 JRPG 生存指標 HUD
@@ -27,6 +29,13 @@ class CuratorFieldHud extends ConsumerWidget {
 
     final isDeficit = resources.isDeficit;
     final isBagFull = inventory.isFull;
+    final timeOfDay = TourTimeOfDay.fromHpAndPhase(
+      currentHp: hp,
+      maxHp: maxHp,
+      isNightEditing: runState.phase == CuratorRunPhase.nightEditing ||
+          runState.phase == CuratorRunPhase.clientReview ||
+          runState.phase == CuratorRunPhase.settled,
+    );
 
     return Container(
       height: 38,
@@ -125,14 +134,62 @@ class CuratorFieldHud extends ConsumerWidget {
                 '${inventory.count}/${inventory.capacity}',
                 style: TextStyle(
                   color: isBagFull
-                      ? const Color(0xFFED8936)
-                      : const Color(0xFF63B3ED),
+                    ? const Color(0xFFED8936)
+                    : const Color(0xFF63B3ED),
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
               ),
             ],
+          ),
+
+          const SizedBox(width: 8),
+
+          // 4. 當前四幕時段與光照標記 (晨曦 06:00 / 午後 11:00 / 黃昏 16:00 📷 / 深夜 19:00+)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            decoration: BoxDecoration(
+              color: timeOfDay.hasCameraBonus
+                  ? const Color(0xFF7C2D12) // 琥珀深紅背景強化相機 1.5x 加成
+                  : Colors.black45,
+              borderRadius: BorderRadius.circular(3),
+              border: Border.all(
+                color: timeOfDay.hasCameraBonus
+                    ? const Color(0xFFF59E0B)
+                    : Colors.white24,
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  timeOfDay == TourTimeOfDay.dawn
+                      ? '🌅'
+                      : timeOfDay == TourTimeOfDay.midday
+                          ? '☀️'
+                          : timeOfDay == TourTimeOfDay.dusk
+                              ? '🌇'
+                              : '🌙',
+                  style: const TextStyle(fontSize: 9),
+                ),
+                const SizedBox(width: 2),
+                Text(
+                  timeOfDay.hasCameraBonus
+                      ? '${timeOfDay.timeString} 📷'
+                      : timeOfDay.timeString,
+                  style: TextStyle(
+                    color: timeOfDay.hasCameraBonus
+                        ? const Color(0xFFFDE047)
+                        : Colors.white70,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

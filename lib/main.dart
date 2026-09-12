@@ -8,6 +8,7 @@ import 'data/core_loop/kyoto_poi_material_resolver.dart';
 import 'data/core_loop/local_persistence_repository.dart';
 import 'domain/core_loop/models/curator_save_data.dart';
 import 'domain/core_loop/models/persistence_repository.dart';
+import 'domain/core_loop/models/tour_time_of_day.dart';
 import 'domain/core_loop/run/curator_run_phase.dart';
 import 'domain/location/camera/camera_follow.dart';
 import 'domain/location/models/district_attraction.dart';
@@ -208,6 +209,16 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
       ),
       onAttractionSelected: (a) => _selectedAttraction.value = a,
       onDistrictRevealed: (d, count) => _focusedDistrict.value = (d, count),
+      timeOfDayGetter: () {
+        final runState = ref.read(curatorRunControllerProvider);
+        return TourTimeOfDay.fromHpAndPhase(
+          currentHp: runState.resources.hp,
+          maxHp: runState.resources.maxHp,
+          isNightEditing: runState.phase == CuratorRunPhase.nightEditing ||
+              runState.phase == CuratorRunPhase.clientReview ||
+              runState.phase == CuratorRunPhase.settled,
+        );
+      },
     );
 
     // 啟動開場自動引導：若處於 philosophizing 階段則主動彈出行前委託底抽屜
