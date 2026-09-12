@@ -1,6 +1,6 @@
 # SPEC — Share Tour 角色動作與動畫系統
 
-狀態：**Draft v6 — 待第五輪覆核**
+狀態：**Draft v6 — peer review 通過，待使用者覆核**
 流程位置：`spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核`
 上位文件：`CLAUDE.md`、`CROSS_CUTTING_CONSTRAINTS.md`
 相關現況：`lib/game/components/player_component.dart`、`lib/game/universal_overworld_game.dart`
