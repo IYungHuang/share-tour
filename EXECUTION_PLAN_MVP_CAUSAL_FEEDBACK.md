@@ -442,7 +442,7 @@ final itineraryCausalReportProvider = Provider<ItineraryCausalReport>((ref) {
 - `ClientExpressionTile`：
   - `Key('client_expression')`，**只有一位客戶**（`state.client`）。
   - `ref.watch(itineraryCausalReportProvider.select((r) => r.clientImpression))`。
-  - 六態靜態圖示切換（含 `idle`，不引入動畫套件）；點擊出定性氣泡，文案以 `ClientSpec.personaName` 稱呼。
+  - 六態表情切換（含 `idle`），轉場以 Flutter 內建 Implicit Animations 或 Flame `Effect` 實作，不新增相依套件；點擊出定性氣泡，文案以 `ClientSpec.personaName` 稱呼。
   - 測試側以 `container.listen` 驗證：換一張不改變心態的卡 → 監聽回呼不觸發（不把 build 計數器寫入產品碼）。
 - `CodexTooltip`：點擊 `CausalBadge` → 依 `reasonCode` 查 `CuratorCodex` → 彈出 `title` / `explanation` / `guideNote`；點擊空白關閉。
 

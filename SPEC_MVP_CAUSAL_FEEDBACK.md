@@ -1,9 +1,14 @@
 # SPEC — 《Share Tour：奇葩旅行策展人》MVP 玩法因果可視化與架構接線契約
 
-狀態：**已簽核（v5，2026-09-12 由使用者明確簽核）**
-流程位置：`spec (已簽核) → plan (已簽核) → 執行計劃 (已簽核) → 待 G4 清償後實作`
+狀態：**已簽核（v6，2026-09-12 由使用者明確簽核）**
+流程位置：`spec (已簽核) → plan (已簽核) → 執行計劃 (已簽核) → 實作中`
 上位文件：`CROSS_CUTTING_CONSTRAINTS.md`、`CLAUDE.md`、`SPEC_MVP_CORE_LOOP.md`（牴觸時以其為準）
 相關文件：`SPEC_MVP_TIMELINE_UI.md`（**必須先完成增修，見 §6 前置條件**）、`SPEC_MVP_AMENDMENT_01.md`
+
+> **v6 修訂摘要（相對 v5，使用者裁決 2026-09-12）**
+> §5 第 3 款「禁止骨骼／粒子動畫」**撤銷**。該款以 `CLAUDE.md` §6（不引入新套件）為由，連帶禁止了不需要任何新套件的表現手法，把相依紀律誤擴張成表現手法禁令，是本案靜態觀感的制度來源。改為明確區分：新增相依套件仍禁止，使用引擎內建動畫能力則開放。本次修訂**不改動任何 AC、數值或領域契約**。
+
+---
 
 > **v5 修訂摘要（相對 v4，第二輪雙軌覆核修訂）**
 > 第二輪企劃與工程雙軌覆核指出了 v4 的殘留矛盾與接線盲區，修訂如下：
@@ -271,7 +276,7 @@ satisfaction = ClientReviewEngine.evaluate(
 1. **純領域零依賴**：`domain/core_loop/causal/` 嚴禁 import Flutter / Flame / `dart:ui`。
 2. **禁止全域最優求解器（Anti-Solver Policy）**：不得計算或呈現「把某卡換成某卡」的最優替換建議。找出它就是遊戲本身。
    （v3 曾為此立 AC，但那是斷言一個從未實作過的東西不存在，恆綠且玩家零感知 —— 降為非目標條款，不佔 AC 名額。）
-3. **禁止骨骼／粒子動畫**：表情以靜態圖示切換呈現，不引入新套件（CLAUDE.md §6）。
+3. **動畫自製，不引入新套件**：允許以 Flutter 內建 `AnimationController` / `Tween` / Implicit Animations 與 Flame 內建 `Effect`、`ParticleSystemComponent` 實作表情轉場、彈跳、震動、數字滾動與粒子效果。**`CLAUDE.md` §6 擋的是新增相依套件，不是動畫本身**；v5 以前把兩者混為一談，是過度延伸。骨骼動畫（Spine／Rive）因確實需要新套件，仍不在本 SPEC 範圍。
 4. **決定性（CC-3）**：策略提示文案若具隨機性，須接受注入 `Random?`。`focusedCulpritSlot` 屬 UI 焦點狀態，**禁止寫入事件日誌**。
 5. **不改動計分規則**：本 SPEC 只可視化既有計算，**不得**新增或調整任何數值規則。數值調整走 `SPEC_MVP_AMENDMENT_01.md`。
 

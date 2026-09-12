@@ -1,6 +1,6 @@
 # SPEC MVP 增修草案 01 —— 核心迴圈數值與取材尺度
 
-**狀態**：v7 草案，待覆核
+**狀態**：**已完成並驗收**（v7 定稿；T0~T14 共 16 個 commit 序列全數執行並通過驗收，證據見 `MVP_AMENDMENT_01_VERIFICATION.md` §6，commit `0b9a30a`）
 **修訂對象**：`SPEC_MVP_CORE_LOOP.md`、`SPEC_MVP_TIMELINE_UI.md`、`SPEC_MVP_POI_GATHERING.md`
 **依據**：2026-09-11 雙軌審查與其後的企劃覆核，主張均已逐項複驗
 **上位文件**：`CROSS_CUTTING_CONSTRAINTS.md`（牴觸時以其為準）
