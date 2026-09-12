@@ -66,13 +66,24 @@ class AttractionDetailCard extends ConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Expanded(
-                        child: Text(
-                          attraction.title,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                            color: Colors.black,
-                          ),
+                        child: Row(
+                          children: [
+                            Text(
+                              _iconForAttraction(attraction.title, attraction.category),
+                              style: const TextStyle(fontSize: 16),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                attraction.title,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: Colors.black,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       GestureDetector(
@@ -273,18 +284,69 @@ class _AttractionDistanceBadge extends ConsumerWidget {
           ? '${(distM / 1000).toStringAsFixed(1)} km'
           : '${distM.toStringAsFixed(0)} m';
     }
+    final inRange = attraction.triggerRadiusPixels != null
+        ? distPx <= attraction.triggerRadiusPixels!
+        : (distPx * manifest.metersPerPixelAt(playerPixel)) <=
+            attraction.triggerRadiusMeters;
 
     return Row(
       children: [
-        const Icon(Icons.directions_walk, size: 14, color: Colors.black87),
+        Icon(
+          inRange ? Icons.camera_alt : Icons.directions_walk,
+          size: 14,
+          color: inRange ? const Color(0xFF15803D) : Colors.black87,
+        ),
         const SizedBox(width: 4),
         Text(
           '距玩家: $distText',
-          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: inRange ? const Color(0xFF15803D) : Colors.black,
+          ),
         ),
+        if (inRange) ...[
+          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDCFCE7),
+              border: Border.all(color: const Color(0xFF16A34A), width: 1),
+            ),
+            child: const Text(
+              '✨ 可取景',
+              style: TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF15803D),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
+}
+
+String _iconForAttraction(String title, AttractionCategory category) {
+  if (title.contains('車') || title.contains('鐵') || title.contains('電車')) return '🚂';
+  if (title.contains('竹林') || title.contains('螢火') || title.contains('高野川')) return '🎋';
+  if (title.contains('鳥居') || title.contains('寺') || title.contains('宮') || title.contains('門') || title.contains('塔') || title.contains('堂')) return '⛩️';
+  if (title.contains('山')) return '⛰️';
+  if (title.contains('貓')) return '🐱';
+  if (title.contains('拉麵') || title.contains('麵') || title.contains('市場') || title.contains('食堂')) return '🍜';
+  if (title.contains('酒') || title.contains('立飲') || title.contains('立吞') || title.contains('割烹')) return '🏮';
+  if (title.contains('咖啡') || title.contains('黑膠') || title.contains('手沖') || title.contains('星巴克') || title.contains('喫茶')) return '☕';
+  if (title.contains('自販機')) return '🥤';
+
+  return switch (category) {
+    AttractionCategory.landmark => '⛩️',
+    AttractionCategory.culture => '📜',
+    AttractionCategory.nature => '🌲',
+    AttractionCategory.food => '🍜',
+    AttractionCategory.recreation => '🎡',
+    AttractionCategory.sightseeing => '📷',
+  };
 }
 
 /// 獨立 6 態取材按鈕 (依 GatheringEligibility 驅動)
