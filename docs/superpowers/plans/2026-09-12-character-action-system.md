@@ -111,8 +111,8 @@ Use these files unless implementation evidence requires a narrower equivalent; k
 
 ### Task 1.5 — Enforce pure-domain boundary
 
-- [ ] Add/update architecture test scanning `lib/domain/character_action/**/*.dart` for forbidden Flutter, Flame, Riverpod, GPS/location, and vector UI imports.
-- [ ] Run architecture plus all character domain tests; commit `test: enforce pure character action boundary`.
+- [x] Add/update architecture test scanning `lib/domain/character_action/**/*.dart` for forbidden Flutter, Flame, Riverpod, GPS/location, and vector UI imports.
+- [x] Run architecture plus all character domain tests; commit `test: enforce pure character action boundary`.
 
 ## Phase 2 — Flame Wiring
 
