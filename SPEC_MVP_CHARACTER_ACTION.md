@@ -1,11 +1,11 @@
 # SPEC — Share Tour 角色動作與動畫系統
 
-狀態：**Draft v2 — 待第二輪覆核**
+狀態：**Draft v3 — 待第三輪覆核**
 流程位置：`spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核`
 上位文件：`CLAUDE.md`、`CROSS_CUTTING_CONSTRAINTS.md`
 相關現況：`lib/game/components/player_component.dart`、`lib/game/universal_overworld_game.dart`
 
-> v2 修訂：依第一輪 peer review 補上單一 playback clock、canonical action key、priority/canInterrupt 數值與判定式、單層 resumeState、載入期驗證／播放期 fallback 分層、sheet layout、assetKind、asset path、logical render size、公開命令入口與純 Dart package boundary。
+> v3 修訂：依第二輪 peer review 補上 loop modulo 與 frame mapping、組合 action 完整 descriptor 規則、multi-action sheet `sourceOrigin`、PlayerComponent constructor/onLoad/position 契約、既有 `switchMap` 回歸邊界、padding/spacing 結構與 region 驗證、透明像素驗證、AC deterministic/priority 覆蓋。
 
 ## 1. 目的
 
@@ -106,6 +106,7 @@ locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<va
 - 動畫資產鍵 `animationKey`
 
 播放契約只描述視覺行為，不得包含物品扣除、數值變化、任務完成或其他 domain 命令。
+每個 canonical action key 對應一個完整 descriptor；組合 action 不使用局部通道 precedence。`run + guide.point` 若要播放，必須註冊完整 canonical key 與自己的 priority、loop、canInterrupt、fallback、animationKey；未註冊組合直接按 unsupported action fallback，不得自動拆成 `run` 或 `guide.point`。
 
 ### 3.4 特殊動作
 
@@ -139,7 +140,7 @@ locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<va
 
 1. 相同 action 且方向未變時，`play` 不得重設目前 frame 或播放時間。
 2. action 或方向改變時，才切換 resolved animation。
-3. 方向改變會切換到新方向動畫，但保留目前 action 的 normalized playback progress。其值定義為 `clamp(elapsed / duration, 0.0, 1.0)`，新方向以該比例映射至新動畫；一次性 action 的完成狀態不因轉向重置。
+3. 方向改變會切換到新方向動畫，但保留目前 action 的 normalized playback progress。loop action 的 progress 定義為 `(elapsed % duration) / duration`；非 loop action 定義為 `clamp(elapsed / duration, 0.0, 1.0)`。新方向以該比例映射至新動畫；一次性 action 的完成狀態不因轉向重置。
 4. 新 action 若被目前 action 阻擋，控制器維持目前播放，不偷偷改成 walk 或 idle。
 5. 先解析能力與 manifest candidate，再做中斷判定。若目前 action `canInterrupt == true`，candidate 可切換；否則只有 `candidate.priority > current.priority` 可切換。高優先級可繞過目前 action 的 `canInterrupt`；同優先級不可繞過。
 6. `stop()` 不會改變角色位置，也不會改變外部 domain 狀態。
@@ -193,6 +194,8 @@ locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<va
 - logical render width / height（Flame world units）
 - current frame index（由 controller 輸出，不由 Flame 自行推進）
 
+frame index 映射固定為 `min(floor(progress * frameCount), frameCount - 1)`；loop action 的 progress 先以 modulo 取得，非 loop action 的 progress 先 clamp。`duration = frameCount / fps`，因此同一 action 的完成時點與 frame 結果唯一。
+
 首版不把 locomotion、posture、activity、held item 分別渲染後再合成。若某組合沒有對應資產，依 action 契約 fallback。
 
 ### 5.2 解析決定性
@@ -228,16 +231,17 @@ locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<va
 | `anchor` | normalized `(x,y)`，每軸 `0.0..1.0` |
 | `renderWidth` / `renderHeight` | 正數；角色在 Flame world 的邏輯尺寸，不由 source pixel 自動決定 |
 | `directionAxis` | `row` 或 `column` |
-| `padding` | sheet 四邊 pixel padding，非負整數 |
-| `spacing` | 相鄰 frame pixel 間距，水平／垂直非負整數 |
+| `sourceOrigin` | 此 action region 外框左上角的 pixel `(x,y)`，包含 region padding，非負整數 |
+| `padding` | action region 四邊 pixel padding `{left, top, right, bottom}`，各值非負整數 |
+| `spacing` | 相鄰 frame 間距 `{horizontal, vertical}`，各值非負整數 |
 | `animationKey` | action canonical key + direction 的唯一鍵 |
 
 ### 6.2 Sprite sheet 契約
 
 - 每張 `overworld` sheet 的方向順序固定為 `front / left / back / right`。
 - `frameCount` 是每一 direction 的 frame 數。`directionAxis=row` 時，四個 direction 佔四列、每列 frame 由左至右；`directionAxis=column` 時，四個 direction 佔四欄、每欄 frame 由上至下。
-- `padding` 與 `spacing` 必須納入切分公式，不得依程式猜測 rect。`row` layout 的圖片尺寸必須等於：`left + right + frameCount * frameWidth + (frameCount - 1) * spacingX`，以及 `top + bottom + 4 * frameHeight + 3 * spacingY`；`column` layout 交換兩軸。
-- 每筆 direction record 可指向同一 sheet；同一 `actionId` 的四筆 record 必須共用 asset path、layout、frameCount、frame 尺寸與 render size。
+- `sourceOrigin`、`padding` 與 `spacing` 必須納入切分公式，不得依程式猜測 rect。action region 外框尺寸為：`regionWidth = padding.left + frameCount * frameWidth + (frameCount - 1) * spacing.horizontal + padding.right`、`regionHeight = padding.top + 4 * frameHeight + 3 * spacing.vertical + padding.bottom`。第一個 frame 起點為 `sourceOrigin + (padding.left, padding.top)`。`directionAxis=row` 時，四個 direction 佔四列、每列 frame 由左至右；`directionAxis=column` 時，四個 direction 佔四欄、每欄 frame 由上至下。完整 region 必須位於 sheet 邊界內。
+- 每筆 direction record 可指向同一 sheet；同一 `actionId` 的四筆 record 必須共用 asset path、layout、sourceOrigin、frameCount、frame 尺寸與 render size。
 - 角色 sprite 必須是 RGBA，透明背景不可用 RGB 假透明替代。
 - sheet 尺寸、每格尺寸、每方向 frame 數必須在同一角色資產集合內一致；男女角色可有不同契約，但各自必須自洽。
 - `run`、`dash` 必須有不同 `actionId`；缺少其中一者時不得靜默共用另一者資產。
@@ -263,6 +267,8 @@ locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<va
 - `run` 與 `dash` 使用同一 action identity。
 - 非 `overworld` assetKind 被角色動畫 manifest 宣告。
 - fallback 指向不存在 action，或 fallback 形成循環。
+- `sourceOrigin` 加 region 尺寸超出圖片邊界。
+- 每一 frame 沒有任何 alpha 小於 `255` 的像素；若 declared padding 存在，padding 像素必須為透明。
 
 播放期只處理合法 manifest 中「未宣告的 action」或「能力 registry 拒絕的特殊 action」：依 fallback chain 解析，無有效結果時使用該角色四方向 idle。不得把 dialogue、halfbody 或其他語意不同的 asset 當 fallback。合法 manifest 不允許已宣告 action 只缺單一方向；這類資料在載入期拒絕。
 
@@ -301,6 +307,9 @@ locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<va
 
 相容要求：
 
+- 保留現有 `PlayerComponent({required position})` 的建構入口；manifest/asset decoder 依賴可由新參數注入，但建構子不得同步解碼圖片。
+- `PlayerComponent` 建構時同步建立 controller；`onLoad` 只負責 async asset load 與 render adapter 初始化。`onLoad` 前收到的 `play`／`setDirection` 直接更新 controller，載入完成後 render controller 當前狀態，不丟失命令。
+- PlayerComponent 是 world position owner；內部 CharacterComponent 使用 local zero position，不另存第二份 world position。`syncTo` 只改 façade position。
 - `syncTo(Vector2 renderedPixel)` 繼續可用。
 - `syncTo` 只複製位置值，不取得或保存位置來源的可變引用。
 - 提供玩家專用的 `play(action)` 與 `setDirection(direction)` façade，兩者只轉送至共用播放核心。
@@ -322,7 +331,11 @@ locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<va
 
 動畫命令與位置同步必須是兩條獨立資料流：位置更新不代表 action 更新，action 更新不代表位置更新。
 
+既有 `switchMap`、camera follow、zoom 與 world lifecycle 是回歸檢查項，不是本 SPEC 新增的地圖功能；本系統不得改變其既有語意。
+
 `CharacterActionModel`、方向、播放狀態、controller 與 resolver 必須位於 `lib/domain/character_action/` 純 Dart 邊界；Flame adapter、manifest asset decoding 與 `CharacterComponent` 留在 game/data 層。controller 的 `update(dt)` 只能由 CharacterComponent 的單一 update 路徑呼叫一次。
+
+本 SPEC 固定外部行為契約，不固定 Dart 檔名、Flame class hierarchy 或 ticker API。`lib/domain/character_action/` 是必要 package boundary；具體檔案拆分與 Flame adapter 選型由後續 plan 決定。
 
 ## 8. 分階段交付
 
@@ -407,7 +420,7 @@ action 或 direction 任一改變時，resolved animation key 必須改變；方
 
 ### AC-CA-05 中斷與優先級
 
-`sleep` 播放期間收到 `walk`，sleep 維持播放；各首版 action 使用 §4.4 priority/canInterrupt 表；高優先級 action 可中斷不可中斷 action，同優先級不可繞過 `canInterrupt`；被拒絕命令不得改變目前狀態。
+`sleep` 播放期間收到 `walk`，sleep 維持播放；低優先級 action 被不可中斷 action 拒絕；高優先級 `jump` 可切換；同優先級 `special` 不得繞過 `canInterrupt`；可中斷 action 收到同優先級 `eat` 可切換；被拒絕命令不得改變目前狀態。
 
 ### AC-CA-06 一次性完成
 
@@ -419,15 +432,17 @@ action 或 direction 任一改變時，resolved animation key 必須改變；方
 
 ### AC-CA-08 決定性解析
 
-相同 manifest 與相同 character/action/direction 輸入重複解析，結果的 asset path、frame geometry、FPS、loop、anchor 完全相同。
+相同 manifest 與相同 character/action/direction 輸入重複解析，結果的 `assetKind`、asset path、frame geometry、FPS、loop、normalized anchor、logical render size、layout、sourceOrigin、animationKey 完全相同。current frame 由 AC-CA-14 驗證，不由 resolver 自行推進。
 
 ### AC-CA-09 manifest 驗證
 
-測試拒絕 RGB、非法尺寸、非法 frameCount、非法 FPS、非 finite FPS、非法 anchor、非法 render size、非法 padding/spacing、無法切分的 sheet、缺方向、重複鍵、重複 animationKey、非 overworld assetKind、缺少 asset、無法解碼、run/dash identity 共用與 fallback 循環；測試確認未宣告 optional action 走 runtime fallback。
+測試拒絕 RGB、非法尺寸、非法 frameCount、非法 FPS、非 finite FPS、非法 anchor、非法 render size、非法 padding/spacing、無法切分的 sheet、缺方向、重複鍵、重複 animationKey、非 overworld assetKind、缺少 asset、無法解碼、run/dash identity 共用、fallback 循環、source region 越界與 frame 缺少透明像素；測試確認未宣告 optional action 走 runtime fallback。
 
 ### AC-CA-10 玩家位置相容
 
 既有 `PlayerComponent` 測試繼續通過：`syncTo` 複製座標，來源向量後續變更不會改變元件位置。
+
+同一 AC 同時驗證既有 `PlayerComponent({required position})` 建構入口仍可建立、`onLoad` 完成 async asset load 後不改變 façade world position；`onLoad` 前送入的 action/direction 在首次 render 可見。
 
 ### AC-CA-11 遊戲位置與動作解耦
 
@@ -435,7 +450,7 @@ action 或 direction 任一改變時，resolved animation key 必須改變；方
 
 ### AC-CA-12 Flame 像素渲染
 
-接線煙霧測試確認角色使用 `FilterQuality.none`、normalized anchor 映射正確、logical render size 不依 source pixel 自動放大、asset path 只套用一次 `assets/images/` 前綴，且元件加入與移除不破壞現有 world、camera follow、zoom 與 map switch。
+接線煙霧測試確認角色使用 `FilterQuality.none`、normalized anchor 映射正確、logical render size 不依 source pixel 自動放大、asset path 只套用一次 `assets/images/` 前綴，且元件加入與移除不破壞現有 world、camera follow、zoom 與既有 `switchMap`。
 
 ### AC-CA-13 首版範圍
 
