@@ -59,6 +59,9 @@ class _ShutterProtoPageState extends State<ShutterProtoPage>
   var _difficulty = ShutterDifficulty.photographer;
   var _spotlightMode = false;
 
+  /// 下緣時間軸：對調參有用，對玩家是雜訊 —— 預設關。
+  var _showTimeline = false;
+
   late final AnimationController _ring;
   final _latency = LatencyStats();
   final _stopwatch = Stopwatch()..start();
@@ -237,7 +240,13 @@ class _ShutterProtoPageState extends State<ShutterProtoPage>
                       value: _spotlightMode,
                       onChanged: (v) => setState(() => _spotlightMode = v),
                     ),
-                    const Text('絕景（取景框跟手指）', style: TextStyle(fontSize: 12)),
+                    const Text('絕景', style: TextStyle(fontSize: 12)),
+                    const SizedBox(width: 8),
+                    Switch(
+                      value: _showTimeline,
+                      onChanged: (v) => setState(() => _showTimeline = v),
+                    ),
+                    const Text('時間軸', style: TextStyle(fontSize: 12)),
                   ],
                 ),
                 TextButton(
@@ -263,29 +272,54 @@ class _ShutterProtoPageState extends State<ShutterProtoPage>
             onPointerDown: _onDown,
             onPointerMove: _onMove,
             onPointerUp: _onUp,
-            child: AnimatedBuilder(
-              animation: _ring,
-              builder: (context, _) => CustomPaint(
-                painter: _StagePainter(
-                  progress: _ring.isAnimating || _downStamp != null
-                      ? _ring.value
-                      : null,
-                  targetRadius: _targetRadius,
-                  startRadiusFactor: _startRadiusFactor,
-                  matchFraction: _params.matchMs / _params.totalMs,
-                  perfectFraction: _params.perfectWindowMs / _params.totalMs,
-                  normalFraction: _params.normalWindowMs == null
-                      ? null
-                      : _params.normalWindowMs! / _params.totalMs,
-                  framePos: _spotlightMode ? _framePos : null,
-                  framingTolerance: _framingTolerance,
-                  lastTier: _last?.tier,
+            child: Stack(
+              children: [
+                AnimatedBuilder(
+                  animation: _ring,
+                  builder: (context, _) => CustomPaint(
+                    painter: _StagePainter(
+                      progress: _downStamp == null ? null : _ring.value,
+                      targetRadius: _targetRadius,
+                      startRadiusFactor: _startRadiusFactor,
+                      matchFraction: _params.matchMs / _params.totalMs,
+                      perfectFraction:
+                          _params.perfectWindowMs / _params.totalMs,
+                      normalFraction: _params.normalWindowMs == null
+                          ? null
+                          : _params.normalWindowMs! / _params.totalMs,
+                      framePos: _spotlightMode ? _framePos : null,
+                      framingTolerance: _framingTolerance,
+                      showTimeline: _showTimeline,
+                      freeze: _downStamp == null ? _last : null,
+                      matchMs: _params.matchMs,
+                    ),
+                    size: Size.infinite,
+                  ),
                 ),
-                size: Size.infinite,
-              ),
+                if (_downStamp == null) _hint(),
+              ],
             ),
           );
         },
+      );
+
+  /// 沒有提示的原型只是一塊會動的方塊 —— 玩家看不懂，就量不到手感。
+  Widget _hint() => Align(
+        alignment: const Alignment(0, 0.55),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Text(
+            _spotlightMode
+                ? '按住畫面拖曳取景框對準中心，\n框線收合到與內圈重合的瞬間放開'
+                : '按住畫面任何位置，\n外圈收縮到與內圈重合的瞬間放開',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.6,
+              color: Colors.white.withValues(alpha: 0.55),
+            ),
+          ),
+        ),
       );
 
   Widget _readout() {
@@ -362,7 +396,9 @@ class _StagePainter extends CustomPainter {
     required this.normalFraction,
     required this.framePos,
     required this.framingTolerance,
-    required this.lastTier,
+    required this.showTimeline,
+    required this.freeze,
+    required this.matchMs,
   });
 
   final double? progress;
@@ -373,68 +409,127 @@ class _StagePainter extends CustomPainter {
   final double? normalFraction;
   final Offset? framePos;
   final double framingTolerance;
-  final ShutterTier? lastTier;
+  final bool showTimeline;
+  final _Shot? freeze;
+  final int matchMs;
+
+  /// 收縮半徑：progress 0 → 起始倍率，matchFraction → 恰好等於目標半徑，
+  /// 1 → 0。**在吻合時刻兩圈真的重合**，這是整個動作唯一的視覺承諾。
+  double _radiusAt(double t) {
+    if (t <= matchFraction) {
+      final k = t / matchFraction;
+      return targetRadius * (startRadiusFactor - (startRadiusFactor - 1) * k);
+    }
+    final k = (t - matchFraction) / (1 - matchFraction);
+    return targetRadius * (1 - k);
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
 
-    // 目標圈（標的）
+    // 目標圈 —— 固定不動，是「吻合」的那個對象。畫粗一點讓它是視覺主體。
     canvas.drawCircle(
       center,
       targetRadius,
       Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..color = Colors.white38,
+        ..strokeWidth = 4
+        ..color = Colors.white54,
     );
 
-    // 收縮帶的時間軸 —— 畫在畫面下緣，刻意**不繞標的**：
-    // 取景框跟隨手指時，手指會壓在標的上，環若繞著標的就被遮住
-    // （v4 REQ-M5-03.3）。
-    _paintTimeline(canvas, size);
-
-    // 收縮框（表現層，判定不看它）
-    if (progress != null) {
-      final r = targetRadius *
-          (startRadiusFactor - (startRadiusFactor - 0) * progress!);
-      canvas.drawRect(
-        Rect.fromCircle(center: center, radius: r.clamp(2.0, double.infinity)),
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3
-          ..color = Colors.white,
-      );
-    }
-
-    // 絕景的取景框
-    if (framePos != null) {
-      final ok = (framePos! - center).distance / targetRadius <= framingTolerance;
+    if (framePos == null) {
+      // 非絕景：手指可以按在任何地方，所以收縮圈**繞著標的**畫沒有遮擋問題，
+      // 而同心收縮是唯一能讓「吻合」看得出來的呈現。
+      if (progress != null) {
+        final r = _radiusAt(progress!);
+        canvas.drawCircle(
+          center,
+          r.clamp(1.0, double.infinity),
+          Paint()
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 3
+            ..color = Colors.white,
+        );
+      }
+    } else {
+      // 絕景：取景框跟手指，所以把收縮指示畫在**框自己的邊框**上 ——
+      // 指示跟著視線走，既不被手指遮住，也不用分心看第二個地方。
+      final ok = (framePos! - center).distance / targetRadius <=
+          framingTolerance;
+      final t = progress ?? 0;
+      final scale = _radiusAt(t) / targetRadius;
       canvas.drawRect(
         Rect.fromCenter(
           center: framePos!,
-          width: targetRadius * 1.5,
-          height: targetRadius * 1.1,
+          width: targetRadius * 1.5 * scale.clamp(0.02, 3.0),
+          height: targetRadius * 1.1 * scale.clamp(0.02, 3.0),
         ),
         Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2
+          ..strokeWidth = 3
           ..color = ok ? Colors.greenAccent : Colors.orangeAccent,
       );
+      // 構圖容差圈：告訴玩家「框心要落在這裡面」。
       canvas.drawCircle(
         center,
         targetRadius * framingTolerance,
         Paint()
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1
-          ..color = Colors.greenAccent.withValues(alpha: 0.38),
+          ..color = Colors.greenAccent.withValues(alpha: 0.4),
+      );
+    }
+
+    // 放開後凍結一瞬：把「你差了多少」畫出來，否則玩家學不到東西。
+    if (freeze != null && progress == null) {
+      _paintMiss(canvas, center, freeze!);
+    }
+
+    if (showTimeline) _paintTimeline(canvas, size);
+  }
+
+  /// 以半徑差呈現偏差 —— 虛線圈是你放開的那一刻收縮圈所在的位置。
+  ///
+  /// 放太早 → 圈還在目標外側；放太晚 → 已經縮進去了。
+  void _paintMiss(Canvas canvas, Offset center, _Shot shot) {
+    if (shot.timedOut) return;
+    final colour = switch (shot.tier) {
+      ShutterTier.perfect => Colors.amberAccent,
+      ShutterTier.normal => Colors.lightBlueAccent,
+      ShutterTier.failed => Colors.redAccent,
+    };
+    final early = shot.heldMs < matchMs;
+    // 把毫秒偏差換成半徑偏差，比例與 _radiusAt 的斜率一致。
+    final delta = targetRadius *
+        (shot.offsetMs / matchMs) *
+        (startRadiusFactor - 1);
+    final r = early ? targetRadius + delta : targetRadius - delta;
+    _dashedCircle(canvas, center, r.clamp(4.0, targetRadius * 2.5), colour);
+  }
+
+  void _dashedCircle(Canvas canvas, Offset c, double r, Color colour) {
+    const segments = 48;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = colour;
+    for (var i = 0; i < segments; i += 2) {
+      final a0 = i / segments * 2 * 3.14159265;
+      final a1 = (i + 1) / segments * 2 * 3.14159265;
+      canvas.drawArc(
+        Rect.fromCircle(center: c, radius: r),
+        a0,
+        a1 - a0,
+        false,
+        paint,
       );
     }
   }
 
   void _paintTimeline(Canvas canvas, Size size) {
-    const h = 26.0;
-    final y = size.height - 40;
+    const h = 20.0;
+    final y = size.height - 32;
     final left = size.width * 0.08;
     final w = size.width * 0.84;
     Rect band(double centreFrac, double widthFrac) => Rect.fromLTWH(
@@ -451,25 +546,20 @@ class _StagePainter extends CustomPainter {
     if (normalFraction != null) {
       canvas.drawRect(
         band(matchFraction, normalFraction!),
-        Paint()..color = Colors.lightBlueAccent.withValues(alpha: 0.35),
-      );
-    } else {
-      canvas.drawRect(
-        Rect.fromLTWH(left, y, w, h),
-        Paint()..color = Colors.lightBlueAccent.withValues(alpha: 0.25),
+        Paint()..color = Colors.lightBlueAccent.withValues(alpha: 0.3),
       );
     }
     canvas.drawRect(
       band(matchFraction, perfectFraction),
-      Paint()..color = Colors.amberAccent.withValues(alpha: 0.7),
+      Paint()..color = Colors.amberAccent.withValues(alpha: 0.6),
     );
     if (progress != null) {
       final x = left + w * progress!;
       canvas.drawLine(
-        Offset(x, y - 6),
-        Offset(x, y + h + 6),
+        Offset(x, y - 5),
+        Offset(x, y + h + 5),
         Paint()
-          ..strokeWidth = 3
+          ..strokeWidth = 2
           ..color = Colors.white,
       );
     }
