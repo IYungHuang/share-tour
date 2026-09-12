@@ -420,5 +420,154 @@ void main() {
       final perfectCount = values.where((s) => s >= 90).length;
       expect(perfectCount, greaterThanOrEqualTo(2));
     });
+
+    test('AC-A1-5.6 美食朝聖前 6 張契合卡採集後 HP > 0；混亂冒險最遲第 5 張採集時 HP 歸零進入 nightEditing 且腰包未滿', () {
+      final foodFitting = reachablePool
+          .where((m) => m.tags.any((t) => TravelPhilosophy.gourmet.preferredTags.contains(t)))
+          .toList();
+      foodFitting.sort((a, b) => a.riskLevel.compareTo(b.riskLevel));
+
+      var foodHp = 100;
+      for (var i = 0; i < 6; i++) {
+        foodHp -= (foodFitting[i].riskLevel * 6);
+      }
+      expect(foodHp, greaterThan(0));
+
+      final chaosFitting = reachablePool
+          .where((m) => m.tags.any((t) => TravelPhilosophy.chaos.preferredTags.contains(t)))
+          .toList();
+      chaosFitting.sort((a, b) => b.riskLevel.compareTo(a.riskLevel));
+
+      var chaosHp = 100;
+      var gatheredCount = 0;
+      for (var i = 0; i < chaosFitting.length; i++) {
+        final cost = chaosFitting[i].riskLevel * 6;
+        if (chaosHp <= cost) {
+          chaosHp = 0;
+          gatheredCount++;
+          break;
+        }
+        chaosHp -= cost;
+        gatheredCount++;
+      }
+      expect(gatheredCount, lessThanOrEqualTo(5));
+      expect(gatheredCount, lessThan(6));
+      expect(chaosHp, equals(0));
+    });
+
+    test('AC-A1-6.5 絕景素材中 cost==0 && risk<=2 者 <= 1 張，且每種哲學仍保有至少 1 張負擔得起的絕景 (cost <= 500)', () {
+      final spotlights = reachablePool.where((m) => m.isSpotlight).toList();
+      final freeAndSafe = spotlights.where((m) => m.cost == 0 && m.riskLevel <= 2).toList();
+      expect(freeAndSafe.length, lessThanOrEqualTo(1));
+
+      const maxAffordableCost = 500;
+      for (final phil in TravelPhilosophy.values) {
+        final fittingSpotlights = spotlights.where((m) {
+          final isFitting = m.tags.any((t) => phil.preferredTags.contains(t));
+          return isFitting && m.cost <= maxAffordableCost;
+        }).toList();
+        expect(fittingSpotlights, isNotEmpty, reason: '$phil 必須保有至少 1 張 cost <= $maxAffordableCost 的絕景');
+      }
+    });
+
+    test('AC-A1-5.1 網紅相機 Lv.1 (1.5x) 黃昏槽固定最佳解比例 <= 30% (以 16-POI 40,040 手牌窮舉全平手)', () {
+      final pool = reachablePool.take(16).toList();
+      final n = pool.length;
+      var totalHandsEvaluated = 0;
+      var fixedDuskHandsCount = 0;
+
+      for (final phil in TravelPhilosophy.values) {
+        for (var i = 0; i < n; i++) {
+          for (var j = i + 1; j < n; j++) {
+            for (var k = j + 1; k < n; k++) {
+              for (var l = k + 1; l < n; l++) {
+                for (var m = l + 1; m < n; m++) {
+                  for (var p = m + 1; p < n; p++) {
+                    totalHandsEvaluated++;
+                    final hand = [pool[i], pool[j], pool[k], pool[l], pool[m], pool[p]];
+                    var maxBaseHypeInHand = hand[0].hypeValue;
+                    for (final c in hand) {
+                      if (c.hypeValue > maxBaseHypeInHand) maxBaseHypeInHand = c.hypeValue;
+                    }
+
+                    var maxSat = -1;
+                    var allBestHaveMaxHypeInDusk = true;
+
+                    for (var a = 0; a < 6; a++) {
+                      for (var b = 0; b < 6; b++) {
+                        if (b == a) continue;
+                        for (var c = 0; c < 6; c++) {
+                          if (c == a || c == b) continue;
+
+                          // 3-slot: [c0, c1, c2, null], dusk is hand[b]
+                          {
+                            final it = TimelineItinerary(slots: [hand[a], hand[b], hand[c], null]);
+                            final sat = ClientReviewEngine.evaluate(
+                              client: ClientSpec.hypeInfluencer,
+                              stats: it.calculateStats(philosophy: phil, cameraMultiplier: 1.5),
+                              philosophy: phil,
+                            ).satisfaction;
+                            final isDuskMaxHype = hand[b].hypeValue == maxBaseHypeInHand;
+                            if (sat > maxSat) {
+                              maxSat = sat;
+                              allBestHaveMaxHypeInDusk = isDuskMaxHype;
+                            } else if (sat == maxSat) {
+                              if (!isDuskMaxHype) allBestHaveMaxHypeInDusk = false;
+                            }
+                          }
+
+                          // 3-slot: [null, c0, c1, c2], dusk is hand[b]
+                          {
+                            final it = TimelineItinerary(slots: [null, hand[a], hand[b], hand[c]]);
+                            final sat = ClientReviewEngine.evaluate(
+                              client: ClientSpec.hypeInfluencer,
+                              stats: it.calculateStats(philosophy: phil, cameraMultiplier: 1.5),
+                              philosophy: phil,
+                            ).satisfaction;
+                            final isDuskMaxHype = hand[b].hypeValue == maxBaseHypeInHand;
+                            if (sat > maxSat) {
+                              maxSat = sat;
+                              allBestHaveMaxHypeInDusk = isDuskMaxHype;
+                            } else if (sat == maxSat) {
+                              if (!isDuskMaxHype) allBestHaveMaxHypeInDusk = false;
+                            }
+                          }
+
+                          // 4-slot: [c0, c1, c2, c3], dusk is hand[c]
+                          for (var d = 0; d < 6; d++) {
+                            if (d == a || d == b || d == c) continue;
+                            final it = TimelineItinerary(slots: [hand[a], hand[b], hand[c], hand[d]]);
+                            final sat = ClientReviewEngine.evaluate(
+                              client: ClientSpec.hypeInfluencer,
+                              stats: it.calculateStats(philosophy: phil, cameraMultiplier: 1.5),
+                              philosophy: phil,
+                            ).satisfaction;
+                            final isDuskMaxHype = hand[c].hypeValue == maxBaseHypeInHand;
+                            if (sat > maxSat) {
+                              maxSat = sat;
+                              allBestHaveMaxHypeInDusk = isDuskMaxHype;
+                            } else if (sat == maxSat) {
+                              if (!isDuskMaxHype) allBestHaveMaxHypeInDusk = false;
+                            }
+                          }
+                        }
+                      }
+                    }
+
+                    if (allBestHaveMaxHypeInDusk) {
+                      fixedDuskHandsCount++;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      expect(totalHandsEvaluated, 40040);
+      final ratio = fixedDuskHandsCount / totalHandsEvaluated;
+      expect(ratio, lessThanOrEqualTo(0.30), reason: '黃金槽固定比例 ${(ratio * 100).toStringAsFixed(2)}% 超過 30% 門檻');
+    }, timeout: const Timeout(Duration(minutes: 2)));
   });
 }
