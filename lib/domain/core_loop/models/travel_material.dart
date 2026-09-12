@@ -50,6 +50,9 @@ class TravelMaterial {
   /// 是否包含特定標籤
   bool hasTag(String tag) => tags.contains(tag);
 
+  /// 是否具備拉車疲勞風險 (riskLevel >= 3)
+  bool get hasFatigueRisk => riskLevel >= 3;
+
   /// 與另一個素材是否具備至少 1 個共同標籤
   bool sharesTagWith(TravelMaterial other) =>
       tags.any((tag) => other.tags.contains(tag));

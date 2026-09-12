@@ -84,7 +84,12 @@ class ItineraryStats {
           themeBaseline == other.themeBaseline &&
           themeBeforeFatigue == other.themeBeforeFatigue &&
           purityActive == other.purityActive &&
-          hasSpotlight == other.hasSpotlight;
+          hasSpotlight == other.hasSpotlight &&
+          _listEquals(slotEffectiveHypes, other.slotEffectiveHypes) &&
+          _setEquals(comboActiveSlots, other.comboActiveSlots) &&
+          _setEquals(rhythmActivePairs, other.rhythmActivePairs) &&
+          _setEquals(fatiguePairs, other.fatiguePairs) &&
+          _mapEquals(slotThemeBonuses, other.slotThemeBonuses);
 
   @override
   int get hashCode => Object.hash(
@@ -98,6 +103,14 @@ class ItineraryStats {
         themeBeforeFatigue,
         purityActive,
         hasSpotlight,
+        Object.hashAll(slotEffectiveHypes),
+        Object.hashAll(comboActiveSlots),
+        Object.hashAll(rhythmActivePairs),
+        Object.hashAll(fatiguePairs),
+        Object.hashAll(
+          (slotThemeBonuses.entries.toList()..sort((a, b) => a.key.compareTo(b.key)))
+              .map((e) => Object.hash(e.key, e.value)),
+        ),
       );
 
   @override
@@ -326,4 +339,31 @@ class TimelineItinerary {
 
   @override
   int get hashCode => Object.hashAll(slots.map((s) => s?.id));
+}
+
+bool _listEquals<T>(List<T>? a, List<T>? b) {
+  if (identical(a, b)) return true;
+  if (a == null || b == null) return false;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+bool _setEquals<T>(Set<T>? a, Set<T>? b) {
+  if (identical(a, b)) return true;
+  if (a == null || b == null) return false;
+  if (a.length != b.length) return false;
+  return a.containsAll(b);
+}
+
+bool _mapEquals<K, V>(Map<K, V>? a, Map<K, V>? b) {
+  if (identical(a, b)) return true;
+  if (a == null || b == null) return false;
+  if (a.length != b.length) return false;
+  for (final key in a.keys) {
+    if (!b.containsKey(key) || b[key] != a[key]) return false;
+  }
+  return true;
 }
