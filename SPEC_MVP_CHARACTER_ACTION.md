@@ -1,9 +1,11 @@
 # SPEC — Share Tour 角色動作與動畫系統
 
-狀態：**Draft v1 — 待覆核**
+狀態：**Draft v2 — 待第二輪覆核**
 流程位置：`spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核`
 上位文件：`CLAUDE.md`、`CROSS_CUTTING_CONSTRAINTS.md`
 相關現況：`lib/game/components/player_component.dart`、`lib/game/universal_overworld_game.dart`
+
+> v2 修訂：依第一輪 peer review 補上單一 playback clock、canonical action key、priority/canInterrupt 數值與判定式、單層 resumeState、載入期驗證／播放期 fallback 分層、sheet layout、assetKind、asset path、logical render size、公開命令入口與純 Dart package boundary。
 
 ## 1. 目的
 
@@ -57,7 +59,7 @@ Flame SpriteAnimation
 |---|---|
 | Locomotion | `idle`、`walk`、`run`、`dash`、`jump` |
 | Posture | `standing`、`crouching`、`sitting`、`supine`、`prone` |
-| Activity | `eat`、`drink`、`sleep` |
+| Activity | `none`、`eat`、`drink`、`sleep` |
 | HeldItem | `none`、`oneHand`、`twoHands` |
 | Special | 角色專屬、命名空間限定，例如 `guide.point` |
 
@@ -72,7 +74,27 @@ Flame SpriteAnimation
 
 動作模型相等性必須包含所有通道值。相同模型不得因建立時間或物件實例不同而被視為不同動作。
 
-### 3.2 動作描述
+### 3.2 Canonical action key
+
+每個 action 使用固定欄位順序產生 canonical key：
+
+```text
+locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<value>
+```
+
+缺省值固定為 `idle`、`standing`、`none`、`none`、`none`；不得省略欄位、交換順序或使用大小寫差異。`special` 值使用角色命名空間，例如 `guide.point`。
+
+短名稱只是輸入別名，合併前必須轉成 canonical key：
+
+- `sit` → `posture=sitting`
+- `drink` → `activity=drink`
+- `sit + drink` → `locomotion=idle|posture=sitting|activity=drink|heldItem=none|special=none`
+- `walk + oneHand` → `locomotion=walk|posture=standing|activity=none|heldItem=oneHand|special=none`
+- `run + guide.point` → `locomotion=run|posture=standing|activity=none|heldItem=none|special=guide.point`
+
+同一通道出現兩個不同值時，命令無效，不得以後者覆蓋前者。不同通道可組合；未提供通道使用缺省值。
+
+### 3.3 動作描述
 
 每個可解析動作必須提供以下視覺播放契約：
 
@@ -85,7 +107,7 @@ Flame SpriteAnimation
 
 播放契約只描述視覺行為，不得包含物品扣除、數值變化、任務完成或其他 domain 命令。
 
-### 3.3 特殊動作
+### 3.4 特殊動作
 
 特殊動作使用角色命名空間，不加入共用 locomotion、posture、activity 或 held-item 值。
 
@@ -108,17 +130,18 @@ Flame SpriteAnimation
 - `play(action)`：請求播放動作。
 - `setDirection(direction)`：設定 `front`、`left`、`back` 或 `right`。
 - `stop()`：停止目前播放，回到可解析的 fallback，預設為 idle。
-- `update(dt)`：只推進目前動畫時間與一次性動作完成狀態。
+- `update(dt)`：控制器唯一推進播放 elapsed、frame index 與一次性動作完成狀態的入口。
 
 控制器不得讀取 GPS、位置、速度、背包、時間或事件 provider。
+控制器是播放時鐘唯一擁有者。Flame 元件不得再以 `SpriteAnimationTicker` 或其他自有時鐘推進 frame；Flame 只依控制器輸出的 frame index render。
 
 ### 4.2 切換規則
 
 1. 相同 action 且方向未變時，`play` 不得重設目前 frame 或播放時間。
 2. action 或方向改變時，才切換 resolved animation。
-3. 方向改變會切換到新方向動畫，播放從該動畫第一 frame 開始。
+3. 方向改變會切換到新方向動畫，但保留目前 action 的 normalized playback progress。其值定義為 `clamp(elapsed / duration, 0.0, 1.0)`，新方向以該比例映射至新動畫；一次性 action 的完成狀態不因轉向重置。
 4. 新 action 若被目前 action 阻擋，控制器維持目前播放，不偷偷改成 walk 或 idle。
-5. 新 action 可在目前 action `canInterrupt == true` 時中斷；高優先級命令可中斷低優先級命令。相同優先級不得繞過 `canInterrupt`。
+5. 先解析能力與 manifest candidate，再做中斷判定。若目前 action `canInterrupt == true`，candidate 可切換；否則只有 `candidate.priority > current.priority` 可切換。高優先級可繞過目前 action 的 `canInterrupt`；同優先級不可繞過。
 6. `stop()` 不會改變角色位置，也不會改變外部 domain 狀態。
 7. 不支援 action 時，控制器必須使用該 action 的 `fallbackAction`；fallback 仍無法解析時，使用 idle。
 8. fallback 解析不得無限循環；循環或缺失 fallback 視為無效，直接落到 idle。
@@ -126,25 +149,29 @@ Flame SpriteAnimation
 ### 4.3 一次性動作
 
 1. `loop == false` 的 action 播放至最後一 frame 後視為完成。
-2. 完成後優先回到切換前仍有效、可恢復的 action。
-3. 原 action 不再有效或不存在時，回到該 action 的 `fallbackAction`；仍無效時回到 idle。
-4. 完成一次性 action 不得重播同一 action，也不得重設已完成 action 的 frame。
-5. loop action 不得因 `update(dt)` 自動完成或回到 idle。
+2. 控制器只保留一個 `resumeState`，用於第一個一次性 action 進入前的 loop action。`resumeState` 包含 action、direction 與 normalized playback progress。
+3. 一次性 action 被更高優先級的一次性 action 中斷時，不建立第二層 stack；原有 `resumeState` 保留，新一次性 action 完成後直接恢復該單一 snapshot。
+4. `resumeState` 無效時，回到目前完成 action 的 `fallbackAction`；仍無效時回到 idle。
+5. 完成一次性 action 不得重播同一 action，也不得重設已完成 action 的 frame。
+6. loop action 不得因 `update(dt)` 自動完成或回到 idle。
 
 ### 4.4 首版優先級最低契約
 
 下表固定首版最小行為，後續角色可擴充但不得改變既有語意：
 
-| Action | Loop | 可被 walk 覆蓋 | 完成後 fallback |
-|---|---:|---:|---|
-| `idle` | 是 | 是 | `idle` |
-| `walk` | 是 | 是 | `idle` |
-| `run` | 是 | 是 | `idle` |
-| `dash` | 否 | 否 | `idle` |
-| `jump` | 否 | 否 | `idle` |
-| `eat` | 否 | 是 | `idle` |
-| `drink` | 否 | 是 | `idle` |
-| `sleep` | 是 | 否 | `idle` |
+| Action | Priority | Loop | canInterrupt |
+|---|---:|---:|---:|
+| `idle` | 0 | 是 | 是 |
+| `walk` | 10 | 是 | 是 |
+| `run` | 20 | 是 | 是 |
+| `eat` | 40 | 否 | 是 |
+| `drink` | 40 | 否 | 是 |
+| `sleep` | 50 | 是 | 否 |
+| `dash` | 60 | 否 | 否 |
+| `jump` | 70 | 否 | 否 |
+| `special` | 80 | 由 registry 指定 | 由 registry 指定 |
+
+首版所有表列 action 的 fallback 均為 `idle`。特殊 action 必須在 registry 明確提供 priority、loop、canInterrupt 與 fallback；未提供者不可播放。
 
 `dash` 可存在於 Flame 接線階段，但不得被當成 `run` 的別名或自動 fallback。
 
@@ -162,7 +189,9 @@ Flame SpriteAnimation
 - frame count
 - FPS
 - loop
-- anchor
+- anchor（純資料 normalized `(x,y)`，每軸範圍 `0.0..1.0`）
+- logical render width / height（Flame world units）
+- current frame index（由 controller 輸出，不由 Flame 自行推進）
 
 首版不把 locomotion、posture、activity、held item 分別渲染後再合成。若某組合沒有對應資產，依 action 契約 fallback。
 
@@ -189,34 +218,55 @@ Flame SpriteAnimation
 | `characterId` | 穩定角色識別值 |
 | `actionId` | 動作或動作組合識別值 |
 | `direction` | `front` / `left` / `back` / `right` |
-| `assetPath` | Flutter asset 路徑 |
+| `assetKind` | `overworld` / `dialogue` / `halfbody` / `portrait`；本系統只接受 `overworld` |
+| `assetPath` | 相對於 `assets/images/` 的路徑，例如 `guide_male/walk.png` |
 | `frameWidth` | 正整數，單 frame 寬度 |
 | `frameHeight` | 正整數，單 frame 高度 |
-| `frameCount` | 正整數 |
-| `fps` | 正數 |
+| `frameCount` | 正整數；每一 direction 的 frame 數，不是整張 sheet 總 frame 數 |
+| `fps` | 正有限數值 |
 | `loop` | 是否循環 |
-| `anchor` | 角色基準錨點 |
+| `anchor` | normalized `(x,y)`，每軸 `0.0..1.0` |
+| `renderWidth` / `renderHeight` | 正數；角色在 Flame world 的邏輯尺寸，不由 source pixel 自動決定 |
+| `directionAxis` | `row` 或 `column` |
+| `padding` | sheet 四邊 pixel padding，非負整數 |
+| `spacing` | 相鄰 frame pixel 間距，水平／垂直非負整數 |
+| `animationKey` | action canonical key + direction 的唯一鍵 |
 
 ### 6.2 Sprite sheet 契約
 
-- 每張 sheet 的方向順序固定為 `front / left / back / right`。
-- manifest 的 frame 尺寸必須能完整切分圖片，不得依程式猜測 rect。
+- 每張 `overworld` sheet 的方向順序固定為 `front / left / back / right`。
+- `frameCount` 是每一 direction 的 frame 數。`directionAxis=row` 時，四個 direction 佔四列、每列 frame 由左至右；`directionAxis=column` 時，四個 direction 佔四欄、每欄 frame 由上至下。
+- `padding` 與 `spacing` 必須納入切分公式，不得依程式猜測 rect。`row` layout 的圖片尺寸必須等於：`left + right + frameCount * frameWidth + (frameCount - 1) * spacingX`，以及 `top + bottom + 4 * frameHeight + 3 * spacingY`；`column` layout 交換兩軸。
+- 每筆 direction record 可指向同一 sheet；同一 `actionId` 的四筆 record 必須共用 asset path、layout、frameCount、frame 尺寸與 render size。
 - 角色 sprite 必須是 RGBA，透明背景不可用 RGB 假透明替代。
 - sheet 尺寸、每格尺寸、每方向 frame 數必須在同一角色資產集合內一致；男女角色可有不同契約，但各自必須自洽。
 - `run`、`dash` 必須有不同 `actionId`；缺少其中一者時不得靜默共用另一者資產。
-- `dialogue`、`halfbody`、表情變體與 overworld sprite 必須使用不同資產類型識別，不得互相 fallback。
+- `dialogue`、`halfbody`、表情變體與 overworld sprite 必須使用不同 `assetKind`，不得互相 fallback。
 
 ### 6.3 Manifest 驗證
 
-驗證失敗必須在載入或測試階段明確報錯，不得以錯誤 frame 尺寸繼續渲染。至少拒絕：
+載入期驗證與播放期 fallback 分開處理。
+
+載入期驗證針對 manifest 結構與已宣告資產；失敗必須明確報錯，不得繼續載入該角色。每個角色的 `idle` 必須具備四方向有效 record。已宣告的 action 也必須具備四方向完整 record；未宣告的可選 action 不算載入錯誤，播放時走 fallback。
+
+載入期至少拒絕：
 
 - RGB 或其他非 RGBA 角色圖。
-- 任一尺寸、frameCount 或 FPS 非正值。
-- 圖片尺寸無法由 manifest frame 尺寸與 frameCount 合法切分。
-- 缺少四方向資料。
+- 任一尺寸、frameCount、render size、padding 或 spacing 不合法。
+- FPS 非正、非有限值。
+- anchor 超出 `0.0..1.0`。
+- asset path 不存在或圖片無法解碼。
+- 圖片尺寸無法由 manifest layout、frame 尺寸、padding、spacing 與 frameCount 合法切分。
+- `idle` 或已宣告 action 缺少四方向資料。
 - 重複 action/direction 鍵。
+- 重複 `animationKey`。
 - `run` 與 `dash` 使用同一 action identity。
+- 非 `overworld` assetKind 被角色動畫 manifest 宣告。
 - fallback 指向不存在 action，或 fallback 形成循環。
+
+播放期只處理合法 manifest 中「未宣告的 action」或「能力 registry 拒絕的特殊 action」：依 fallback chain 解析，無有效結果時使用該角色四方向 idle。不得把 dialogue、halfbody 或其他語意不同的 asset 當 fallback。合法 manifest 不允許已宣告 action 只缺單一方向；這類資料在載入期拒絕。
+
+資產存在性測試同時檢查 manifest `assetPath` 對應 `assets/images/<assetPath>` 的檔案，並檢查 Flutter asset bundle 可載入該相對路徑。`loadSprite` 與 `loadSpriteAnimation` 均不得再加第二次 `assets/images/` 前綴。
 
 目前已知資產阻塞：
 
@@ -234,7 +284,7 @@ Flame SpriteAnimation
 
 - 持有目前 resolved Flame sprite animation。
 - 持有角色 anchor。
-- 依 `update(dt)` 播放 frame。
+- 呼叫 controller 的單一 `update(dt)`，再依 controller 輸出的 frame index render；不得另持有會自行推進的 animation ticker。
 - 使用 `FilterQuality.none` 維持像素硬邊。
 - 將 resolved animation render 成角色圖像。
 
@@ -253,6 +303,8 @@ Flame SpriteAnimation
 
 - `syncTo(Vector2 renderedPixel)` 繼續可用。
 - `syncTo` 只複製位置值，不取得或保存位置來源的可變引用。
+- 提供玩家專用的 `play(action)` 與 `setDirection(direction)` façade，兩者只轉送至共用播放核心。
+- 初始 action 固定為 `idle + standing + none`，初始 direction 固定為 `front`。
 - 玩家元件仍可被 `UniversalOverworldGame` 以目前方式加入 world。
 - 對既有位置同步與 camera follow 的行為不得產生回歸。
 
@@ -262,13 +314,15 @@ Flame SpriteAnimation
 
 - 建立角色元件。
 - 將 domain 已算出的 rendered pixel 傳給 `syncTo`。
-- 傳入 action 與 direction 命令。
+- 提供 `playPlayerAction(action)` 與 `setPlayerDirection(direction)`，轉送 action/direction 命令給 `PlayerComponent`；不得另存第二份播放狀態。
 - 推進角色元件生命週期。
 - 保持目前相機跟隨、縮放、地圖切換與位置同步流程。
 
 遊戲層不得以位置差、速度或每幀距離變化自動猜測 walk/run/dash。
 
 動畫命令與位置同步必須是兩條獨立資料流：位置更新不代表 action 更新，action 更新不代表位置更新。
+
+`CharacterActionModel`、方向、播放狀態、controller 與 resolver 必須位於 `lib/domain/character_action/` 純 Dart 邊界；Flame adapter、manifest asset decoding 與 `CharacterComponent` 留在 game/data 層。controller 的 `update(dt)` 只能由 CharacterComponent 的單一 update 路徑呼叫一次。
 
 ## 8. 分階段交付
 
@@ -279,15 +333,16 @@ Flame SpriteAnimation
 交付：
 
 - action ID、direction、frame 尺寸、FPS、loop、anchor、fallback 的固定規則。
+- canonical action key、同通道衝突規則與 shorthand 正規化。
 - 角色 sprite RGBA 驗證。
-- 男女角色 sheet 格子契約。
+- 男女角色 sheet layout、padding、spacing、每方向 frameCount 與 logical render size 契約。
 - manifest 欄位與驗證規則。
 
 通過條件：所有首版要接線的角色資產均能由 manifest 通過驗證，且 `run`、`dash` identity 分離。
 
 ### Phase 1：純 Dart 播放核心
 
-交付動作模型、方向、播放狀態、控制器與解析行為。此階段不得 import Flutter 或 Flame。
+交付動作模型、canonical key、方向、播放狀態、控制器與解析行為。此階段不得 import Flutter 或 Flame；controller 擁有唯一 playback clock，測試不得依賴 Flame ticker。
 
 至少驗證：
 
@@ -298,8 +353,9 @@ Flame SpriteAnimation
 - 一次性特殊動作完成後回 fallback
 - 相同 action 不重設 frame
 - 不支援 action → 明確 fallback
-- 方向切換 → 切換對應方向動畫
+- 方向切換 → 切換對應方向動畫且保留 normalized progress
 - fallback 循環 → idle
+- walk → dash → jump → 恢復 walk 的單層 resumeState
 
 ### Phase 2：Flame 接線
 
@@ -307,7 +363,7 @@ Flame SpriteAnimation
 
 再接：`run`、`jump`。
 
-驗證位置同步、相機跟隨、縮放、地圖切換、anchor、像素濾鏡與元件移除生命週期。
+驗證位置同步、相機跟隨、縮放、地圖切換、anchor、logical render size、像素濾鏡、asset 相對路徑與元件移除生命週期。
 
 ### Phase 3：通用生活動作
 
@@ -335,11 +391,11 @@ Flame SpriteAnimation
 
 ### AC-CA-01 純模型邊界
 
-動作模型、方向、播放狀態、控制器與解析器可在無 Flutter、Flame、GPS、Riverpod 的測試環境執行。架構測試確認 `domain/` 不出現 framework import。
+動作模型、方向、播放狀態、控制器與解析器位於 `lib/domain/character_action/`，可在無 Flutter、Flame、GPS、Riverpod 的測試環境執行。架構測試確認該路徑不出現 framework import。
 
 ### AC-CA-02 組合動作
 
-同一角色可表達 `sit + drink`、`supine + sleep`、`walk + oneHand`、`run + special` 四種組合；模型不需要新增一個代表完整組合的大型 enum。
+同一角色可表達 `sit + drink`、`supine + sleep`、`walk + oneHand`、`run + special` 四種組合；每組合產生固定欄位順序的 canonical key；同通道衝突命令被拒絕；模型不需要新增一個代表完整組合的大型 enum。
 
 ### AC-CA-03 不重設相同 action
 
@@ -347,19 +403,19 @@ Flame SpriteAnimation
 
 ### AC-CA-04 action 或方向切換
 
-action 或 direction 任一改變時，resolved animation key 必須改變；方向切換從新動畫第一 frame 開始。
+action 或 direction 任一改變時，resolved animation key 必須改變；方向切換保留 normalized playback progress，不得重播一次性 action。
 
 ### AC-CA-05 中斷與優先級
 
-`sleep` 播放期間收到 `walk`，sleep 維持播放；可中斷 action 收到合法高優先級 action 時才切換；被拒絕命令不得改變目前狀態。
+`sleep` 播放期間收到 `walk`，sleep 維持播放；各首版 action 使用 §4.4 priority/canInterrupt 表；高優先級 action 可中斷不可中斷 action，同優先級不可繞過 `canInterrupt`；被拒絕命令不得改變目前狀態。
 
 ### AC-CA-06 一次性完成
 
-`jump`、`dash` 或特殊一次性 action 播放完畢後，只回到有效前一狀態或明確 fallback；不得停在不存在的 frame，也不得重播自身。
+`walk → dash → jump` 中，jump 完成後恢復 walk；dash 的一次性狀態不建立第二層 stack。無有效 `resumeState` 時回明確 fallback；不得停在不存在的 frame，也不得重播自身。
 
 ### AC-CA-07 fallback
 
-解析器遇到不存在 action、缺方向資產、能力不允許特殊動作、fallback 缺失或 fallback 循環時，結果明確落到 idle 或契約指定的有效 fallback；不得拋出未處理例外，也不得選用相鄰但語意不同的資產。
+載入期拒絕 malformed manifest；播放期遇到未宣告 action 或能力不允許特殊動作時，結果明確落到 idle 或契約指定的有效 fallback。已宣告 action 缺方向不得進入播放期，因為載入期已拒絕；不得拋出未處理例外，也不得選用相鄰但語意不同的資產。
 
 ### AC-CA-08 決定性解析
 
@@ -367,7 +423,7 @@ action 或 direction 任一改變時，resolved animation key 必須改變；方
 
 ### AC-CA-09 manifest 驗證
 
-測試拒絕 RGB、非法尺寸、非法 frameCount、非法 FPS、無法切分的 sheet、缺方向、重複鍵、run/dash identity 共用與 fallback 循環。
+測試拒絕 RGB、非法尺寸、非法 frameCount、非法 FPS、非 finite FPS、非法 anchor、非法 render size、非法 padding/spacing、無法切分的 sheet、缺方向、重複鍵、重複 animationKey、非 overworld assetKind、缺少 asset、無法解碼、run/dash identity 共用與 fallback 循環；測試確認未宣告 optional action 走 runtime fallback。
 
 ### AC-CA-10 玩家位置相容
 
@@ -379,11 +435,19 @@ action 或 direction 任一改變時，resolved animation key 必須改變；方
 
 ### AC-CA-12 Flame 像素渲染
 
-接線煙霧測試確認角色使用 `FilterQuality.none`、anchor 來自 manifest，且元件加入與移除不破壞現有 world、camera follow、zoom 與 map switch。
+接線煙霧測試確認角色使用 `FilterQuality.none`、normalized anchor 映射正確、logical render size 不依 source pixel 自動放大、asset path 只套用一次 `assets/images/` 前綴，且元件加入與移除不破壞現有 world、camera follow、zoom 與 map switch。
 
 ### AC-CA-13 首版範圍
 
 測試與程式碼搜尋確認角色動作系統沒有新增 GPS、背包、時間、事件、體力、任務或 NPC 行為依賴。
+
+### AC-CA-14 單一播放時鐘
+
+controller 是唯一更新 elapsed、frame index 與完成狀態的元件；CharacterComponent 每次 `update(dt)` 只呼叫一次 controller。Flame ticker 不得再推進同一 animation。測試以固定 dt 驗證 frame 與完成時點只有一種結果。
+
+### AC-CA-15 公開命令與狀態單一來源
+
+外部呼叫 `UniversalOverworldGame.playPlayerAction(action)` 或 `setPlayerDirection(direction)` 後，命令只經 `PlayerComponent` façade 進入共用 controller；game、PlayerComponent、controller 不得各自保存互相矛盾的 action 狀態。未提供命令時，初始狀態為 `idle + standing + none + front`。
 
 ## 10. 完成定義
 
