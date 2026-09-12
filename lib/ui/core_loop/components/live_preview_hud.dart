@@ -5,21 +5,18 @@ import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 
 /// 即時數值看板組件 (LivePreviewHUD)
-class LivePreviewHUD extends ConsumerStatefulWidget {
+/// 遵循 AC-CF-3.2：不含 finalTheme / totalHype 之渲染，絕景區以 4 格 pip 呈現，社畜局呈現階梯張力警示
+class LivePreviewHUD extends ConsumerWidget {
   const LivePreviewHUD({super.key, this.onSubmit});
 
   final VoidCallback? onSubmit;
 
   @override
-  ConsumerState<LivePreviewHUD> createState() => _LivePreviewHUDState();
-}
-
-class _LivePreviewHUDState extends ConsumerState<LivePreviewHUD> {
-  ClientType _selectedClientView = ClientType.budgetWorker;
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(itineraryStatsProvider);
+    final client = ref.watch(
+      curatorRunControllerProvider.select((s) => s.client),
+    );
     final canSubmit = ref.watch(
       curatorRunControllerProvider.select((s) => s.canSubmit),
     );
@@ -27,11 +24,7 @@ class _LivePreviewHUDState extends ConsumerState<LivePreviewHUD> {
       curatorRunControllerProvider.select((s) => s.submissionIssue),
     );
 
-    final targetBudget = switch (_selectedClientView) {
-      ClientType.budgetWorker => ClientSpec.budgetWorker.targetBudget,
-      ClientType.hypeInfluencer => ClientSpec.hypeInfluencer.targetBudget,
-    };
-
+    final targetBudget = client.targetBudget;
     final isOverspent = stats.totalCost > targetBudget;
 
     return RepaintBoundary(
@@ -47,7 +40,7 @@ class _LivePreviewHUDState extends ConsumerState<LivePreviewHUD> {
         ),
         child: Column(
           children: [
-            // 客群視角切換器
+            // 看板標題（呈現當前委託客戶具名稱呼，取消客群切換器）
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -55,27 +48,22 @@ class _LivePreviewHUDState extends ConsumerState<LivePreviewHUD> {
                   '即時試算看板',
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
                 ),
-                Row(
-                  children: [
-                    _buildClientTab(
-                      label: '社畜視角',
-                      type: ClientType.budgetWorker,
-                    ),
-                    const SizedBox(width: 4),
-                    _buildClientTab(
-                      label: '網紅視角',
-                      type: ClientType.hypeInfluencer,
-                    ),
-                  ],
+                Text(
+                  '${client.personaName}（${client.displayName}）',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black54,
+                  ),
                 ),
               ],
             ),
             const Divider(height: 10, thickness: 1),
 
-            // 數值指標列
+            // 數值與因果指標列
             Row(
               children: [
-                // 開銷
+                // 1. 開銷
                 Expanded(
                   child: Column(
                     children: [
@@ -99,46 +87,70 @@ class _LivePreviewHUDState extends ConsumerState<LivePreviewHUD> {
                   ),
                 ),
 
-                // 熱度
+                // 2. 焦點絕景 4 格 pip (AC-CF-3.2, SPEC §3.1.2)
                 Expanded(
                   child: Column(
                     children: [
                       const Text(
-                        '有效爆點',
+                        '焦點絕景',
                         style: TextStyle(fontSize: 9, color: Colors.black54),
                       ),
-                      Text(
-                        '🔥 ${stats.totalHype}',
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFFEA580C),
+                      const SizedBox(height: 2),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            for (int i = 0; i < 3; i++) ...[
+                              Text(
+                                i < stats.spotlightCount ? '●' : '○',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: i < stats.spotlightCount
+                                      ? const Color(0xFFF59E0B)
+                                      : const Color(0xFFCBD5E1),
+                                ),
+                              ),
+                              const SizedBox(width: 2),
+                            ],
+                            Text(
+                              stats.spotlightCount >= 4 ? '★' : '☆',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: stats.spotlightCount >= 4
+                                    ? const Color(0xFFF59E0B)
+                                    : const Color(0xFFCBD5E1),
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              stats.spotlightCount >= 4 ? '🌟 絕景大滿貫' : '📉 絕景缺口',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                                color: stats.spotlightCount >= 4
+                                    ? const Color(0xFF16A34A)
+                                    : const Color(0xFFD97706),
+                              ),
+                            ),
+                          ],
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
                 ),
 
-                // 主題性
+                // 3. 氛圍與張力警示 (社畜反無聊 / 網紅主題)
                 Expanded(
                   child: Column(
                     children: [
-                      const Text(
-                        '主題適配',
-                        style: TextStyle(fontSize: 9, color: Colors.black54),
-                      ),
                       Text(
-                        '🎯 ${stats.finalTheme} / 100',
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2563EB),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        client.type == ClientType.budgetWorker ? '反無聊警示' : '行程氛圍',
+                        style: const TextStyle(fontSize: 9, color: Colors.black54),
                       ),
+                      const SizedBox(height: 2),
+                      _buildTensionWarning(client, stats),
                     ],
                   ),
                 ),
@@ -163,7 +175,7 @@ class _LivePreviewHUDState extends ConsumerState<LivePreviewHUD> {
                     side: const BorderSide(color: Colors.black, width: 1.5),
                   ),
                 ),
-                onPressed: canSubmit ? (widget.onSubmit ?? () {}) : null,
+                onPressed: canSubmit ? (onSubmit ?? () {}) : null,
                 child: Text(
                   canSubmit
                       ? '呈送客戶審查'
@@ -184,24 +196,36 @@ class _LivePreviewHUDState extends ConsumerState<LivePreviewHUD> {
     );
   }
 
-  Widget _buildClientTab({required String label, required ClientType type}) {
-    final isSelected = _selectedClientView == type;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedClientView = type),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1E293B) : Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(2),
-        ),
-        child: Text(
-          label,
+  Widget _buildTensionWarning(ClientSpec client, ItineraryStats stats) {
+    if (client.type == ClientType.budgetWorker) {
+      if (stats.totalHype < 120) {
+        return const Text(
+          '🚨 極度乏味',
           style: TextStyle(
-            fontSize: 9,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? Colors.white : Colors.black87,
+            fontSize: 9.5,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFFDC2626),
           ),
-        ),
+        );
+      } else if (stats.totalHype < 168) {
+        return const Text(
+          '⚠️ 稍嫌平淡',
+          style: TextStyle(
+            fontSize: 9.5,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFFD97706),
+          ),
+        );
+      } else {
+        return const SizedBox.shrink(); // totalHype >= 168 即時消褪
+      }
+    }
+    return const Text(
+      '✨ 網紅話題',
+      style: TextStyle(
+        fontSize: 9.5,
+        fontWeight: FontWeight.bold,
+        color: Color(0xFF805AD5),
       ),
     );
   }

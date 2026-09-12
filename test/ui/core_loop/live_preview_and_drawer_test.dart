@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
+import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
+import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 import 'package:share_tour/state/core_loop/curator_run_controller.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
@@ -191,5 +194,128 @@ void main() {
         isTrue,
       );
     });
+
+    testWidgets('AC-CF-3.2: 數值看板與腰包清退計分文字、絕景 4-pip 與反無聊階梯張力警示', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      // 1. 建立具有不同 Hype 與 Spotlight 的測試素材
+      const lowHypeMat = TravelMaterial(
+        id: 'low_hype',
+        name: '平淡景點',
+        tags: ['#日常'],
+        themeValue: 30,
+        hypeValue: 20,
+        cost: 100,
+        riskLevel: 1,
+      );
+      const midHypeMat = TravelMaterial(
+        id: 'mid_hype',
+        name: '稍有特色景點',
+        tags: ['#探索'],
+        themeValue: 30,
+        hypeValue: 60,
+        cost: 100,
+        riskLevel: 1,
+      );
+      const spotlightMat = TravelMaterial(
+        id: 'spotlight_mat',
+        name: '絕景打卡地',
+        tags: ['#打卡', '#絕景'],
+        themeValue: 30,
+        hypeValue: 80,
+        isSpotlight: true,
+        cost: 200,
+        riskLevel: 2,
+      );
+
+      final materials = [lowHypeMat, midHypeMat, spotlightMat];
+
+      // 測試 A: 社畜初始狀態（總 Hype = 0 < 120），驗證：
+      // - 不含 finalTheme / totalHype 數字
+      // - 槽位與腰包不含 🎯 數字
+      // - 絕景顯示 4 格 pip (0 spotlight: ○ ○ ○ ☆) 與 📉 絕景缺口，無乘數數字
+      // - 社畜反無聊顯示 🚨 極度乏味
+      var state = CuratorRunState.create(
+        client: ClientSpec.budgetWorker,
+        philosophy: TravelPhilosophy.slow,
+        equipment: EquipmentInventory.initial(),
+      ).addMaterial(lowHypeMat).addMaterial(spotlightMat);
+
+      Widget createCustomSubject(CuratorRunState runState) {
+        return ProviderScope(
+          key: UniqueKey(),
+          overrides: [
+            curatorMaterialPoolProvider.overrideWithValue(materials),
+            curatorRunControllerProvider.overrideWith(
+              (ref) => CuratorRunController(
+                materialPool: materials,
+                initialState: runState,
+              ),
+            ),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  LivePreviewHUD(),
+                  Expanded(child: WaistBagDrawer()),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
+      await tester.pumpWidget(createCustomSubject(state));
+
+      // 斷言計分數字不存在
+      expect(find.textContaining('🎯'), findsNothing);
+      expect(find.textContaining('有效爆點'), findsNothing);
+      expect(find.textContaining('主題適配'), findsNothing);
+      expect(find.textContaining('+20% Combo'), findsNothing);
+
+      // 斷言乘數不存在
+      expect(find.textContaining('x0.'), findsNothing);
+      expect(find.textContaining('x1.'), findsNothing);
+
+      // 斷言客戶稱呼
+      expect(find.textContaining('小林（極限窮遊社畜）'), findsOneWidget);
+
+      // 斷言 0 絕景 pip 與 🚨 極度乏味
+      expect(find.text('📉 絕景缺口'), findsOneWidget);
+      expect(find.text('🚨 極度乏味'), findsOneWidget);
+
+      // 測試 B: 總 Hype 提升至 120 <= Hype < 168 (例如排入 low + low + mid = 20 + 20 + 90 = 130)
+      state = state
+          .setTimelineSlot(0, lowHypeMat)
+          .setTimelineSlot(1, lowHypeMat)
+          .setTimelineSlot(2, midHypeMat);
+      await tester.pumpWidget(createCustomSubject(state));
+
+      expect(find.text('⚠️ 稍嫌平淡'), findsOneWidget);
+      expect(find.text('🚨 極度乏味'), findsNothing);
+
+      // 測試 C: 總 Hype 提升至 >= 168 (排入 low + mid + spotlight = 20 + 60 + 80 = 160，再加一個 = 220)
+      state = state.setTimelineSlot(3, midHypeMat);
+      await tester.pumpWidget(createCustomSubject(state));
+
+      // totalHype >= 168 時警示即時消褪
+      expect(find.text('⚠️ 稍嫌平淡'), findsNothing);
+      expect(find.text('🚨 極度乏味'), findsNothing);
+
+      // 測試 D: 4 格全滿絕景大滿貫 (4 個 spotlight)
+      state = state
+          .setTimelineSlot(0, spotlightMat)
+          .setTimelineSlot(1, spotlightMat)
+          .setTimelineSlot(2, spotlightMat)
+          .setTimelineSlot(3, spotlightMat);
+      await tester.pumpWidget(createCustomSubject(state));
+
+      expect(find.text('🌟 絕景大滿貫'), findsOneWidget);
+      expect(find.text('📉 絕景缺口'), findsNothing);
+    });
   });
 }
+

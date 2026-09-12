@@ -84,7 +84,7 @@ void main() {
       },
     );
 
-    testWidgets('AC-UI-2.2: 相鄰兩槽位命中同標籤時，渲染連鎖光軌與 +20% Combo 文本', (tester) async {
+    testWidgets('AC-UI-2.2: 相鄰兩槽位命中同標籤時，渲染連鎖光軌與 [共鳴] 符號', (tester) async {
       tester.view.physicalSize = const Size(360, 640);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -97,7 +97,8 @@ void main() {
       await tester.pumpWidget(createSubject(state));
 
       expect(find.byKey(const Key('combo_indicator_0_1')), findsOneWidget);
-      expect(find.textContaining('+20% Combo'), findsOneWidget);
+      expect(find.text('0-1 [共鳴]'), findsOneWidget);
+      expect(find.textContaining('+20% Combo'), findsNothing);
     });
 
     testWidgets('AC-UI-2.3: 相鄰兩槽位皆為高風險(riskLevel >= 3)時，渲染拉車疲勞警示', (
@@ -116,6 +117,39 @@ void main() {
 
       expect(find.byKey(const Key('fatigue_warning_1_2')), findsOneWidget);
       expect(find.textContaining('💀 拉車疲勞'), findsOneWidget);
+    });
+
+    testWidgets('AC-CF-3.4: 相鄰槽位一高一低風險時，光軌渲染 🎵 節奏互補 (同軌同階)', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      // Slot 0 (risk 1) 與 Slot 1 (risk 3)
+      var state = CuratorRunState.initial();
+      state = state.setTimelineSlot(0, walkMaterial);
+      state = state.setTimelineSlot(1, foodMaterial);
+
+      await tester.pumpWidget(createSubject(state));
+
+      expect(
+        find.byKey(const Key('rail_indicator_rhythm_complement_0_1')),
+        findsOneWidget,
+      );
+      expect(find.textContaining('🎵 節奏互補'), findsOneWidget);
+    });
+
+    testWidgets('AC-CF-4.2: focusedCulpritSlot 在對應槽位渲染 highlight_culprit_slot 光暈', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      var state = CuratorRunState.initial();
+      state = state.setTimelineSlot(1, foodMaterial);
+      state = state.copyWith(focusedCulpritSlot: 1);
+
+      await tester.pumpWidget(createSubject(state));
+
+      expect(find.byKey(const Key('highlight_culprit_slot')), findsOneWidget);
     });
 
     testWidgets('AC-UI-2.4: Slot 2 黃昏槽位動態顯示當前相機等級之熱度倍率 (預設 Lv.1 為 1.5x)', (

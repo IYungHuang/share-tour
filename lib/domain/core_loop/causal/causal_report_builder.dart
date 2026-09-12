@@ -172,6 +172,7 @@ class CausalReportBuilder {
         direction: ImpactDirection.positive,
         intensity: ImpactIntensity.major,
         slotIndex: slot,
+        pairIndices: slot > 0 ? (slot - 1, slot) : null,
         sourceSignifier: '[共鳴]',
         reasonCode: 'tag_synergy',
       ));

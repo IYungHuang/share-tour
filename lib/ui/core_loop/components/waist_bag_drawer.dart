@@ -132,6 +132,17 @@ class _WaistBagCardItem extends ConsumerWidget {
     );
 
     final isSlotted = slottedIndex != -1;
+    final philosophy = ref.watch(
+      curatorRunControllerProvider.select((s) => s.philosophy),
+    );
+    final hasRepelled = philosophy.repelledTags.any((t) => material.hasTag(t));
+    final matchedCount =
+        philosophy.preferredTags.where((t) => material.hasTag(t)).length;
+    final qualitativeTag = hasRepelled
+        ? '💢 排斥'
+        : (matchedCount >= 2
+            ? '★★ 強烈共鳴'
+            : (matchedCount == 1 ? '★ 契合' : null));
 
     return GestureDetector(
       key: Key('bag_card_${material.id}'),
@@ -186,15 +197,19 @@ class _WaistBagCardItem extends ConsumerWidget {
                         color: Color(0xFFDC2626),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '🎯${material.themeValue}',
-                      style: const TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF2563EB),
+                    if (qualitativeTag != null) ...[
+                      const SizedBox(width: 8),
+                      Text(
+                        qualitativeTag,
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.bold,
+                          color: hasRepelled
+                              ? const Color(0xFFDC2626)
+                              : const Color(0xFF16A34A),
+                        ),
                       ),
-                    ),
+                    ],
                     const SizedBox(width: 8),
                     Text(
                       '危險: ${'★' * material.riskLevel}',

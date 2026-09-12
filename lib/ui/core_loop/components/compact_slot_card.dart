@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_tour/domain/core_loop/causal/causal_fact.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
+
+import 'causal_badge.dart';
 
 /// 四幕劇緊湊槽位卡片組件 (76~95dp 自適應寬度，防溢出設計)
 class CompactSlotCard extends ConsumerWidget {
@@ -26,6 +29,18 @@ class CompactSlotCard extends ConsumerWidget {
     final canSubmit = ref.watch(
       curatorRunControllerProvider.select((s) => s.canSubmit),
     );
+
+    // 監聽微調元兇焦點光暈 (SPEC §2.4, §3.2.2, AC-CF-4.2)
+    final isCulprit = ref.watch(
+      curatorRunControllerProvider.select(
+        (s) => s.focusedCulpritSlot == slotIndex,
+      ),
+    );
+
+    // 監聽該槽位之因果報告事實
+    final causalReport = ref.watch(itineraryCausalReportProvider);
+    final slotFacts =
+        causalReport.facts.where((f) => f.slotIndex == slotIndex).toList();
 
     final (timeLabel, defaultHint, gradientColors) = switch (slotIndex) {
       0 => (
@@ -55,6 +70,7 @@ class CompactSlotCard extends ConsumerWidget {
         key: Key('slot_card_$slotIndex'),
         onTap: onTap,
         child: Container(
+          key: isCulprit ? const Key('highlight_culprit_slot') : null,
           height: 110,
           margin: const EdgeInsets.symmetric(horizontal: 2),
           padding: const EdgeInsets.all(4),
@@ -65,11 +81,20 @@ class CompactSlotCard extends ConsumerWidget {
               end: Alignment.bottomCenter,
             ),
             border: Border.all(
-              color: slotIndex == 2 ? const Color(0xFFD97706) : Colors.black,
-              width: slotIndex == 2 ? 2.5 : 2.0,
+              color: isCulprit
+                  ? const Color(0xFFF59E0B)
+                  : (slotIndex == 2 ? const Color(0xFFD97706) : Colors.black),
+              width: isCulprit ? 3.0 : (slotIndex == 2 ? 2.5 : 2.0),
             ),
-            boxShadow: const [
-              BoxShadow(color: Colors.black26, offset: Offset(2, 2)),
+            boxShadow: [
+              if (isCulprit)
+                const BoxShadow(
+                  color: Color(0xFFF59E0B),
+                  blurRadius: 8,
+                  spreadRadius: 2,
+                )
+              else
+                const BoxShadow(color: Colors.black26, offset: Offset(2, 2)),
             ],
           ),
           child: Column(
@@ -115,7 +140,7 @@ class CompactSlotCard extends ConsumerWidget {
               Expanded(
                 child: material == null
                     ? _buildEmptyContent(canSubmit ? '刻意留白' : defaultHint)
-                    : _buildFilledContent(material),
+                    : _buildFilledContent(material, slotFacts),
               ),
             ],
           ),
@@ -147,7 +172,10 @@ class CompactSlotCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildFilledContent(TravelMaterial material) {
+  Widget _buildFilledContent(
+    TravelMaterial material,
+    List<CausalFact> slotFacts,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -175,7 +203,7 @@ class CompactSlotCard extends ConsumerWidget {
           ],
         ),
 
-        // 數值藥丸 (熱度與主題)
+        // 因果定性階梯與熱度 (AC-CF-3.2: 移除 🎯themeValue，保留 🔥hypeValue 與定性階梯)
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -187,14 +215,23 @@ class CompactSlotCard extends ConsumerWidget {
                 color: Color(0xFFDC2626),
               ),
             ),
-            Text(
-              '🎯${material.themeValue}',
-              style: const TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2563EB),
+            if (slotFacts.isNotEmpty)
+              Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: slotFacts
+                        .map(
+                          (f) => Padding(
+                            padding: const EdgeInsets.only(left: 2),
+                            child: CausalBadge.fromFact(f),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
               ),
-            ),
           ],
         ),
       ],

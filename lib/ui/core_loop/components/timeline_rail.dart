@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_tour/domain/core_loop/causal/causal_fact.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 
 import 'compact_slot_card.dart';
@@ -12,7 +13,8 @@ class TimelineRail extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final stats = ref.watch(itineraryStatsProvider);
+    // 硬約束：編排期因果符號一律只從 itineraryCausalReportProvider 的 facts 渲染
+    final causalReport = ref.watch(itineraryCausalReportProvider);
 
     return RepaintBoundary(
       child: Container(
@@ -25,7 +27,7 @@ class TimelineRail extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // 頂部連動狀態提示軌 (Synergy Rail)
-            _buildSynergyRail(stats),
+            _buildSynergyRail(causalReport.facts),
             const SizedBox(height: 6),
 
             // 4 槽位橫向軌道 (自適應彈性排版，無溢出)
@@ -69,72 +71,84 @@ class TimelineRail extends ConsumerWidget {
         .removeMaterialFromSlot(index);
   }
 
-  Widget _buildSynergyRail(dynamic stats) {
+  Widget _buildSynergyRail(List<CausalFact> facts) {
     final indicators = <Widget>[];
 
-    // 檢查相鄰配對 (0,1), (1,2), (2,3)
-    for (var i = 0; i < 3; i++) {
-      final next = i + 1;
-      final isCombo = stats.comboActiveSlots.contains(next);
-      final isFatigue = stats.fatiguePairs.contains(i);
+    // 檢查相鄰配對事實在 (0,1), (1,2), (2,3) 軌道上的投影
+    final pairFacts = facts.where((f) => f.pairIndices != null).toList();
 
-      if (isCombo) {
-        indicators.add(
-          Container(
-            key: Key('combo_indicator_${i}_$next'),
-            margin: const EdgeInsets.only(right: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF59E0B),
-              borderRadius: BorderRadius.circular(3),
-              border: Border.all(color: Colors.amberAccent, width: 1),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+    for (final fact in pairFacts) {
+      final (i, next) = fact.pairIndices!;
+      final key = switch (fact.reasonCode) {
+        'fatigue_spike' || 'fatigue_hype_penalty' =>
+          Key('fatigue_warning_${i}_$next'),
+        'chaotic_combo' || 'tag_synergy' =>
+          Key('combo_indicator_${i}_$next'),
+        _ => Key('rail_indicator_${fact.reasonCode}_${i}_$next'),
+      };
+
+      final (bgColor, borderColor, textColor) = switch (fact.reasonCode) {
+        'fatigue_spike' => (
+          const Color(0xFFDC2626),
+          Colors.redAccent,
+          Colors.white,
+        ),
+        'fatigue_hype_penalty' => (
+          const Color(0xFFBE185D),
+          Colors.pinkAccent,
+          Colors.white,
+        ),
+        'rhythm_complement' => (
+          const Color(0xFF0284C7),
+          Colors.lightBlueAccent,
+          Colors.white,
+        ),
+        'chaotic_combo' => (
+          const Color(0xFF7C3AED),
+          Colors.purpleAccent,
+          Colors.white,
+        ),
+        'tag_synergy' => (
+          const Color(0xFFF59E0B),
+          Colors.amberAccent,
+          Colors.black,
+        ),
+        _ => (
+          const Color(0xFF475569),
+          Colors.blueGrey,
+          Colors.white,
+        ),
+      };
+
+      indicators.add(
+        Container(
+          key: key,
+          margin: const EdgeInsets.only(right: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(3),
+            border: Border.all(color: borderColor, width: 1),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (fact.reasonCode == 'tag_synergy') ...[
                 const Icon(Icons.link, size: 11, color: Colors.black),
                 const SizedBox(width: 2),
-                Text(
-                  '$i-$next +20% Combo',
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
-                ),
               ],
-            ),
-          ),
-        );
-      }
-
-      if (isFatigue) {
-        indicators.add(
-          Container(
-            key: Key('fatigue_warning_${i}_$next'),
-            margin: const EdgeInsets.only(right: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFFDC2626),
-              borderRadius: BorderRadius.circular(3),
-              border: Border.all(color: Colors.redAccent, width: 1),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '$i-$next 💀 拉車疲勞',
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+              Text(
+                '$i-$next ${fact.sourceSignifier}',
+                style: TextStyle(
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        );
-      }
+        ),
+      );
     }
 
     if (indicators.isEmpty) {
