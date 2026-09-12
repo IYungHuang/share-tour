@@ -53,10 +53,7 @@ void main() {
     });
 
     expect(
-      registry.canPlay(
-        'guide',
-        const CharacterAction(special: 'guide.point'),
-      ),
+      registry.canPlay('guide', const CharacterAction(special: 'guide.point')),
       isTrue,
     );
     expect(
@@ -67,10 +64,7 @@ void main() {
       isFalse,
     );
     expect(
-      registry.canPlay(
-        'other',
-        const CharacterAction(special: 'guide.point'),
-      ),
+      registry.canPlay('other', const CharacterAction(special: 'guide.point')),
       isFalse,
     );
   });

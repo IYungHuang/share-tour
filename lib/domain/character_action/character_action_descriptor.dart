@@ -27,6 +27,8 @@ class CharacterActionDescriptorRegistry {
 
   final Map<String, CharacterActionDescriptor> _byKey;
 
+  Iterable<CharacterActionDescriptor> get values => _byKey.values;
+
   static CharacterActionDescriptorRegistry standard() {
     const idle = CharacterAction();
     return CharacterActionDescriptorRegistry([

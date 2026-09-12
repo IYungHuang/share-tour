@@ -166,7 +166,7 @@ void main() {
         manifestWith(
           asset(actionId: 'dialogue', assetKind: CharacterAssetKind.dialogue),
         ),
-        {'guide/idle.png': sheet(), 'guide/idle.png': sheet()},
+        {'guide/idle.png': sheet()},
         message: 'overworld',
       );
       expectInvalid(

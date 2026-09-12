@@ -77,28 +77,28 @@ class CharacterManifestValidator {
         errors.add('${asset.assetPath} must use overworld assetKind');
       }
       if (asset.frameWidth <= 0) {
-        errors.add('${recordKey} frameWidth must be positive');
+        errors.add('$recordKey frameWidth must be positive');
       }
       if (asset.frameHeight <= 0) {
-        errors.add('${recordKey} frameHeight must be positive');
+        errors.add('$recordKey frameHeight must be positive');
       }
       if (asset.frameCount <= 0) {
-        errors.add('${recordKey} frameCount must be positive');
+        errors.add('$recordKey frameCount must be positive');
       }
       if (!asset.fps.isFinite || asset.fps <= 0) {
-        errors.add('${recordKey} fps must be finite and positive');
+        errors.add('$recordKey fps must be finite and positive');
       }
       if (!_isNormalized(asset.anchor)) {
-        errors.add('${recordKey} anchor must be normalized');
+        errors.add('$recordKey anchor must be normalized');
       }
       if (asset.renderWidth <= 0 || !asset.renderWidth.isFinite) {
-        errors.add('${recordKey} renderWidth must be finite and positive');
+        errors.add('$recordKey renderWidth must be finite and positive');
       }
       if (asset.renderHeight <= 0 || !asset.renderHeight.isFinite) {
-        errors.add('${recordKey} renderHeight must be finite and positive');
+        errors.add('$recordKey renderHeight must be finite and positive');
       }
       if (!_isNonNegative(asset.sourceOrigin.x, asset.sourceOrigin.y)) {
-        errors.add('${recordKey} sourceOrigin must be non-negative');
+        errors.add('$recordKey sourceOrigin must be non-negative');
       }
       if (!_isNonNegative(
         asset.padding.left,
@@ -106,10 +106,10 @@ class CharacterManifestValidator {
         asset.padding.right,
         asset.padding.bottom,
       )) {
-        errors.add('${recordKey} padding must be non-negative');
+        errors.add('$recordKey padding must be non-negative');
       }
       if (!_isNonNegative(asset.spacing.horizontal, asset.spacing.vertical)) {
-        errors.add('${recordKey} spacing must be non-negative');
+        errors.add('$recordKey spacing must be non-negative');
       }
 
       final sheet = sheets[asset.assetPath];
@@ -131,11 +131,11 @@ class CharacterManifestValidator {
       final right = asset.sourceOrigin.x + asset.regionWidth;
       final bottom = asset.sourceOrigin.y + asset.regionHeight;
       if (right > sheet.width || bottom > sheet.height) {
-        errors.add('${recordKey} region exceeds sheet bounds');
+        errors.add('$recordKey region exceeds sheet bounds');
         continue;
       }
       if (_hasOpaquePadding(asset, sheet)) {
-        errors.add('${recordKey} declared padding must be transparent');
+        errors.add('$recordKey declared padding must be transparent');
       }
     }
 

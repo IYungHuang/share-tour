@@ -5,8 +5,10 @@ void main() {
   test('default action uses idle standing and empty channels', () {
     const action = CharacterAction();
 
-    expect(action.canonicalKey,
-        'locomotion=idle|posture=standing|activity=none|heldItem=none|special=none');
+    expect(
+      action.canonicalKey,
+      'locomotion=idle|posture=standing|activity=none|heldItem=none|special=none',
+    );
   });
 
   test('composes shorthand tokens into fixed canonical key order', () {
