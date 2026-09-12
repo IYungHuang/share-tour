@@ -263,13 +263,19 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
       nextItinerary = nextItinerary.setSlot(i, currentSlots[i]);
     }
 
-    state = state.copyWith(itinerary: nextItinerary);
+    state = state.copyWith(
+      itinerary: nextItinerary,
+      clearFocusedCulpritSlot: state.focusedCulpritSlot != null,
+    );
   }
 
   /// 自指定槽位卸下素材
   void removeMaterialFromSlot(int slotIndex) {
     RangeError.checkValueInInterval(slotIndex, 0, 3, 'slotIndex');
-    state = state.setTimelineSlot(slotIndex, null);
+    final nextState = state.setTimelineSlot(slotIndex, null);
+    state = state.focusedCulpritSlot != null
+        ? nextState.copyWith(clearFocusedCulpritSlot: true)
+        : nextState;
   }
 
   /// 互換兩槽位素材 (支援空槽位移動)
@@ -285,7 +291,10 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     var nextItinerary = state.itinerary.setSlot(fromIndex, toMat);
     nextItinerary = nextItinerary.setSlot(toIndex, fromMat);
 
-    state = state.copyWith(itinerary: nextItinerary);
+    state = state.copyWith(
+      itinerary: nextItinerary,
+      clearFocusedCulpritSlot: state.focusedCulpritSlot != null,
+    );
   }
 
   /// 呈送審查 (產生確定性結算報告，推進至 clientReview)
@@ -333,8 +342,11 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
   }
 
   /// 返回微調行程 (在 Near Miss / Rejected 下退回 nightEditing，保留槽位與腰包)
-  void tweakItinerary() {
-    state = state.tweakItinerary();
+  void tweakItinerary({int? culpritSlot}) {
+    state = state.tweakItinerary().copyWith(
+      focusedCulpritSlot: culpritSlot,
+      clearFocusedCulpritSlot: culpritSlot == null,
+    );
   }
 
   /// 重新啟動新單局 (進入行前準備 philosophizing 階段，保留裝備與金幣)

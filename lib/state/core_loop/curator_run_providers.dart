@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_tour/domain/core_loop/causal/causal_fact.dart';
+import 'package:share_tour/domain/core_loop/causal/causal_report_builder.dart';
 import 'package:share_tour/domain/core_loop/models/gathering_eligibility.dart';
 import 'package:share_tour/domain/core_loop/models/persistence_repository.dart';
 import 'package:share_tour/domain/core_loop/models/poi_material_resolver.dart';
@@ -57,6 +59,25 @@ final curatorRunControllerProvider =
 final itineraryStatsProvider = Provider<ItineraryStats>((ref) {
   final state = ref.watch(curatorRunControllerProvider);
   return state.currentStats;
+});
+
+/// 即時因果回饋報告衍生 Provider (具備 Riverpod Memoization，供 HUD、光軌、表情與結算共享)
+final itineraryCausalReportProvider = Provider<ItineraryCausalReport>((ref) {
+  // 細粒度訂閱，避免阿導在大地圖走動扣 HP 或取材進背包時觸發無效重算
+  final itinerary =
+      ref.watch(curatorRunControllerProvider.select((s) => s.itinerary));
+  final philosophy =
+      ref.watch(curatorRunControllerProvider.select((s) => s.philosophy));
+  final client =
+      ref.watch(curatorRunControllerProvider.select((s) => s.client));
+  // 複用既有 memoized provider；s.currentStats 是 getter，每次重跑 calculateStats
+  final stats = ref.watch(itineraryStatsProvider);
+  return CausalReportBuilder.build(
+    itinerary: itinerary,
+    stats: stats,
+    philosophy: philosophy,
+    client: client,
+  );
 });
 
 /// 單向探索許可 Provider (控制 DPad / GPS 小人移動；僅在 fieldTrip 踩線且未透支時允許)

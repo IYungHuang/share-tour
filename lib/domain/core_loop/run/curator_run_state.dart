@@ -35,6 +35,7 @@ class CuratorRunState {
     this.rerollsUsed = 0,
     this.gatheredPoiIds = const {},
     this.latestReport,
+    this.focusedCulpritSlot,
   }) : equipmentSnapshot = equipmentSnapshot ?? equipment;
 
   /// 建立全新單局初始狀態 (預設 philosophizing 階段，UUID 遵循 CC-1)
@@ -189,6 +190,9 @@ class CuratorRunState {
 
   /// 最近一次客戶審查結算報告
   final ReviewReport? latestReport;
+
+  /// 微調導向之焦點槽位 (0..3，null 表示無焦點，SPEC §2.4)
+  final int? focusedCulpritSlot;
 
   /// 是否具備出發踩線資格 (已選定哲學)
   bool get canDepart => selectedPhilosophy != null;
@@ -436,6 +440,8 @@ class CuratorRunState {
     EquipmentInventory? equipmentSnapshot,
     Set<String>? gatheredPoiIds,
     ReviewReport? latestReport,
+    int? focusedCulpritSlot,
+    bool clearFocusedCulpritSlot = false,
   }) => CuratorRunState(
     runId: runId ?? this.runId,
     phase: phase ?? this.phase,
@@ -453,15 +459,18 @@ class CuratorRunState {
     equipmentSnapshot: equipmentSnapshot ?? this.equipmentSnapshot,
     gatheredPoiIds: gatheredPoiIds ?? this.gatheredPoiIds,
     latestReport: latestReport ?? this.latestReport,
+    focusedCulpritSlot: clearFocusedCulpritSlot
+        ? null
+        : (focusedCulpritSlot ?? this.focusedCulpritSlot),
   );
 
   static List<TravelPhilosophy> _pickDistinctPhilosophies(
     Random rng,
     int count,
   ) {
-    final all = List<TravelPhilosophy>.from(TravelPhilosophy.values);
-    all.shuffle(rng);
-    return List<TravelPhilosophy>.unmodifiable(all.take(count));
+    final pool = List<TravelPhilosophy>.from(TravelPhilosophy.values);
+    pool.shuffle(rng);
+    return pool.take(count).toList();
   }
 
   @override
@@ -480,6 +489,7 @@ class CuratorRunState {
           itinerary == other.itinerary &&
           equipment == other.equipment &&
           equipmentSnapshot == other.equipmentSnapshot &&
+          focusedCulpritSlot == other.focusedCulpritSlot &&
           _setsEqual(gatheredPoiIds, other.gatheredPoiIds);
 
   @override
@@ -495,6 +505,7 @@ class CuratorRunState {
     itinerary,
     equipment,
     equipmentSnapshot,
+    focusedCulpritSlot,
     Object.hashAll(gatheredPoiIds),
   );
 
