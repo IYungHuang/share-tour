@@ -53,35 +53,35 @@ class KyotoNightMapManifest implements OverworldMapManifest {
           code: 'kyoto_nakagyo',
           name: '洛中・河原町街區',
           centerGeo: const GeoPoint(35.0060, 135.7680),
-          centerPixel: Vector2(397.0, 379.0),
+          centerPixel: Vector2(397.0, 434.0),
           minZoomForSpots: 0.5,
         ),
         AdministrativeDistrict(
           code: 'kyoto_higashiyama',
           name: '洛東・祇園清水街區',
           centerGeo: const GeoPoint(35.0000, 135.7780),
-          centerPixel: Vector2(537.0, 410.0),
+          centerPixel: Vector2(537.0, 561.0),
           minZoomForSpots: 0.5,
         ),
         AdministrativeDistrict(
           code: 'kyoto_sakyo',
           name: '洛東北・左京大文字街區',
           centerGeo: const GeoPoint(35.0300, 135.7850),
-          centerPixel: Vector2(660.0, 256.0),
+          centerPixel: Vector2(660.0, 240.0),
           minZoomForSpots: 0.5,
         ),
         AdministrativeDistrict(
           code: 'kyoto_arashiyama',
           name: '洛西・嵐山嵯峨街區',
           centerGeo: const GeoPoint(35.0200, 135.6800),
-          centerPixel: Vector2(130.0, 307.0),
+          centerPixel: Vector2(130.0, 293.0),
           minZoomForSpots: 0.5,
         ),
         AdministrativeDistrict(
           code: 'kyoto_fushimi_uji',
           name: '洛南・伏見宇治街區',
           centerGeo: const GeoPoint(34.9400, 135.7700),
-          centerPixel: Vector2(416.0, 717.0),
+          centerPixel: Vector2(416.0, 818.0),
           minZoomForSpots: 0.5,
         ),
       ];
@@ -94,13 +94,13 @@ class KyotoNightMapManifest implements OverworldMapManifest {
   @override
   Vector2 projectToPixel(double lat, double lng) {
     final x = kyotoProjectLngToPixelX(lng);
-    final y = (maxLat - lat) / (maxLat - minLat) * 1024.0;
+    final y = kyotoProjectLatToPixelY(lat);
     return Vector2(x, y);
   }
 
   @override
   GeoPoint unprojectToGeo(Vector2 pixel) {
-    final lat = maxLat - (pixel.y / 1024.0) * (maxLat - minLat);
+    final lat = kyotoUnprojectPixelYToLat(pixel.y);
     final lng = kyotoUnprojectPixelXToLng(pixel.x);
     return GeoPoint(lat, lng);
   }

@@ -321,17 +321,74 @@ double kyotoUnprojectPixelXToLng(double x) {
   return kyotoLngAnchors.last;
 }
 
-/// 依真實地理經緯度投影至 1024x1024 地圖像素座標（分段美術配準）
+/// 宏觀京都盆地緯度控制錨點（對齊手繪像素地圖特徵：鞍馬山區、一乘寺、出町柳三角洲、丸太町北門、三條商圈、錦市場核心、四條南緣、下京、伏見鳥居、伏見酒造、宇治川）
+const List<double> kyotoLatAnchors = [
+  35.0800, // 0.0: 北方鞍馬深山
+  35.0440, // 160.0: 左京一乘寺
+  35.0300, // 240.0: 出町柳三角洲／北野
+  35.0150, // 320.0: 平安京北城牆／丸太町
+  35.0085, // 370.0: 三條商圈（星巴克、伊野田）
+  35.0050, // 460.0: 洛中核心（錦市場、寺町通、新京極、幽靈自販機）
+  35.0020, // 550.0: 四條南緣（四條大宮、先斗町南端、木屋町）
+  34.9850, // 640.0: 下京區／京都站／東寺外城
+  34.9670, // 730.0: 伏見稻荷千本鳥居
+  34.9300, // 850.0: 伏見酒造運河區
+  34.8800, // 1024.0: 南方宇治川南緣
+];
+
+const List<double> kyotoPixelYAnchors = [
+  0.0,
+  160.0,
+  240.0,
+  320.0,
+  370.0,
+  460.0,
+  550.0,
+  640.0,
+  730.0,
+  850.0,
+  1024.0,
+];
+
+/// 將真實緯度投影為宏觀地圖像素 Y 座標（單調雙射分段線性配準）
+double kyotoProjectLatToPixelY(double lat) {
+  if (lat >= kyotoLatAnchors.first) return kyotoPixelYAnchors.first;
+  if (lat <= kyotoLatAnchors.last) return kyotoPixelYAnchors.last;
+  for (int i = 0; i < kyotoLatAnchors.length - 1; i++) {
+    if (lat >= kyotoLatAnchors[i + 1]) {
+      final t = (kyotoLatAnchors[i] - lat) /
+          (kyotoLatAnchors[i] - kyotoLatAnchors[i + 1]);
+      return kyotoPixelYAnchors[i] +
+          t * (kyotoPixelYAnchors[i + 1] - kyotoPixelYAnchors[i]);
+    }
+  }
+  return kyotoPixelYAnchors.last;
+}
+
+/// 將宏觀地圖像素 Y 座標逆投影為真實緯度（嚴格可逆，誤差 < 0.0001 px）
+double kyotoUnprojectPixelYToLat(double y) {
+  if (y <= kyotoPixelYAnchors.first) return kyotoLatAnchors.first;
+  if (y >= kyotoPixelYAnchors.last) return kyotoLatAnchors.last;
+  for (int i = 0; i < kyotoPixelYAnchors.length - 1; i++) {
+    if (y <= kyotoPixelYAnchors[i + 1]) {
+      final t = (y - kyotoPixelYAnchors[i]) /
+          (kyotoPixelYAnchors[i + 1] - kyotoPixelYAnchors[i]);
+      return kyotoLatAnchors[i] -
+          t * (kyotoLatAnchors[i] - kyotoLatAnchors[i + 1]);
+    }
+  }
+  return kyotoLatAnchors.last;
+}
+
+/// 依真實地理經緯度投影至 1024x1024 地圖像素座標（分段美術雙軸配準）
 Vector2 kyotoPixelForSpotId(String id) {
   final info = kyotoPoiGeoMap[id];
   if (info == null) {
     throw ArgumentError('未知的京都 POI ID: $id');
   }
-  const minLat = 34.8800;
-  const maxLat = 35.0800;
 
   final x = kyotoProjectLngToPixelX(info.lng);
-  final y = (maxLat - info.lat) / (maxLat - minLat) * 1024.0;
+  final y = kyotoProjectLatToPixelY(info.lat);
   return Vector2(x, y);
 }
 

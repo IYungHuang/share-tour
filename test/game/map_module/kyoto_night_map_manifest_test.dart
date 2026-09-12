@@ -54,19 +54,31 @@ void main() {
       }
     });
 
-    test('4b. 美術地圖分段配準驗證：洛中景點均勻分佈於中央棋盤格與鴨川西岸 (X: 250~445)', () {
+    test('4b. 美術地圖雙軸分段配準驗證：洛中景點縱橫均勻分佈於中央棋盤格 (X: 250~445, Y: 350~520, 垂直跨度 > 100px)', () {
       final attractions = manifest.districtAttractions;
       final nakagyoSpots = attractions
           .where((a) => a.districtCode == 'kyoto_nakagyo')
           .toList();
       expect(nakagyoSpots.length, equals(9));
 
+      double minY = 1024.0;
+      double maxY = 0.0;
+
       for (final spot in nakagyoSpots) {
         expect(spot.pixel.x, greaterThanOrEqualTo(250.0),
             reason: '${spot.title} 像素 X 應在中央棋盤格 (>= 250)');
         expect(spot.pixel.x, lessThanOrEqualTo(445.0),
             reason: '${spot.title} 像素 X 應在鴨川西岸 (<= 445)');
+        expect(spot.pixel.y, greaterThanOrEqualTo(350.0),
+            reason: '${spot.title} 像素 Y 應在中央城區北部 (>= 350)');
+        expect(spot.pixel.y, lessThanOrEqualTo(520.0),
+            reason: '${spot.title} 像素 Y 應在中央城區南部 (<= 520)');
+        if (spot.pixel.y < minY) minY = spot.pixel.y;
+        if (spot.pixel.y > maxY) maxY = spot.pixel.y;
       }
+
+      expect(maxY - minY, greaterThan(100.0),
+          reason: '洛中 9 景點垂直跨度應 >= 100px，不可再擠在 28px 細條中');
 
       final higashiyamaSpots = attractions
           .where((a) => a.districtCode == 'kyoto_higashiyama')
