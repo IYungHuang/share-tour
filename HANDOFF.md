@@ -1,6 +1,6 @@
 # HANDOFF — 交接紀錄
 
-**最後更新**：2026-09-12 上午
+**最後更新**：2026-09-12 下午
 **分支**：`feature/mvp-amendment-01`
 **上一份交接**：停在 2026-09-07 任務 C 階段，已整份汰換。
 
@@ -8,41 +8,42 @@
 
 ## 0. 三十秒版
 
-本次會話做了四件事：
+本次會話做了六件事：
 
 1. **解除一條擋住所有動畫的規格禁令** —— `SPEC_MVP_CAUSAL_FEEDBACK.md` §5.3 原本禁止骨骼／粒子動畫，已撤銷（v6）。
-2. **寫出 M5 快門微動作 SPEC**，經**兩輪雙軌覆核**（企劃＋工程），v1 → v2，目前 **v2 待改為 v3**。
-3. **跑了全母體搜尋**取得三態幅度的實證數據，推翻了 v2 的初始幅度（差一個數量級）。
-4. **確立勳章系統構想**，排在 M5 之後，尚未寫成文件。
+2. **寫出 M5 快門微動作 SPEC**，經**兩輪雙軌覆核**（企劃＋工程），v1 → v2 → **v3（已出，待覆核）**。
+3. **跑了全母體搜尋**取得三態幅度的實證數據，推翻了 v2 的幅度（差一個數量級）。
+4. **修掉一個會滅存檔的 bug** —— 事件日誌對未知事件種類的前向相容（commit `14f6e92`）。
+5. **確立勳章系統構想**，排在 M6，構想記於 §5。
+6. 更新 `CLAUDE.md`（新增「文件檔頭視為可能過期」）與本交接。
 
-**下一步**：出 M5 SPEC v3（材料齊備，見 §3），然後寫勳章提案文件（見 §5）。
+**下一步**：送 M5 SPEC v3 覆核（建議第三輪雙軌，見 §3）。v3 通過後才進 plan。
 
 ---
 
 ## 1. 版控狀態
 
 ```
-456f6b2 test(ui): prove each causal code travels from the rules to the screen
-239724e docs(spec): rewrite micro-action spec after dual-track review     ← M5 SPEC v2
-188fc38 feat(ui): stop the settlement panel from misreporting its own math
-ed29238 feat(ui): show the assigned client reacting live and open the codex on tap
-66f0629 docs(spec): add micro-action shutter QTE spec for milestone M5    ← M5 SPEC v1
-3bc8fb8 feat(ui): replace editing phase readouts with ordinal causal symbols
-2495b9d feat(state): carry culprit slot focus across the tweak round trip
+f70e9f7 docs(spec): settle micro-action magnitudes from an exhaustive search  ← M5 SPEC v3
+ce4e2b8 test: stop the amplitude search from taxing every suite run
+14f6e92 fix(core-loop): keep unknown event types instead of erasing the save  ← §7 的 bug
+fbf4280 feat(lighting): dynamic 4-act time of day progression                 ← 並行 agent
+762fde4 docs: hand off the shutter micro-action spec mid-revision             ← 上一版交接
+eb4f912 feat(map): ground 32 spots to true Kyoto geography and 5 districts    ← 並行 agent
+456f6b2 test(ui): prove each causal code travels from the rules to the screen  ← 並行 agent
+239724e docs(spec): rewrite micro-action spec after dual-track review          ← M5 SPEC v2
+66f0629 docs(spec): add micro-action shutter QTE spec for milestone M5         ← M5 SPEC v1
 128400b docs: judge build status from git log, not document headers
 9c2bd50 docs(spec): mark amendment 01 completed and permit engine-native animations
 ```
 
-**未進版控**：
+`flutter analyze` 0 issues、`flutter test` 全綠（交接當下 540+，分析腳本已 `skip` 不計入）。
 
-```
-?? test/analysis/micro_action_amplitude_search_test.dart   ← 幅度搜尋腳本，見 §4
-?? assets/images/guide_*_generated.png (18 張，仍在增加)    ← 角色素材，見 §6
-?? lib/domain/core_loop/models/tour_time_of_day.dart       ← 並行 agent 的時段光照
-?? lib/game/components/time_of_day_lighting_component.dart
-```
+**未進版控**：角色素材與京都底圖（`assets/images/guide_*_generated.png` 18 張 + `kyoto_basin_overworld.png`，仍在增加），由並行 agent 產出。見 §6。
 
-**注意**：本次會話期間有**另一個 agent 並行施工**，上列 `feat(ui)` / `feat(state)` commit 由它產出。它先做因果可視化（`lib/ui/core_loop/`、`lib/state/core_loop/`），交接當下已轉向**時段光照**（未進版控的 `lib/domain/core_loop/models/tour_time_of_day.dart`、`lib/game/components/time_of_day_lighting_component.dart` 與其測試），並同時在產出角色素材（見 §6）。**動 `lib/` 之前先確認它是否仍在跑。**
+**並行 agent 的動向**：本次會話全程有另一個 agent 在同一 repo 施工。它依序做了因果可視化（`lib/ui/core_loop/`、`lib/state/core_loop/`）→ 京都圖資接真實地理與 5 個行政區（`eb4f912`）→ 四幕制時段光照（`fbf4280`），並持續產出角色素材。**動 `lib/` 之前先確認它是否仍在跑。**
+
+> **已驗**：`eb4f912` 改了 285 行 `kyoto_night_layout.dart`，一度懷疑會讓 §4 的搜尋母體失效（該搜尋用 `reachablePool.take(16)`）。**重跑後十組數字與原先完全相同** —— 那次改動只動座標與分區，未動素材池。§4 數據仍有效。
 
 ---
 
@@ -62,102 +63,83 @@ ed29238 feat(ui): show the assigned client reacting live and open the codex on t
 
 放在 §7 之後。核心：**判斷施工狀態一律以 `git log` 與驗收報告為準，文件自述的狀態行不算證據。** 判讀順序 `git log -- <spec>` → `*_VERIFICATION.md` 結論節 → 程式碼 → 最後才是檔頭。附帶「規格沒寫 ≠ 沒規劃」。
 
-### 2.3 M5 SPEC v1 → v2（commit `66f0629` → `239724e`）
+### 2.3 M5 SPEC v1 → v2 → v3（commit `66f0629` → `239724e` → `f70e9f7`）
 
-`SPEC_MVP_MICRO_ACTION.md`。目前檔案內容是 **v2**，狀態 `Draft v2 — 待覆核`。
+`SPEC_MVP_MICRO_ACTION.md`，567 行。目前檔案內容是 **v3**，狀態 `Draft v3 — 待覆核`。
+兩輪雙軌覆核合計 12 條 P0 已全數處理，§4 的搜尋數據已回填成 `AC-M5-9.2` 的門檻。
+
+### 2.4 事件日誌前向相容修復（commit `14f6e92`）
+
+原本的行為鏈：`CuratorEvent.fromJson` 對未知 `type` 拋 `FormatException` → `loadEvents` 把整份日誌搬去 `.bak` 回空 → `loadSave` 重建全新身分 → **玩家金幣與裝備歸零**。M5 的 `difficultySelected` 會是第一個踩到的新種類。
+
+修法是**原文保留**：`type` 改可空（`null` = 本建置不認得），新增 `rawTypeName` 保住原文供往返，重播 `continue` 略過，`_doAppend` 的整份寫回因此把它原樣寫回、`seq` 不再塌陷。
+
+守住兩條邊界並各有測試釘住：**真正損毀的 JSON 仍走 `.bak`**、**缺 `eventId`/`seq`/`occurredAtUtc` 的仍視為損毀** —— 前向相容不得變成吞掉真損壞的藉口。
+
+測試：`test/data/core_loop/event_log_forward_compat_test.dart`，7 條全綠。
+
+### 2.5 分析腳本降噪（commit `ce4e2b8`）
+
+`test/analysis/micro_action_amplitude_search_test.dart` 預設 `skip`。它是求參數的分析腳本不是驗收條件，留在版控是為了讓 §4 的數字可重現（約 30 秒），但不該對每次 `flutter test` 收 28 秒的稅。**要重跑就拿掉那行 `skip:`。**
 
 ---
 
-## 3. M5 SPEC：v3 要做什麼（主要待辦）
+## 3. M5 SPEC v3：現況與下一步
 
-### 3.1 已定案的設計裁決（v1/v2 使用者逐題裁決，不要重開）
+**v3 已出並 commit（`f70e9f7`），狀態 `Draft v3 — 待覆核`。** 兩輪雙軌覆核的 12 條 P0 全數處理完畢。
+
+### 3.1 已定案的設計裁決（使用者逐題裁決，**不要重開**）
 
 | 議題 | 裁決 |
 |---|---|
 | 三態影響哪一側 | **產出側**（素材品質），成本固定 |
-| 更好的卡怎麼來 | **每張卡手寫三版本**（`name` 三版相同，只有 `description` 不同） |
-| Runner 與 Snapshot | 本里程碑**只做快門**，Runner 延後 |
+| 更好的卡怎麼來 | **每張卡手寫三版本**，`name` 三版相同、只有 `description` 不同 |
+| Runner 與 Snapshot | 本里程碑**只做快門**，Runner 延至 M7 |
 | 快門玩法 | **收縮準心**；絕景加構圖，**單一手勢**（按住取景、放開快門） |
 | 跳過與重試 | **皆不可**，無障礙由難度承接 |
-| 難度 | 三檔 `tourist` 觀光客／`photographer` 攝影師／`decisiveMoment` 決定性瞬間 |
-| 難度是否影響局內 | **是**（(a) 案）—— 難度放大三態幅度 |
+| 難度 | 三檔，且**放大局內幅度** |
 | 事件範圍 | **縮小**，不建單局事件溯源管線 |
-| 台灣卡表 | **descope**，只做京都 32 張 → 96 張、64 段新文案 |
+| 台灣卡表 | **descope** |
+| 設計語言 | **損害控制機制**，非獎勵機制（§3.3） |
+| 勳章 | 第一版**只做收集**，資源與解鎖延後；排 M6 |
 
-### 3.2 v3 要寫進去的三個新裁決（本次會話已定，尚未寫入檔案）
+### 3.2 v3 的三張參數表（施工前已驗算自洽）
 
-**① 中斷改「判 `normal` + 每局一次配額」，不做凍結。**
-v2 寫的是凍結續跑。改掉的理由有二：企劃指出凍結會造成必輸局面（`decisiveMoment` 在 760 ms 被打斷，回前景只剩 40 ms，低於人類反應時間）；工程指出現有 `lib/core/time/` 的 `Clock.elapsed` 是 `Stopwatch`、**沒有暫停能力**，凍結要嘛做不到、要嘛得擴張未核准的抽象。
-判 `normal` 同時解掉兩邊：它劣於 `perfect` 故無刷取誘因，優於 `failed` 故真實來電不受罰，**每局一次配額**（第二次起判 `failed`）擋住濫用。附帶好處是**消滅了工程 P0-1 的暫停時長扣除問題**。
-須補 AC：**任何中斷序列都不得提高三態結果的期望值。**
+| 難度 | 幅度（一般／絕景） | $t_{吻合}$ | 完美窗 | 普通窗 | 動畫全長 | ×16 次節奏 | 獎金上限 → 升滿級 |
+|---|---|---|---|---|---|---|---|
+| `tourist` 觀光客 | ±2 / ±3 | 1400 | 800 | 不設上限 | 2000 ms | 51.2 s | 80 金 → 6.94 局 |
+| `photographer` 攝影師 | ±3 / ±5 | 1100 | 240 | 720 | 1600 ms | 44.8 s | 160 金 → 6.47 局 |
+| `decisiveMoment` 決定性瞬間 | ±4 / ±7 | 800 | 120 | 300 | 1200 ms | 38.4 s | 240 金 → 6.05 局 |
 
-**② 節奏預算重寫。**
-v2 引的「野外段基準 240 秒」是**誤引** —— `AC-A1-4.1` 是可達性測試（240 秒內能採到 6 個 POI），不是時間預算。
-改為兩條可驗的東西：單次 QTE 儀式上限 = 動畫全長 + 1200 ms（轉場與浮字）；以 Lv1 體力上界 **16 次**（`gatheringHpCost = riskLevel × 6`，100 HP ÷ 6）計，總邏輯時間 ≤ **60 秒**。
-並把 `tourist` 動畫全長從 2600 ms 壓到 **2000 ms**（`t_吻合` 1400 / `W_p` 800）。壓縮後 `(2.0 + 1.2) × 16 = 51.2 s`，守得住；順帶讓 `tourist` 的 `normal` 態真的存在（原本 `W_p` 佔全長 40%，normal 幾乎不可能出現）。
+三條約束全數守住：節奏 ≤ 60 秒、升滿級落在 `AC-A1-5.4` 的 6~10 局、完美窗 ≥ 120 ms 硬下限。
 
-**③ 幅度依搜尋數據定案**（見 §4）：
+### 3.3 v3 最重要的改變：承認機制的真實形狀
 
-| 難度 | 一般卡 | 絕景 | 動畫全長 | `t_吻合` | `W_p` | `W_n` |
-|---|---|---|---|---|---|---|
-| `tourist` | ±2 | ±3 | 2000 ms | 1400 ms | 800 ms | 不設上限 |
-| `photographer` | ±3 | ±5 | 1600 ms | 1100 ms | 240 ms | 720 ms |
-| `decisiveMoment` | ±4 | ±7 | 1200 ms | 800 ms | 120 ms | 300 ms |
-
-**v2 寫的 ±12 / ±20 差了一個數量級，必須改。**
-
-### 3.3 兩軌覆核的待修清單
-
-第二輪雙軌覆核（企劃 8 條 P0、工程 4 條 P0）。**除 §3.2 已裁決的三條外**，剩下這些要在 v3 處理：
-
-**工程軌 P0**
-
-- **時基錨定**：`t_吻合` 是幀累加時間軸、`t_按下` 若取 `PointerEvent.timeStamp` 是自由奔跑時戳，**兩者相減沒有定義**。須明訂單一權威時間軸與換算式。（裁決①拿掉凍結後，暫停扣除的部分自動消失，只剩錨定要寫。）
-- **難度持久化的載體被 v2 自己封死**：v2 寫「不為 `CuratorSaveData` 加欄位」，但它是重播的唯一投影 —— 不加欄位就沒有東西承載「上次選的難度」，AC-M5-5.3 成立不了。正解是**新增 `difficultySelected` 事件型別 `並` 在 `CuratorSaveData` 加 `lastDifficulty` 投影欄位**；`saveVersion` 不動（它不參與序列化）。往沒有 `toJson` 的投影型別加欄位不是 schema 變更。
-- **§5.2 的前置 bugfix 寫錯層且漏洞更嚴重**（見 §7）。
-
-**工程軌 P1**（逐條都要改）
-
-- `AC-M5-1.8` 是空測（參數表根本不會有那兩個參數）→ 改靜態檢查：判定模組原始碼不出現 `riskLevel` / `cameraLevel`。
-- `AC-M5-5.5` 無完美率模型，算不出來 → SPEC 須定義**參考玩家模型**：按下誤差 $\sim N(0, \sigma)$，$\sigma$ 取三檔固定值（建議 120 / 200 / 300 ms），AC 對三個 $\sigma$ 皆須成立。此模型同時讓經濟 AC 與支配性 AC 可自動化。
-- `AC-M5-9.2` 母體未定義，最壞規模跑不完 → 須寫死：**16-POI 子集**（`reachablePool.take(16)`）、每手 6 張、3 槽、**全域齊一態**。用完整 32 張池是 $\binom{32}{6}=906{,}192$，約 113 倍、跑 8 小時。
-- **三態值掛在哪個型別上仍未定**（v1 唯一沒關乾淨的老洞）→ SPEC 不需給設計，但要給**契約約束**：「三態值不得改變 `TravelMaterial` 的相等語意」「不得改動 `MaterialInventory` 與 `TimelineItinerary` 的元素型別」。
-- `AC-M5-9.1` 只在相機 Lv3 成立（倍率 1.5 / 1.8 / 2.2；`12×1.5−12 = 6 < 12` 必紅）→ 明寫 `cameraLevel = 3`，或改門檻為「差值 > 0 且隨等級單調遞增」。
-- `AC-M5-12.2` 分母未定，**SPEC 自己的範例三連過不了其中一種讀法**（實測 normal 28 / perfect 41 / failed 39 字，短版分母 46.4% > 40%）→ 明訂 `max/min ≤ 1.4`。
-- `REQ-M5-03.4` 規定了機制而非性質（`CLAUDE.md` §1 禁止 spec 寫演算法）→ 改為性質陳述：「構圖偏差的判定不得受玩家縮放狀態影響；QTE 結束後相機狀態須與進入前一致」。另注意 `CameraFollow` **沒有存／還原 API**，`recenter()` 會清掉 `_frozenCenter` 等狀態。
-- **快門時戳須取自原始指標事件，不得取自手勢識別器的 details** —— `TapUpDetails` 與 `DragEndDetails` **都沒有時戳**，只有 `DragUpdateDetails.sourceTimeStamp` 與 `PointerEvent.timeStamp` 帶得到。走 `onPanEnd` / Flame `DragCallbacks` 會在框架邊界弄丟時戳。可測性成立：`TestGesture.up(timeStamp:)` 可指定，走 `Listener.onPointerUp` 能寫決定性測試。
-- **§5 須增列「擷取 32 張 `normal` golden fixture」為第 1 條**，早於一切卡表改動 —— 否則文案回填後基線就髒了。
-
-**企劃軌 P0**
-
-- **§1.2.4 設計意圖已被自己的修改證偽** → `riskLevel` 解耦後，任一非絕景卡的期望熱度是 $H + (p_p - p_f)\Delta$，一個**與路線無關的常數加項**，不改變任何兩條路線的排序。必須改寫或刪除（把已證偽的斷言留在「不得順手改掉」清單裡最糟）。
-- **快門獎金改為封頂「提交行程中的 `perfect` 張數」（≤ 4）**，而非採集次數。v2 的算法獎勵「跑滿 32 個 POI、全採便宜卡」—— 行程品質最差的路線。單價與倍率建議 **40 金 × (0.5 / 1.0 / 1.5)**，並補 AC：**加入獎金後 `AC-A1-5.4` 仍須落在 6~10 局**。退件局比照故事折現打 30%。
-- **節奏的 POI 數 16 → 32**（見 §8 的錯誤紀錄），並改以體力上界推導次數；`AC-M5-10.2` 改驗**最壞情況**，不要綁 `AC-A1-4.1` 的 6 次基準路徑（那是最友善案例，會在真實破綻存在時亮綠燈）。
-- **新增 AC：以三態混合池為母體重跑 Amendment 01 的分佈 AC**（`AC-A1-5.1` 黃金槽 ≤ 30%、`6.3a/b`、`6.4`、`6.8a/b`）。目前三態變體不進扁平卡表（`AC-M5-2.7` 刻意保護），代價是那些 AC **全部只驗 `normal` 版**，玩家實際經歷的混合牌組從未被檢查。
-  **特別注意 `AC-A1-5.1`**：`perfect` 嚴格優於其他版本 × 黃昏槽有倍率 = **強支配解**，而該 AC 正是要把強支配解壓在 30% 以下。v2 §1.2.1 把這件事當價值賣點，**兩份文件對同一件事結論相反**。須降級為「失手卡的損害控制」。
-
-**企劃軌 P1**
-
-- **§7 已知限制 1 的推論無效**（見 §8），須用 §4 的實測數據改寫。
-- `AC-M5-9.1` / `AC-M5-9.3` **都是恆真式**。9.1：$0.5(H+12) > 12 \iff H > 12$，卡表最低 20 → 恆真。9.3：`AC-A1-6.8a` 比各哲學最佳解，最佳解一律全 `perfect`，五家同加同一量 → 極差不變。兩條都要重寫。
-- **絕景單一手勢的三個手感破口**：(i) 取景框跟隨手指 → 判定瞬間手指正好蓋住要盯的環，**結構性遮擋**，須把環改成不繞標的（例如取景框邊框發光）；(ii) lift-off 座標會漂移數 px，`d_c` 須取**放開前約 50 ms** 的取樣或最後 N 筆中位數；(iii) 「取兩項較差者」使絕景失手率是一般卡的 7.8 倍 → 改為**構圖最多降一階**（構圖 `failed` + 時機 `perfect` → `normal`）。
-- **快門獎金缺持久化與呈現規格**：必須折進 `runSettled` 的 `earnedCoins`（`curator_event_replay.dart` 只累加該欄位），並補 AC 驗證重播後金幣總額相符；另須在結算面板獨立成行 —— 它是社畜局玩家**唯一**感知得到的技巧回饋通道，呈現是承重的不是裝飾。
-
-**P2 選要的**：`AppLifecycleState.inactive` 的涵蓋要與定位層策略區隔（`main.dart:182` 對 `inactive` 刻意 `break`）；`AC-M5-3.7` 應寫 `tester.binding.handleAppLifecycleStateChanged`（實例方法）；`AC-M5-3.5` 須明寫「以 `LocationSource` 注入新座標」（QTE 期間引擎暫停，方向鍵不會動）；`AC-M5-1.7` 禁 `dart:math` 過度（連 `min`/`max` 一起擋），改行為 AC；三態 UI 徽章的規格（腰包抽屜／4 槽卡面／結算歸因三處）完全沒寫。
-
-### 3.4 設計語言的轉向（**使用者已同意，v3 必須貫徹**）
-
-搜尋數據證明這個機制**只有懲罰、沒有獎勵**（見 §4）。已同意把設計語言從「拍得好有獎勵」改成「拍壞了有懲罰」：
+§4 的搜尋證明 `perfect` 在 **59.7% 的網紅局**與**約 99% 的社畜局**不產生任何作用，且該比例**與幅度無關**。v3 §1.3 因此明文採用對應的設計語言：
 
 > `normal` 不是「普通」，是**這張素材原本的價值**；`perfect` 是少數情況下的額外收穫；`failed` 是你搞砸了。
 
-配套：文案契約的重心反轉 —— **`failed` 版是主力**（最常看到、最需要變化），`perfect` 版是彩蛋。這會影響 §7 限制 3 的撰寫成本評估。
+推導出兩條施工約束：**文案重心反轉**（`failed` 是主力、`perfect` 是彩蛋）、**`perfect` 的穩定回報必須來自局外**（快門獎金）。
+
+同時刪掉一條、降級一條設計意圖：
+- **刪除**「技巧軸回饋到路線決策」—— 已被 v2 自己的 `riskLevel` 解耦證偽（解耦後期望熱度是與路線無關的常數加項，不改變任何兩條路線的排序）。
+- **降級**「把完美的留給黃昏槽」→ 改寫為「失手卡的損害控制」。前者描述的是**強支配解**，而 `AC-A1-5.1` 正是要把黃昏槽的固定最佳解壓在 30% 以下 —— 原本的寫法與該 AC 結論相反。
+
+### 3.4 建議送第三輪雙軌覆核
+
+改動幅度大（v2 → v3 幾乎重寫），且前兩輪各抓出 11 / 12 條 P0。我自己看到的可疑點，可以寫進覆核 prompt：
+
+1. **`AC-M5-9.4` 可能直接失敗。** 它要求以三態混合池重跑 `AC-A1-5.1`（黃金槽固定最佳解 ≤ 30%）。而 `perfect` 嚴格優於其他版本 × 黃昏槽有倍率，本來就會推高該比例。若失敗，可能得回頭限制「絕景不得進黃昏槽的三態放大」或其他手段 —— **這條沒實測過**。
+2. **`AC-M5-12.2` 的門檻與範例互相矛盾**（v3 §6 待決 4 已自陳）：$\max/\min \le 1.4$，但範例三連是 28 / 41 / 39 字，比值 1.46。要嘛收短範例、要嘛放寬門檻。
+3. **絕景的構圖門檻整組未定**（v3 §6 待決 2），故 `AC-M5-4.2` 的 9 格真值表目前驗的是一組不存在的數字。
+4. **中斷判 `normal` + 每局一次配額**是本輪新裁決，沒有經過覆核。配額的計數要存在哪裡（單局狀態）、跨中斷是否可靠，值得工程軌看一眼。
+5. **`AC-M5-3.8`（任何中斷序列不得提高期望值）怎麼寫**還沒想清楚 —— 它需要參考玩家模型 + 中斷時點的分佈假設，可能寫不出決定性的測試。
 
 ---
 
 ## 4. 幅度搜尋的實測數據（v3 的 AC-M5-9.2 依據）
 
-腳本：`test/analysis/micro_action_amplitude_search_test.dart`（**未 commit**）。母體與 `AC-A1-5.1` 同基準：16-POI 子集、8,008 手 × 5 哲學 × 2 客戶 = 40,040 樣本、相機 Lv.1。排列以 `normal` 態的最佳解決定（排列選擇與幅度無關），再在同一排列上評估三態。**執行 28 秒。**
+腳本：`test/analysis/micro_action_amplitude_search_test.dart`（**已進版控，預設 `skip`** —— 拿掉那行 `skip:` 即可重跑，約 30 秒）。母體與 `AC-A1-5.1` 同基準：16-POI 子集、8,008 手 × 5 哲學 × 2 客戶 = 40,040 樣本、相機 Lv.1。排列以 `normal` 態的最佳解決定（排列選擇與幅度無關），再在同一排列上評估三態。**執行 28 秒。**
 
 ```
 [社畜] ±2/±3   三態相異 0.0%  完全同分 73.3%  P=N 100.0%  F=N 73.4%  極差 mean 6.7  med 0  p95 25 max 25
@@ -219,7 +201,9 @@ M5  快門微動作 → M6 勳章系統 → M7 Runner 衝刺
 
 **框架的抽象邊界**（`CLAUDE.md` §3）：會變的軸是**條目本身**（未來一定會加），不是判定機制。所以框架該薄到只擋住那條軸：**一個條件表、一個發放事件、一個持有清單**。不做外掛式的成就引擎。
 
-**待辦**：開 `SPEC_MVP_BADGES_PROPOSAL.md`（提案，不是 SPEC，比照 `TASK_D_LOCAL_TIER_PROPOSAL.md` 的格式），把上述記下來。另在 M5 v3 的 §7 已知限制加**一句話**註明「`perfect` 的長期回報預期由勳章系統承接」——**不加任何欄位、不改任何介面**。
+**已做**：M5 SPEC v3 的 §7 已知限制 4 已註明「`perfect` 的長期回報預期由勳章系統（M6）承接」，且未新增任何欄位或介面。
+
+**待辦**：開 `SPEC_MVP_BADGES_PROPOSAL.md`（提案，不是 SPEC，比照 `TASK_D_LOCAL_TIER_PROPOSAL.md` 的格式）。**建議等 M5 落地、`perfect` 的實際達成率出來後再寫** —— 那個數字直接決定「一局全完美」該訂成家常便飯還是稀有成就，現在訂條件是憑空猜。本節的內容已足以讓構想不散掉。
 
 ---
 
@@ -246,30 +230,13 @@ M5  快門微動作 → M6 勳章系統 → M7 Runner 衝刺
 
 ---
 
-## 7. 一條獨立於 M5 的資料遺失 bug（**建議優先修，獨立 commit**）
+## 7. 已清償：事件日誌的資料遺失 bug
 
-重播遇未知事件型別會滅掉玩家存檔。目前未觸發（4 種事件從沒變過），但 M5 要新增 `difficultySelected` 會**首次踩到**。
+**已於本次會話修復（commit `14f6e92`），詳見 §2.4。** 本節保留標題以免其他章節的交叉引用斷掉。
 
-**兩段路徑，第二段比第一段嚴重**：
+另一條同類的既有缺陷**尚未修**，已列為 M5 SPEC v3 的 §5 前置條件第 4 條，同樣**建議獨立 commit**：
 
-1. `lib/domain/core_loop/events/curator_event.dart:89` —— `CuratorEvent.fromJson` 對未知 `type` 直接 `throw FormatException`。而 `LocalPersistenceRepository.loadEvents` 接到解析失敗會把**整份日誌搬去 `.bak` 並回傳空**，`loadSave` 於是重建全新身分 → **金幣與裝備歸零**。
-   （注意：拋出點在**解析**不在重播；`replayCuratorEvents` 的 `switch` 是 enum 窮舉，未知型別根本無法被表示。M5 SPEC v2 的 §5.2 寫「重播對未知事件型別採忽略」是**寫錯層**，照字面做會改錯檔案。）
-
-2. **更嚴重**：即使把解析改成「跳過未知事件」，`_doAppend`（`local_persistence_repository.dart:69-80`）的追加是「`loadEvents()` 讀出 → 合併 → **整份寫回**」：
-
-   ```dart
-   final existing = await loadEvents();
-   var nextSeq = existing.isEmpty ? 0 : existing.last.seq;
-   final sealed = [for (final draft in drafts) draft.seal(++nextSeq)];
-   final merged = [...existing, ...sealed];
-   await prefs.setString(eventLogKey, jsonEncode(merged.map((e) => e.toJson()).toList()));
-   ```
-
-   被跳過的未知事件**不在 `existing` 裡，於是在下一次追加時被永久抹掉**；且 `nextSeq` 會與被抹掉那些事件的 seq **撞號**。
-
-**正解**：解析層對未知型別採**原文保留**（unknown-event 佔位，保留 `seq` 與原 JSON），重播忽略之，追加時原樣寫回。這是 append-only 日誌前向相容的標準解法。只改第一段等於修一半，滅檔換個形式再來。
-
-另一條同類的既有缺陷（M5 §5.6 已列為前置條件，同樣建議獨立 commit）：`curator_run_controller.gatherPoi()` 會用 `nearestGatherablePoi()` **重算並覆蓋傳入的 `poiId`**，且沒有 `replaceGatheredPoi()` 那樣的 `expectedPoiId` 防護。插入 QTE 後，「按下取材」與「實際呼叫 domain」之間多了 1.2~2.0 秒，期間位置持續更新 → 玩家對 A 景點做的 QTE 會套用到 B 景點的素材上。
+`curator_run_controller.gatherPoi()` 會用 `nearestGatherablePoi()` **重算並覆蓋傳入的 `poiId`**，且沒有 `replaceGatheredPoi()` 那樣的 `expectedPoiId` 防護。插入 QTE 後，「按下取材」與「實際呼叫 domain」之間多了 1.2~2.0 秒，期間位置持續更新 → 玩家對 A 景點做的 QTE 會套用到 B 景點的素材上。
 
 ---
 
@@ -306,7 +273,9 @@ M5  快門微動作 → M6 勳章系統 → M7 Runner 衝刺
 ```bash
 dart run build_runner build --delete-conflicting-outputs
 flutter analyze            # 須 0 errors / 0 warnings
-flutter test               # 註：CLAUDE.md §0 的「316 passed」已過期，實測 462+
+flutter test               # 註：CLAUDE.md §0 的「316 passed」已過期，實測 540+
 ```
 
-然後讀 `SPEC_MVP_MICRO_ACTION.md`（v2），對照本文 §3 出 v3。§4 的數據直接用，不必重跑；要重跑的話腳本在 `test/analysis/`，28 秒。
+然後讀 `SPEC_MVP_MICRO_ACTION.md`（v3，567 行）。**下一步是送第三輪雙軌覆核**，重點與我自己看到的可疑點列在 §3.4。覆核通過才進 plan（`CLAUDE.md` §1 的流程不可跳級）。
+
+§4 的數據已回填進 v3 的 `AC-M5-9.2`，不必重跑；真要重跑就拿掉分析腳本裡那行 `skip:`。
