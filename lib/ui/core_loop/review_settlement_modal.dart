@@ -4,6 +4,7 @@ import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/review_outcome.dart';
 import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
+import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 
 import 'gear_shop/gear_shop_modal.dart';
@@ -256,6 +257,9 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
                     const SizedBox(height: 12),
                     // 細部評分擊穿
                     _buildSubscores(report),
+
+                    // 局域因果歸因 (AC-CF-4.1 ~ 4.4)
+                    _buildAttributionSection(context, runState, report),
                   ],
                 ),
               ),
@@ -340,9 +344,11 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
                     ),
                   ),
                   onPressed: () {
+                    final culpritSlot =
+                        ref.read(itineraryCausalReportProvider).primaryCulpritSlot;
                     ref
                         .read(curatorRunControllerProvider.notifier)
-                        .tweakItinerary();
+                        .tweakItinerary(culpritSlot: culpritSlot);
                     if (widget.onClose != null) {
                       widget.onClose!();
                     } else {
@@ -541,9 +547,9 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
 
       final String spotlightText;
       if (spotlightCount == 0 && spotlightMultiplier < 1.0) {
-        spotlightText = '無絕景 (階梯 ${(spotlightMultiplier * 100).round()}%)';
+        spotlightText = '無絕景 (缺口 4 張，階梯 ${(spotlightMultiplier * 100).round()}%)';
       } else if (spotlightMultiplier < 1.0 && spotlightCount > 0) {
-        spotlightText = '絕景 $spotlightCount/4 張 (階梯 ${(spotlightMultiplier * 100).round()}%)';
+        spotlightText = '絕景 $spotlightCount/4 張 (缺口 ${4 - spotlightCount} 張，階梯 ${(spotlightMultiplier * 100).round()}%)';
       } else {
         spotlightText = '絕景已達標 (階梯 ${(spotlightMultiplier * 100).round()}%)';
       }
@@ -594,12 +600,19 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
             label,
             style: const TextStyle(fontSize: 10.5, color: Colors.black54),
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 10.5,
-              fontWeight: FontWeight.bold,
-              color: isNegative ? const Color(0xFFDC2626) : Colors.black87,
+          const SizedBox(width: 6),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.bold,
+                  color: isNegative ? const Color(0xFFDC2626) : Colors.black87,
+                ),
+              ),
             ),
           ),
         ],
@@ -620,5 +633,162 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
       final nextLv = shoeLv < 3 ? shoeLv + 1 : 3;
       return '要是體力能再多走兩步就好了... 👟 球鞋目前 Lv.$shoeLv，升至 Lv.$nextLv 可提升 HP 上限！';
     }
+  }
+
+  Widget _buildAttributionSection(
+    BuildContext context,
+    CuratorRunState runState,
+    ReviewReport report,
+  ) {
+    final assignedType = runState.client.type;
+    final isAssignedTab = _currentClientType == assignedType;
+
+    if (!isAssignedTab) {
+      return Container(
+        key: const Key('settlement_attribution_simulation_notice'),
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: const Color(0xFFCBD5E1), width: 1),
+        ),
+        child: const Row(
+          children: [
+            Text('ℹ️', style: TextStyle(fontSize: 13)),
+            SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                '此為另一位客戶的試算，不含歸因',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF64748B),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final causalReport = ref.watch(itineraryCausalReportProvider);
+    final items = <Widget>[];
+
+    // 1. 超支元兇 (AC-CF-4.1)
+    if (causalReport.isOverBudget && causalReport.primaryCulpritSlot != null) {
+      final slot = causalReport.primaryCulpritSlot!;
+      final card = runState.itinerary.slots[slot];
+      final cost = card?.cost ?? 0;
+      items.add(_buildAttributionRow(
+        '超支元兇',
+        'Slot $slot (¥$cost)',
+      ));
+    }
+
+    // 2. 拉車疲勞時段對 (AC-CF-4.1)
+    final fatiguePairs = <(int, int)>{};
+    for (final fact in causalReport.facts) {
+      if (fact.reasonCode == 'fatigue_spike' && fact.pairIndices != null) {
+        fatiguePairs.add(fact.pairIndices!);
+      }
+    }
+    for (final pair in fatiguePairs) {
+      final (p1, p2) = pair;
+      items.add(_buildAttributionRow(
+        '拉車疲勞',
+        '時段 $p1-$p2 疲勞',
+      ));
+    }
+
+    // 3. 絕景缺口張數 (AC-CF-4.1: 網紅限定)
+    if (assignedType == ClientType.hypeInfluencer &&
+        runState.currentStats.spotlightCount < 4) {
+      final shortfall = (4 - runState.currentStats.spotlightCount).clamp(1, 4);
+      items.add(_buildAttributionRow(
+        '絕景缺口',
+        '還差 $shortfall 張焦點絕景',
+      ));
+    }
+
+    // 4. 哲學排斥槽位
+    for (final fact in causalReport.facts) {
+      if (fact.reasonCode == 'philosophy_repelled' && fact.slotIndex != null) {
+        items.add(_buildAttributionRow(
+          '哲學排斥',
+          'Slot ${fact.slotIndex}',
+        ));
+      }
+    }
+
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      key: const Key('settlement_attribution_section'),
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFFECACA), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Text('🔍', style: TextStyle(fontSize: 13)),
+              SizedBox(width: 4),
+              Text(
+                '局域因果歸因',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF991B1B),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ...items,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttributionRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF991B1B),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerRight,
+              child: Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFB91C1C),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

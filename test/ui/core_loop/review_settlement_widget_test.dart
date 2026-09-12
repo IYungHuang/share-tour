@@ -203,6 +203,7 @@ void main() {
           subscores: {
             'effectiveHype': 100,
             'spotlightMultiplier': 0.5,
+            'spotlightCount': 0,
             'themeFactor': 1.0,
           },
         );
@@ -219,6 +220,7 @@ void main() {
 
         expect(find.byKey(const Key('stamp_near_miss')), findsOneWidget);
         expect(find.textContaining('無絕景'), findsOneWidget);
+        expect(find.textContaining('缺口 4 張'), findsOneWidget);
       },
     );
 
