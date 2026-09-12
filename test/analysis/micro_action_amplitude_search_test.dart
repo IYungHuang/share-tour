@@ -1,6 +1,7 @@
 // 一次性分析腳本（非驗收測試）：為 SPEC_MVP_MICRO_ACTION v3 求三態幅度。
 //
 // 母體沿用 AC-A1-5.1 的 16-POI 子集（`reachablePool.take(16)`），每手 6 張，
+// 3 槽與 4 槽合法提交全部列舉（與 AC-A1-5.1 同基準），
 // 5 哲學 × 2 客戶。排列以 `normal` 態的最佳解決定（排列選擇與幅度無關），
 // 再在同一排列上評估三態 × 三組候選幅度。
 //
@@ -21,6 +22,8 @@ const candidates = <String, (int, int)>{
   '±4/±7': (4, 7),
   '±6/±10': (6, 10),
   '±8/±13': (8, 13),
+  '±12/±20': (12, 20),
+  '±20/±33': (20, 33),
 };
 
 TravelMaterial shift(TravelMaterial m, int delta) {
@@ -119,10 +122,16 @@ void main() {
                         if (b == a) continue;
                         for (var c = 0; c < 6; c++) {
                           if (c == a || c == b) continue;
-                          for (final layout in [
+                          final layouts = <List<TravelMaterial?>>[
                             [hand[a], hand[b], hand[c], null],
                             [null, hand[a], hand[b], hand[c]],
-                          ]) {
+                          ];
+                          // 4 槽全填亦為合法提交，AC-A1-5.1 同樣窮舉之。
+                          for (var d = 0; d < 6; d++) {
+                            if (d == a || d == b || d == c) continue;
+                            layouts.add([hand[a], hand[b], hand[c], hand[d]]);
+                          }
+                          for (final layout in layouts) {
                             final s = evaluate(layout, ce.value, phil, cam);
                             if (s > bestSat) {
                               bestSat = s;
@@ -170,7 +179,6 @@ void main() {
     expect(hands, 8008);
   },
       timeout: const Timeout(Duration(minutes: 30)),
-      // 這是求參數用的分析腳本，不是驗收條件：留在版控是為了讓 HANDOFF §4 的
-      // 數字可重現，但每次 flutter test 多跑 28 秒沒有意義。要重跑就拿掉這行。
+      // 分析腳本，不是驗收條件。要重跑就拿掉這行。
       skip: '分析腳本，需要時手動解除 skip 重跑');
 }
