@@ -1,11 +1,11 @@
 # SPEC — Share Tour 角色動作與動畫系統
 
-狀態：**Draft v5 — 待第五輪覆核**
+狀態：**Draft v6 — 待第五輪覆核**
 流程位置：`spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核`
 上位文件：`CLAUDE.md`、`CROSS_CUTTING_CONSTRAINTS.md`
 相關現況：`lib/game/components/player_component.dart`、`lib/game/universal_overworld_game.dart`
 
-> v5 修訂：依第四輪 peer review 補上未註冊組合的統一 idle fallback、Game initial state 覆寫規則、`stop()` 清除 resumeState、duration 派生契約與對應 AC。
+> v6 修訂：依第五輪 consistency review 明確區分已註冊 descriptor 與未註冊 action 的 idle fallback，補正 `row`／`column` sprite sheet 的 region 尺寸、方向索引與 frame 起點公式，並加入對應 manifest 驗證 AC。
 
 ## 1. 目的
 
@@ -106,7 +106,7 @@ locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<va
 - 動畫資產鍵 `animationKey`
 
 播放契約只描述視覺行為，不得包含物品扣除、數值變化、任務完成或其他 domain 命令。
-每個 canonical action key 對應一個完整 descriptor；組合 action 不使用局部通道 precedence。`run + guide.point` 若要播放，必須註冊完整 canonical key 與自己的 priority、loop、canInterrupt、fallback、animationKey；未註冊組合不具 descriptor，統一直接 fallback 至該角色四方向 `idle`，不得自動拆成 `run` 或 `guide.point`。組合 descriptor 不繼承或平均各通道 descriptor 欄位。
+每個已註冊 canonical action key 對應一個完整 descriptor；組合 action 不使用局部通道 precedence。`run + guide.point` 若要播放，必須註冊完整 canonical key 與自己的 priority、loop、canInterrupt、fallback、animationKey；未註冊組合不具 descriptor，統一直接 fallback 至該角色四方向 `idle`，不得自動拆成 `run` 或 `guide.point`。組合 descriptor 不繼承或平均各通道 descriptor 欄位。
 
 ### 3.4 特殊動作
 
@@ -241,7 +241,7 @@ locomotion=<value>|posture=<value>|activity=<value>|heldItem=<value>|special=<va
 
 - 每張 `overworld` sheet 的方向順序固定為 `front / left / back / right`。
 - `frameCount` 是每一 direction 的 frame 數。`directionAxis=row` 時，四個 direction 佔四列、每列 frame 由左至右；`directionAxis=column` 時，四個 direction 佔四欄、每欄 frame 由上至下。
-- `sourceOrigin`、`padding` 與 `spacing` 必須納入切分公式，不得依程式猜測 rect。action region 外框尺寸為：`regionWidth = padding.left + frameCount * frameWidth + (frameCount - 1) * spacing.horizontal + padding.right`、`regionHeight = padding.top + 4 * frameHeight + 3 * spacing.vertical + padding.bottom`。第一個 frame 起點為 `sourceOrigin + (padding.left, padding.top)`。`directionAxis=row` 時，四個 direction 佔四列、每列 frame 由左至右；`directionAxis=column` 時，四個 direction 佔四欄、每欄 frame 由上至下。完整 region 必須位於 sheet 邊界內。
+- `sourceOrigin`、`padding` 與 `spacing` 必須納入切分公式，不得依程式猜測 rect。`directionAxis=row` 時，action region 外框尺寸為：`regionWidth = padding.left + frameCount * frameWidth + (frameCount - 1) * spacing.horizontal + padding.right`、`regionHeight = padding.top + 4 * frameHeight + 3 * spacing.vertical + padding.bottom`；四個 direction 依固定順序佔四列，每列 frame 由左至右。`directionAxis=column` 時，外框尺寸為：`regionWidth = padding.left + 4 * frameWidth + 3 * spacing.horizontal + padding.right`、`regionHeight = padding.top + frameCount * frameHeight + (frameCount - 1) * spacing.vertical + padding.bottom`；四個 direction 依固定順序佔四欄，每欄 frame 由上至下。兩種 layout 的第一個 frame 起點均為 `sourceOrigin + (padding.left, padding.top)`；row layout 以 direction index 取垂直列，column layout 以 direction index 取水平欄。完整 region 必須位於 sheet 邊界內。
 - 每筆 direction record 可指向同一 sheet；同一 `actionId` 的四筆 record 必須共用 asset path、layout、sourceOrigin、frameCount、frame 尺寸與 render size。
 - 角色 sprite 必須是 RGBA，透明背景不可用 RGB 假透明替代。
 - sheet 尺寸、每格尺寸、每方向 frame 數必須在同一角色資產集合內一致；男女角色可有不同契約，但各自必須自洽。
@@ -440,7 +440,7 @@ action 或 direction 任一改變時，resolved animation key 必須改變；方
 
 ### AC-CA-09 manifest 驗證
 
-測試拒絕 RGB、非法尺寸、非法 frameCount、非法 FPS、非 finite FPS、非法 anchor、非法 render size、非法 padding/spacing、無法切分的 sheet、缺方向、重複鍵、重複 animationKey、非 overworld assetKind、缺少 asset、無法解碼、run/dash identity 共用、fallback 循環、source region 越界與 declared padding 不透明；無 padding 的全不透明 frame 可通過；測試確認未宣告 optional action 走 runtime fallback。
+測試拒絕 RGB、非法尺寸、非法 frameCount、非法 FPS、非 finite FPS、非法 anchor、非法 render size、非法 padding/spacing、無法依 `row` 或 `column` 公式切分的 sheet、缺方向、重複鍵、重複 animationKey、非 overworld assetKind、缺少 asset、無法解碼、run/dash identity 共用、fallback 循環、source region 越界與 declared padding 不透明；無 padding 的全不透明 frame 可通過；測試確認未宣告 optional action 走 runtime fallback。
 
 ### AC-CA-10 玩家位置相容
 
