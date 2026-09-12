@@ -168,5 +168,9 @@ void main() {
       }
     }
     expect(hands, 8008);
-  }, timeout: const Timeout(Duration(minutes: 30)));
+  },
+      timeout: const Timeout(Duration(minutes: 30)),
+      // 這是求參數用的分析腳本，不是驗收條件：留在版控是為了讓 HANDOFF §4 的
+      // 數字可重現，但每次 flutter test 多跑 28 秒沒有意義。要重跑就拿掉這行。
+      skip: '分析腳本，需要時手動解除 skip 重跑');
 }
