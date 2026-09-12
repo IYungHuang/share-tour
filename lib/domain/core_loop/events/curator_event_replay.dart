@@ -26,7 +26,10 @@ CuratorSaveData replayCuratorEvents(Iterable<CuratorEvent> events) {
   var completedRuns = 0;
 
   for (final event in ordered) {
-    switch (event.type) {
+    final type = event.type;
+    // 本建置不認得的種類：忽略但不丟棄。它仍佔著 seq，也仍會被原樣寫回。
+    if (type == null) continue;
+    switch (type) {
       case CuratorEventType.profileCreated:
         profileId = event.payload['profileId'] as String?;
       case CuratorEventType.philosophyRerolled:

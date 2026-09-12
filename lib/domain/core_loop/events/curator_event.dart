@@ -54,8 +54,14 @@ class CuratorEvent {
     required this.type,
     required this.occurredAtUtc,
     this.payload = const {},
+    String? rawTypeName,
   }) : assert(occurredAtUtc.isUtc, 'occurredAtUtc must be in UTC'),
-       assert(seq >= 1, 'seq 為 1 起算的單調序號');
+       assert(seq >= 1, 'seq 為 1 起算的單調序號'),
+       assert(
+         type != null || rawTypeName != null,
+         '未知種類的事件必須帶著它的原文 type，否則寫回時會遺失',
+       ),
+       rawTypeName = rawTypeName ?? type!.name;
 
   /// 事件唯一識別 (UUID v4, CC-1)
   final String eventId;
@@ -63,7 +69,15 @@ class CuratorEvent {
   /// 單調遞增序號，決定重播順序
   final int seq;
 
-  final CuratorEventType type;
+  /// 事件種類。`null` 表示**本建置不認得**的種類 —— 通常是較新的建置寫入的。
+  ///
+  /// 這種事件必須原文保留：重播忽略它，但它仍佔著自己的 `seq` 並被原樣寫回。
+  /// 若改為丟棄，`_doAppend` 的「讀出 → 合併 → 整份寫回」會把它永久抹掉，
+  /// 且後續事件的 `seq` 會與被抹掉的那些撞號。
+  final CuratorEventType? type;
+
+  /// `type` 欄位的原文。已知種類時等於 `type.name`；未知種類時保留來源字串。
+  final String rawTypeName;
 
   /// 事件發生時間 (UTC, CC-2)
   final DateTime occurredAtUtc;
@@ -74,7 +88,7 @@ class CuratorEvent {
   Map<String, Object?> toJson() => {
     'eventId': eventId,
     'seq': seq,
-    'type': type.name,
+    'type': rawTypeName,
     'occurredAtUtc': occurredAtUtc.toIso8601String(),
     'payload': payload,
   };
@@ -84,10 +98,9 @@ class CuratorEvent {
     if (rawType == null) {
       throw const FormatException('事件缺少 type 欄位');
     }
-    final type = CuratorEventType.values.where((t) => t.name == rawType);
-    if (type.isEmpty) {
-      throw FormatException('未知的事件種類: $rawType');
-    }
+    // 未知種類不是損毀：較新的建置會寫入本建置還不認得的事件。
+    // 這裡放行並保留原文，由重播忽略之 (前向相容)。
+    final matched = CuratorEventType.values.where((t) => t.name == rawType);
     final rawOccurred = json['occurredAtUtc'] as String?;
     final eventId = json['eventId'] as String?;
     final seq = json['seq'] as int?;
@@ -98,7 +111,8 @@ class CuratorEvent {
     return CuratorEvent(
       eventId: eventId,
       seq: seq,
-      type: type.first,
+      type: matched.isEmpty ? null : matched.first,
+      rawTypeName: rawType,
       occurredAtUtc: DateTime.parse(rawOccurred).toUtc(),
       payload: Map<String, Object?>.from(
         (json['payload'] as Map?) ?? const <String, Object?>{},
@@ -113,11 +127,13 @@ class CuratorEvent {
           other.eventId == eventId &&
           other.seq == seq &&
           other.type == type &&
+          other.rawTypeName == rawTypeName &&
           other.occurredAtUtc == occurredAtUtc &&
           _payloadEquals(other.payload, payload);
 
   @override
-  int get hashCode => Object.hash(eventId, seq, type, occurredAtUtc);
+  int get hashCode =>
+      Object.hash(eventId, seq, type, rawTypeName, occurredAtUtc);
 
   static bool _payloadEquals(Map<String, Object?> a, Map<String, Object?> b) {
     if (a.length != b.length) return false;
@@ -130,5 +146,5 @@ class CuratorEvent {
   }
 
   @override
-  String toString() => 'CuratorEvent(#$seq ${type.name} @$occurredAtUtc)';
+  String toString() => 'CuratorEvent(#$seq $rawTypeName @$occurredAtUtc)';
 }
