@@ -54,6 +54,31 @@ void main() {
       }
     });
 
+    test('4b. 美術地圖分段配準驗證：洛中景點均勻分佈於中央棋盤格與鴨川西岸 (X: 250~445)', () {
+      final attractions = manifest.districtAttractions;
+      final nakagyoSpots = attractions
+          .where((a) => a.districtCode == 'kyoto_nakagyo')
+          .toList();
+      expect(nakagyoSpots.length, equals(9));
+
+      for (final spot in nakagyoSpots) {
+        expect(spot.pixel.x, greaterThanOrEqualTo(250.0),
+            reason: '${spot.title} 像素 X 應在中央棋盤格 (>= 250)');
+        expect(spot.pixel.x, lessThanOrEqualTo(445.0),
+            reason: '${spot.title} 像素 X 應在鴨川西岸 (<= 445)');
+      }
+
+      final higashiyamaSpots = attractions
+          .where((a) => a.districtCode == 'kyoto_higashiyama')
+          .toList();
+      expect(higashiyamaSpots.length, equals(9));
+
+      for (final spot in higashiyamaSpots) {
+        expect(spot.pixel.x, greaterThanOrEqualTo(435.0),
+            reason: '${spot.title} 像素 X 應在鴨川東側或東山 (>= 435)');
+      }
+    });
+
     test('5. 公尺/像素比例 (metersPerPixelAt) 保留嚴格正值', () {
       expect(manifest.metersPerPixelAt(Vector2.zero()), greaterThan(0));
       expect(manifest.metersPerPixelAt(Vector2(512, 512)), greaterThan(0));

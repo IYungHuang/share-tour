@@ -270,7 +270,58 @@ final Map<String, KyotoPoiGeoInfo> kyotoPoiGeoMap = {
   for (final info in kyotoPoiGeoTable) info.id: info,
 };
 
-/// 依真實地理經緯度投影至 1024x1024 地圖像素座標
+/// 宏觀京都盆地經度控制錨點（對齊手繪像素地圖特徵：西方山區、中央棋盤格、鴨川中軸、東山山麓、大文字山）
+const List<double> kyotoLngAnchors = [
+  135.6600, // 0.0: 西方山巒邊界（嵐山以西）
+  135.6800, // 130.0: 嵐山嵯峨野風景區
+  135.7400, // 240.0: 洛西北（北野天滿宮、千本閻魔堂）
+  135.7600, // 320.0: 中央古城棋盤格西緣（四條大宮、二條）
+  135.7725, // 440.0: 鴨川中心水系軸線（四條大橋、河原町、先斗町河畔）
+  135.7850, // 660.0: 洛東坡道與古寺群（祇園、八坂塔、二年坂、清水寺）
+  135.8200, // 1024.0: 東方如意嶽與大文字山東界
+];
+
+const List<double> kyotoPixelXAnchors = [
+  0.0,
+  130.0,
+  240.0,
+  320.0,
+  440.0,
+  660.0,
+  1024.0,
+];
+
+/// 將真實經度投影為宏觀地圖像素 X 座標（單調雙射分段線性配準）
+double kyotoProjectLngToPixelX(double lng) {
+  if (lng <= kyotoLngAnchors.first) return kyotoPixelXAnchors.first;
+  if (lng >= kyotoLngAnchors.last) return kyotoPixelXAnchors.last;
+  for (int i = 0; i < kyotoLngAnchors.length - 1; i++) {
+    if (lng <= kyotoLngAnchors[i + 1]) {
+      final t = (lng - kyotoLngAnchors[i]) /
+          (kyotoLngAnchors[i + 1] - kyotoLngAnchors[i]);
+      return kyotoPixelXAnchors[i] +
+          t * (kyotoPixelXAnchors[i + 1] - kyotoPixelXAnchors[i]);
+    }
+  }
+  return kyotoPixelXAnchors.last;
+}
+
+/// 將宏觀地圖像素 X 座標逆投影為真實經度（嚴格可逆，誤差 < 0.0001 px）
+double kyotoUnprojectPixelXToLng(double x) {
+  if (x <= kyotoPixelXAnchors.first) return kyotoLngAnchors.first;
+  if (x >= kyotoPixelXAnchors.last) return kyotoLngAnchors.last;
+  for (int i = 0; i < kyotoPixelXAnchors.length - 1; i++) {
+    if (x <= kyotoPixelXAnchors[i + 1]) {
+      final t = (x - kyotoPixelXAnchors[i]) /
+          (kyotoPixelXAnchors[i + 1] - kyotoPixelXAnchors[i]);
+      return kyotoLngAnchors[i] +
+          t * (kyotoLngAnchors[i + 1] - kyotoLngAnchors[i]);
+    }
+  }
+  return kyotoLngAnchors.last;
+}
+
+/// 依真實地理經緯度投影至 1024x1024 地圖像素座標（分段美術配準）
 Vector2 kyotoPixelForSpotId(String id) {
   final info = kyotoPoiGeoMap[id];
   if (info == null) {
@@ -278,10 +329,8 @@ Vector2 kyotoPixelForSpotId(String id) {
   }
   const minLat = 34.8800;
   const maxLat = 35.0800;
-  const minLng = 135.6600;
-  const maxLng = 135.8200;
 
-  final x = (info.lng - minLng) / (maxLng - minLng) * 1024.0;
+  final x = kyotoProjectLngToPixelX(info.lng);
   final y = (maxLat - info.lat) / (maxLat - minLat) * 1024.0;
   return Vector2(x, y);
 }
