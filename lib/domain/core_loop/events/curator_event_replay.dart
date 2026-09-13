@@ -51,6 +51,9 @@ CuratorSaveData replayCuratorEvents(Iterable<CuratorEvent> events) {
       case CuratorEventType.runSettled:
         coins += (event.payload['earnedCoins'] as int?) ?? 0;
         completedRuns += 1;
+      case CuratorEventType.difficultySelected:
+        // 難度是單局狀態，不落局外存檔投影——本分支刻意不動任何欄位。
+        break;
     }
   }
 

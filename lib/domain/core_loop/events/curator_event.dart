@@ -11,6 +11,11 @@ enum CuratorEventType {
 
   /// 單局結算收下佣金，payload: {earnedCoins}
   runSettled,
+
+  /// 行前選定快門難度（REQ-M5-05.4／REQ-M5-06.3），payload: {difficulty}。
+  /// 難度是單局狀態不落局外存檔投影，本事件只為 CC-3 事件溯源的完整性
+  /// 而記錄，重播時不影響 [CuratorSaveData] 任何欄位。
+  difficultySelected,
 }
 
 /// 尚未編號的事件草稿。

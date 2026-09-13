@@ -34,7 +34,7 @@ void main() {
       {
         'eventId': 'evt-2',
         'seq': 2,
-        'type': 'difficultySelected',
+        'type': 'futureBadgeUnlocked',
         'occurredAtUtc': '2026-09-12T06:02:00.000Z',
         'payload': {'difficulty': 'photographer'},
       },
@@ -62,7 +62,7 @@ void main() {
 
       expect(events.length, 3, reason: '未知事件必須保留在序列中');
       expect(events[1].type, isNull, reason: '無法對應列舉時 type 為 null');
-      expect(events[1].rawTypeName, 'difficultySelected');
+      expect(events[1].rawTypeName, 'futureBadgeUnlocked');
       expect(events[1].seq, 2);
       expect(events[1].payload['difficulty'], 'photographer');
       expect(
@@ -113,7 +113,7 @@ void main() {
         [1, 2, 3, 4],
         reason: '未知事件被抹掉會讓 seq 塌陷並與新事件撞號',
       );
-      expect(reloaded[1].rawTypeName, 'difficultySelected');
+      expect(reloaded[1].rawTypeName, 'futureBadgeUnlocked');
       expect(
         reloaded[1].payload['difficulty'],
         'photographer',
@@ -139,7 +139,7 @@ void main() {
       final types = raw.map((e) => (e as Map)['type']).toList();
       expect(types, [
         'profileCreated',
-        'difficultySelected',
+        'futureBadgeUnlocked',
         'runSettled',
         'runSettled',
       ]);
