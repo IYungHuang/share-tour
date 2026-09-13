@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 
 import '../../domain/character_action/character_action_controller.dart';
+import '../../domain/character_action/character_animation_manifest.dart';
 import '../../game/characters/character_asset_loader.dart';
 import '../../game/characters/guide_action_sheet_registry.dart';
 
@@ -19,6 +20,8 @@ class CharacterComponent extends PositionComponent {
 
   SpriteComponent? _spriteChild;
   SpriteAnimation? _animation;
+  String? _loadedAnimationKey;
+  String? _loadingAnimationKey;
   CharacterActionSheetCell? _activeCell;
   double _cellElapsed = 0;
 
@@ -47,23 +50,52 @@ class CharacterComponent extends PositionComponent {
       return;
     }
 
-    final loaded = await loader.load(resolved.asset);
-    _animation = loaded.animation;
-    _spriteChild = SpriteComponent(
-      sprite: _animation!.frames[controller.frameIndex].sprite,
-      autoResize: false,
-      size: Vector2(loaded.asset.renderWidth, loaded.asset.renderHeight),
-      position: Vector2.zero(),
-      anchor: Anchor(loaded.asset.anchor.x, loaded.asset.anchor.y),
-    )..paint.filterQuality = FilterQuality.none;
-    add(_spriteChild!);
-    size.setValues(loaded.asset.renderWidth, loaded.asset.renderHeight);
-    anchor = Anchor(loaded.asset.anchor.x, loaded.asset.anchor.y);
+    await _loadAnimation(resolved.asset, createChild: true);
+  }
+
+  Future<void> _loadAnimation(
+    CharacterAnimationAsset asset, {
+    bool createChild = false,
+  }) async {
+    final key = asset.animationKey;
+    if (_loadingAnimationKey == key) return;
+    _loadingAnimationKey = key;
+    try {
+      final loaded = await loader.load(asset);
+      if (controller.resolvedAnimation?.asset.animationKey != key) return;
+      _animation = loaded.animation;
+      _loadedAnimationKey = key;
+      final child = _spriteChild;
+      if (child == null && createChild) {
+        _spriteChild = SpriteComponent(
+          sprite: _animation!.frames[controller.frameIndex].sprite,
+          autoResize: false,
+          size: Vector2(asset.renderWidth, asset.renderHeight),
+          position: Vector2.zero(),
+          anchor: Anchor(asset.anchor.x, asset.anchor.y),
+        )..paint.filterQuality = FilterQuality.none;
+        add(_spriteChild!);
+      } else if (child != null) {
+        child.sprite = _animation!.frames[controller.frameIndex].sprite;
+        child.size.setValues(asset.renderWidth, asset.renderHeight);
+        child.anchor = Anchor(asset.anchor.x, asset.anchor.y);
+      }
+      size.setValues(asset.renderWidth, asset.renderHeight);
+      anchor = Anchor(asset.anchor.x, asset.anchor.y);
+    } finally {
+      _loadingAnimationKey = null;
+    }
   }
 
   @override
   void update(double dt) {
     controller.update(dt);
+    final resolved = controller.resolvedAnimation;
+    if (resolved != null &&
+        resolved.asset.animationKey != _loadedAnimationKey &&
+        resolved.asset.animationKey != _loadingAnimationKey) {
+      _loadAnimation(resolved.asset);
+    }
     final cell = _activeCell;
     if (cell != null) {
       _cellElapsed += dt;

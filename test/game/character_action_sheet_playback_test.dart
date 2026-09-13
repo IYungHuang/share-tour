@@ -9,6 +9,7 @@ import 'package:share_tour/domain/character_action/character_capability_registry
 import 'package:share_tour/domain/character_action/character_direction.dart';
 import 'package:share_tour/game/characters/character_asset_loader.dart';
 import 'package:share_tour/game/characters/guide_action_sheet_registry.dart';
+import 'package:share_tour/game/characters/guide_character_manifest.dart';
 import 'package:share_tour/game/components/character_component.dart';
 
 void main() {
@@ -73,4 +74,30 @@ void main() {
       expect(component.spriteChild!.sprite!.src.width, 362);
     },
   );
+
+  test('reloads sprite sheet when controller changes to run', () async {
+    final controller = CharacterActionController(
+      characterId: 'guide',
+      descriptors: CharacterActionDescriptorRegistry.standard(),
+      resolver: CharacterAnimationResolver(guideCharacterManifest),
+      capabilities: CharacterCapabilityRegistry(const {}),
+    );
+    final component = CharacterComponent(
+      controller: controller,
+      loader: CharacterAssetLoader(images: Images()),
+    );
+
+    await component.onLoad();
+    expect(component.spriteChild!.sprite!.src.top, 0);
+    expect(
+      controller.play(
+        const CharacterAction(locomotion: CharacterLocomotion.run),
+      ),
+      isTrue,
+    );
+    component.update(0.01);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    expect(component.spriteChild!.sprite!.src.top, 724);
+  });
 }
