@@ -190,6 +190,31 @@ class CausalReportBuilder {
       ));
     }
 
+    // 9. 快門三態對第二層分數的影響（REQ-M5-08.2）。單一詞條
+    // （'shot_quality'），方向依行程中是否存在 perfect／failed 素材決定；
+    // 兩者皆存在時各記一條——這條事實指向第二層分數，不指向 satisfaction，
+    // 故只看 hypeSumByTier 的六分量，不呼叫 ClientReviewEngine。
+    final failedHype =
+        stats.failedSpotlightHype + stats.failedNonSpotlightHype;
+    final perfectHype =
+        stats.perfectSpotlightHype + stats.perfectNonSpotlightHype;
+    if (failedHype > 0) {
+      facts.add(const CausalFact(
+        domain: CausalDomain.shotQuality,
+        direction: ImpactDirection.negative,
+        sourceSignifier: '快門失手',
+        reasonCode: 'shot_quality',
+      ));
+    }
+    if (perfectHype > 0) {
+      facts.add(const CausalFact(
+        domain: CausalDomain.shotQuality,
+        direction: ImpactDirection.positive,
+        sourceSignifier: '快門完美',
+        reasonCode: 'shot_quality',
+      ));
+    }
+
     // 嚴格全序排序：domain → (slotIndex ?? pairIndices?.$1 ?? 99) → (pairIndices?.$2 ?? 99) → reasonCode
     facts.sort(_compareFacts);
 

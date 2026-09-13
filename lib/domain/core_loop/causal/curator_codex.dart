@@ -100,6 +100,13 @@ class CuratorCodex {
       explanation: '在恰當的時間走訪恰當的景點，享受時段專屬氛圍加分。',
       guideNote: '阿導筆記：晨曦散步、午後美食、深夜小酌，順應天時。',
     ),
+    'shot_quality': CodexEntry(
+      title: '快門手感',
+      jargon: '決定性瞬間',
+      explanation: '快門判定的三態（完美／普通／失手）直接影響擴散觸及或 CP 值'
+          '這個第二層分數，與滿意度、評等、佣金無關。',
+      guideNote: '阿導筆記：快門拍得巧不巧不影響能不能過關，只影響拍出來的東西值不值錢。',
+    ),
   };
 
   /// 依 reasonCode 查詢對應策展手冊詞條
