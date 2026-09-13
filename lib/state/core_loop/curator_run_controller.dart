@@ -18,6 +18,8 @@ import 'package:share_tour/domain/core_loop/review/client_review_engine.dart';
 import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
+import 'package:share_tour/domain/core_loop/time/diurnal_resonance_rule.dart';
+import 'package:share_tour/domain/core_loop/time/tour_period.dart';
 import 'package:share_tour/domain/location/models/district_attraction.dart';
 import 'package:share_tour/domain/location/projection/map_manifest.dart';
 import 'package:vector_math/vector_math.dart';
@@ -67,6 +69,7 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     String poiId, {
     OverworldMapManifest? manifest,
     Vector2? playerPixel,
+    TourPeriod? period,
   }) {
     final resolver = _resolver;
     if (resolver == null) {
@@ -111,10 +114,19 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
           );
     }
 
+    final overrideHpCost = period != null
+        ? DiurnalResonanceRule.calculateActualCost(
+            baseHpCost: gatheringHpCost(targetMaterial),
+            currentPeriod: period,
+            material: targetMaterial,
+          )
+        : null;
+
     final hpBefore = state.resources.currentHp;
     state = state.gatherPoiMaterial(
       poiId: targetAttraction.id,
       material: targetMaterial,
+      overrideHpCost: overrideHpCost,
     );
     final hpAfter = state.resources.currentHp;
     return (
@@ -134,6 +146,7 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     OverworldMapManifest? manifest,
     Vector2? playerPixel,
     String? expectedPoiId,
+    TourPeriod? period,
   }) {
     final resolver = _resolver;
     if (resolver == null) {
@@ -185,11 +198,20 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
           );
     }
 
+    final overrideHpCost = period != null
+        ? DiurnalResonanceRule.calculateActualCost(
+            baseHpCost: gatheringHpCost(targetMaterial),
+            currentPeriod: period,
+            material: targetMaterial,
+          )
+        : null;
+
     final hpBefore = state.resources.currentHp;
     state = state.replaceGatheredMaterial(
       poiId: targetAttraction.id,
       dropIndex: dropIndex,
       newMaterial: targetMaterial,
+      overrideHpCost: overrideHpCost,
     );
     final hpAfter = state.resources.currentHp;
     return (

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:share_tour/domain/core_loop/models/tour_time_of_day.dart';
-import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
+import 'package:share_tour/domain/core_loop/time/tour_period.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
+import 'package:share_tour/state/core_loop/game_time_controller.dart';
 
 /// 大世界漫步時頂部常駐的極簡 JRPG 生存指標 HUD
 ///
@@ -29,13 +29,8 @@ class CuratorFieldHud extends ConsumerWidget {
 
     final isDeficit = resources.isDeficit;
     final isBagFull = inventory.isFull;
-    final timeOfDay = TourTimeOfDay.fromHpAndPhase(
-      currentHp: hp,
-      maxHp: maxHp,
-      isNightEditing: runState.phase == CuratorRunPhase.nightEditing ||
-          runState.phase == CuratorRunPhase.clientReview ||
-          runState.phase == CuratorRunPhase.settled,
-    );
+    final timeSnapshot = ref.watch(gameTimeProvider);
+    final period = timeSnapshot.period;
 
     return Container(
       height: 38,
@@ -150,12 +145,12 @@ class CuratorFieldHud extends ConsumerWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             decoration: BoxDecoration(
-              color: timeOfDay.hasCameraBonus
+              color: period.hasCameraBonus
                   ? const Color(0xFF7C2D12) // 琥珀深紅背景強化相機 1.5x 加成
                   : Colors.black45,
               borderRadius: BorderRadius.circular(3),
               border: Border.all(
-                color: timeOfDay.hasCameraBonus
+                color: period.hasCameraBonus
                     ? const Color(0xFFF59E0B)
                     : Colors.white24,
                 width: 1,
@@ -165,22 +160,21 @@ class CuratorFieldHud extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  timeOfDay == TourTimeOfDay.dawn
-                      ? '🌅'
-                      : timeOfDay == TourTimeOfDay.midday
-                          ? '☀️'
-                          : timeOfDay == TourTimeOfDay.dusk
-                              ? '🌇'
-                              : '🌙',
+                  switch (period) {
+                    TourPeriod.dawn => '🌅',
+                    TourPeriod.midday => '☀️',
+                    TourPeriod.dusk => '🌇',
+                    TourPeriod.night => '🌙',
+                  },
                   style: const TextStyle(fontSize: 9),
                 ),
                 const SizedBox(width: 2),
                 Text(
-                  timeOfDay.hasCameraBonus
-                      ? '${timeOfDay.timeString} 📷'
-                      : timeOfDay.timeString,
+                  period.hasCameraBonus
+                      ? '${timeSnapshot.formattedTimeString} 📷'
+                      : timeSnapshot.formattedTimeString,
                   style: TextStyle(
-                    color: timeOfDay.hasCameraBonus
+                    color: period.hasCameraBonus
                         ? const Color(0xFFFDE047)
                         : Colors.white70,
                     fontSize: 9,

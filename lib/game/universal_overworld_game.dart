@@ -3,6 +3,7 @@ import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import '../domain/core_loop/models/tour_time_of_day.dart';
+import '../domain/core_loop/time/game_time_snapshot.dart';
 import '../domain/location/camera/camera_follow.dart';
 import '../domain/location/models/district_attraction.dart';
 import 'components/attraction_layer_component.dart';
@@ -19,6 +20,7 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
     required this.cameraFollow,
     this.onAttractionSelected,
     this.onDistrictRevealed,
+    this.timeSnapshotGetter,
     this.timeOfDayGetter,
   }) : _manifest = manifest;
 
@@ -40,6 +42,7 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
   /// 縮放聚焦行政區變更回調
   final void Function(AdministrativeDistrict? district, int visibleCount)?
       onDistrictRevealed;
+  final GameTimeSnapshot Function()? timeSnapshotGetter;
   final TourTimeOfDay Function()? timeOfDayGetter;
 
   late final World mapWorld;
@@ -56,6 +59,12 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
   @override
   Color backgroundColor() {
     final baseColor = Color(manifest.oceanColorArgb);
+    if (timeSnapshotGetter != null) {
+      return Color.alphaBlend(
+        Color(timeSnapshotGetter!().ambientColorArgb),
+        baseColor,
+      );
+    }
     final time = timeOfDayGetter?.call() ?? TourTimeOfDay.dawn;
     switch (time) {
       case TourTimeOfDay.dawn:
@@ -111,6 +120,7 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
     // 5. 加入動態四幕光照與環境燈火圖層 (晨曦／午後／黃昏／深夜)
     lightingComponent = TimeOfDayLightingComponent(
       mapSize: manifest.mapDimensions,
+      timeSnapshotGetter: timeSnapshotGetter,
       timeOfDayGetter: timeOfDayGetter ?? () => TourTimeOfDay.dawn,
       playerPositionGetter: () => playerComponent.position,
       lightPositionsGetter: () =>

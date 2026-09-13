@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:share_tour/domain/core_loop/models/poi_material_resolver.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
+import 'package:share_tour/domain/core_loop/time/diurnal_resonance_rule.dart';
+import 'package:share_tour/domain/core_loop/time/tour_period.dart';
 import 'package:share_tour/domain/location/models/district_attraction.dart';
 import 'package:share_tour/domain/location/projection/map_manifest.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
@@ -346,6 +348,70 @@ void main() {
       expect(replaceMismatch, isNull);
       expect(container.read(curatorRunControllerProvider).resources.hp, equals(hpBeforeMismatch));
       expect(container.read(curatorRunControllerProvider).inventory.count, equals(countBeforeMismatch));
+    });
+
+    test('Task 4: gatherPoi 與 replaceGatheredPoi 支援時段共鳴體力折讓 (契合折讓 3 HP，底線保底 1 HP)', () {
+      final controller = container.read(curatorRunControllerProvider.notifier);
+
+      // mat_dawn: riskLevel 2 (base 12 HP), tags: ['#散步'] -> 晨曦共鳴折讓 3 HP => 9 HP
+      const matDawn = TravelMaterial(
+        id: 'mat_dawn',
+        name: '鴨川散步',
+        tags: ['#散步'],
+        themeValue: 10,
+        hypeValue: 10,
+        riskLevel: 2,
+      );
+      // mat_bar: riskLevel 2 (base 12 HP), tags: ['#居酒屋'] -> 晨曦無共鳴 => 12 HP
+      const matBar = TravelMaterial(
+        id: 'mat_bar',
+        name: '木屋町居酒屋',
+        tags: ['#居酒屋'],
+        themeValue: 10,
+        hypeValue: 10,
+        riskLevel: 2,
+      );
+      // mat_low: riskLevel 1 (base 6 HP), tags: ['#寺院'] -> 晨曦共鳴折讓 3 HP => 3 HP
+      const matLow = TravelMaterial(
+        id: 'mat_low',
+        name: '南禪寺小路',
+        tags: ['#寺院'],
+        themeValue: 10,
+        hypeValue: 10,
+        riskLevel: 1,
+      );
+
+      fakeResolver.mapping['poi_dawn'] = matDawn;
+      fakeResolver.mapping['poi_bar'] = matBar;
+      fakeResolver.mapping['poi_low'] = matLow;
+
+      final initialHp = container.read(curatorRunControllerProvider).resources.hp; // 100
+
+      // 1. 晨曦契合取材：實扣 9 HP
+      final resDawn = controller.gatherPoi('poi_dawn', period: TourPeriod.dawn);
+      expect(resDawn.hpSpent, 9);
+      expect(container.read(curatorRunControllerProvider).resources.hp, initialHp - 9);
+
+      // 2. 晨曦不契合取材：實扣 12 HP (無折讓)
+      final resBar = controller.gatherPoi('poi_bar', period: TourPeriod.dawn);
+      expect(resBar.hpSpent, 12);
+      expect(container.read(curatorRunControllerProvider).resources.hp, initialHp - 9 - 12);
+
+      // 3. 晨曦契合取材 (base 6 HP - 3 HP)：實扣 3 HP
+      final resLow = controller.gatherPoi('poi_low', period: TourPeriod.dawn);
+      expect(resLow.hpSpent, 3);
+      expect(container.read(curatorRunControllerProvider).resources.hp, initialHp - 9 - 12 - 3);
+
+      // 4. 驗證 DiurnalResonanceRule 1 HP 保底邏輯
+      expect(
+        DiurnalResonanceRule.calculateActualCost(
+          baseHpCost: 2,
+          currentPeriod: TourPeriod.dawn,
+          material: matLow,
+        ),
+        1,
+        reason: '名目成本 2 HP 小於折讓額 3 HP 時，應保底 1 HP',
+      );
     });
   });
 }

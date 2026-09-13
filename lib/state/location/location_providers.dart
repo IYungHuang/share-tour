@@ -101,11 +101,11 @@ final locationControllerProvider =
 ///
 /// 只轉發意圖，不含判定邏輯——邏輯全在 LocationController 組裝的純函式裡。
 class LocationNotifier extends Notifier<LocationControllerState> {
-  late final LocationController _controller;
-  late final VirtualLocationSource _virtual;
-  late final LocationSubscriptionManager _subscriptions;
-  late final FixThrottle _throttle;
-  late final PermissionResolver _resolver;
+  late LocationController _controller;
+  late VirtualLocationSource _virtual;
+  late LocationSubscriptionManager _subscriptions;
+  late FixThrottle _throttle;
+  late PermissionResolver _resolver;
 
   /// 目前作用中來源 → 節流的訂閱。切換模式時換掉的是這一條。
   StreamSubscription<GeoFix>? _sourceSub;
