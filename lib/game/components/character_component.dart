@@ -93,6 +93,7 @@ class CharacterComponent extends PositionComponent {
         child.size.setValues(asset.renderWidth, asset.renderHeight);
         child.anchor = Anchor(asset.anchor.x, asset.anchor.y);
       }
+      _spriteChild?.scale.x = sheet?.mirrored == true ? -1 : 1;
       size.setValues(asset.renderWidth, asset.renderHeight);
       anchor = Anchor(asset.anchor.x, asset.anchor.y);
     } finally {

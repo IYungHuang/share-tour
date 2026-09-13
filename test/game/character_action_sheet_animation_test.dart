@@ -43,7 +43,7 @@ void main() {
     );
   });
 
-  test('selects distinct rows for all four directions', () {
+  test('selects directional rows and action-sheet side rows', () {
     final rows = [
       for (final direction in CharacterDirection.values)
         actionSheetAnimationFor(
@@ -53,6 +53,22 @@ void main() {
         )!.cells.first.sourceOrigin.y,
     ];
 
-    expect(rows, [888, 1110, 1332, 1554]);
+    expect(rows, [888, 631, 1332, 631]);
+    expect(
+      actionSheetAnimationFor(
+        'guide',
+        const CharacterAction(locomotion: CharacterLocomotion.run),
+        CharacterDirection.left,
+      )!.mirrored,
+      isTrue,
+    );
+    expect(
+      actionSheetAnimationFor(
+        'guide',
+        const CharacterAction(locomotion: CharacterLocomotion.run),
+        CharacterDirection.right,
+      )!.mirrored,
+      isFalse,
+    );
   });
 }

@@ -40,6 +40,7 @@ class CharacterActionSheetAnimation {
     required this.cells,
     required this.fps,
     this.loop = true,
+    this.mirrored = false,
   });
 
   final String characterId;
@@ -48,6 +49,7 @@ class CharacterActionSheetAnimation {
   final List<CharacterActionSheetCell> cells;
   final double fps;
   final bool loop;
+  final bool mirrored;
 }
 
 const _malePath = 'guide_action_sheet_v1_generated.png';
@@ -158,16 +160,19 @@ const femaleGuideActionSheetRegistry = <CharacterActionSheetCell>[
 final guideActionSheetAnimations = _makeDirectionalAnimations(
   'guide',
   'guide_directional_locomotion_sheet_v2_generated.png',
+  _malePath,
 );
 
 final femaleGuideActionSheetAnimations = _makeDirectionalAnimations(
   'guide_female',
   'guide_female_directional_locomotion_sheet_v2_generated.png',
+  _femalePath,
 );
 
 List<CharacterActionSheetAnimation> _makeDirectionalAnimations(
   String characterId,
-  String assetPath,
+  String directionalAssetPath,
+  String sideAssetPath,
 ) {
   const directions = CharacterDirection.values;
   return [
@@ -177,35 +182,62 @@ List<CharacterActionSheetAnimation> _makeDirectionalAnimations(
       directionIndex++
     )
       for (final locomotion in ['walk', 'run'])
-        CharacterActionSheetAnimation(
+        _makeDirectionalAnimation(
           characterId: characterId,
-          animationId: locomotion,
           direction: directions[directionIndex],
-          cells: [
-            for (var frameIndex = 0; frameIndex < 4; frameIndex++)
-              CharacterActionSheetCell(
-                characterId: characterId,
-                cellId:
-                    '${characterId}_${locomotion}_${directions[directionIndex].name}_f${frameIndex + 1}',
-                assetPath: assetPath,
-                sourceOrigin: PixelPoint(
-                  frameIndex * 222,
-                  (directionIndex + (locomotion == 'run' ? 4 : 0)) * 222,
-                ),
-                frameWidth: 222,
-                frameHeight: 222,
-                renderWidth: 24,
-                renderHeight: 24,
-                observationalTags: [
-                  '${directions[directionIndex].name}_facing',
-                  '${locomotion}_cycle',
-                ],
-                semanticCandidates: ['${locomotion}_cycle'],
-              ),
-          ],
-          fps: 8,
+          locomotion: locomotion,
+          directionalAssetPath: directionalAssetPath,
+          sideAssetPath: sideAssetPath,
         ),
   ];
+}
+
+CharacterActionSheetAnimation _makeDirectionalAnimation({
+  required String characterId,
+  required CharacterDirection direction,
+  required String locomotion,
+  required String directionalAssetPath,
+  required String sideAssetPath,
+}) {
+  final isSide =
+      direction == CharacterDirection.left ||
+      direction == CharacterDirection.right;
+  final sideRowY = characterId == 'guide_female'
+      ? (locomotion == 'walk' ? 316 : 632)
+      : (locomotion == 'walk' ? 315 : 631);
+  final rowIndex = direction.indexInSheet + (locomotion == 'run' ? 4 : 0);
+  final assetPath = isSide ? sideAssetPath : directionalAssetPath;
+  return CharacterActionSheetAnimation(
+    characterId: characterId,
+    animationId: locomotion,
+    direction: direction,
+    mirrored: direction == CharacterDirection.left,
+    cells: [
+      for (var frameIndex = 0; frameIndex < 4; frameIndex++)
+        CharacterActionSheetCell(
+          characterId: characterId,
+          cellId:
+              '${characterId}_${locomotion}_${direction.name}_f${frameIndex + 1}',
+          assetPath: assetPath,
+          sourceOrigin: PixelPoint(
+            isSide ? const [0, 311, 623, 934][frameIndex] : frameIndex * 222,
+            isSide ? sideRowY : rowIndex * 222,
+          ),
+          frameWidth: isSide ? const [311, 312, 311, 312][frameIndex] : 222,
+          frameHeight: isSide
+              ? (characterId == 'guide_female' ? 316 : 315)
+              : 222,
+          renderWidth: 24,
+          renderHeight: 24,
+          observationalTags: [
+            '${direction.name}_facing',
+            '${locomotion}_cycle',
+          ],
+          semanticCandidates: ['${locomotion}_cycle'],
+        ),
+    ],
+    fps: 8,
+  );
 }
 
 CharacterActionSheetAnimation? actionSheetAnimationFor(
