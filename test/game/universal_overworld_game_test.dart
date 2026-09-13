@@ -49,4 +49,22 @@ void main() {
       returnsNormally,
     );
   });
+
+  test('尚未載入時 switchMap 更新 manifest 且不存取 Flame 元件', () async {
+    final first = FakeMapManifest.linear();
+    final second = FakeMapManifest.linear(originPixel: Vector2(80, 90));
+    final game = UniversalOverworldGame(
+      manifest: first,
+      onTick: (_) {},
+      renderedPixelOf: () => Vector2.zero(),
+      cameraFollow: CameraFollow(
+        clock: FakeClock(),
+        returnDelay: const Duration(seconds: 3),
+      ),
+    );
+
+    await game.switchMap(second, newSpawnPixel: Vector2(12, 13));
+
+    expect(game.manifest, same(second));
+  });
 }

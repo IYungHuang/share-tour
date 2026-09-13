@@ -23,13 +23,13 @@ class LocationSubscriptionManager {
     required OverworldMapManifest manifest,
     this.backgroundGrace = const Duration(seconds: 20),
     this.resumeDebounce = const Duration(seconds: 2),
-  })  : _source = source,
-        _clock = clock,
-        _manifest = manifest;
+  }) : _source = source,
+       _clock = clock,
+       _manifest = manifest;
 
   final LocationSource _source;
   final Clock _clock;
-  final OverworldMapManifest _manifest;
+  OverworldMapManifest _manifest;
   final Duration backgroundGrace;
   final Duration resumeDebounce;
 
@@ -88,6 +88,8 @@ class LocationSubscriptionManager {
     _mode = mode;
     await _applyDesiredState();
   }
+
+  void switchManifest(OverworldMapManifest next) => _manifest = next;
 
   void dispose() {
     _sub?.cancel();

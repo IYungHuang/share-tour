@@ -23,8 +23,9 @@ import 'location_controller.dart';
 /// 可覆寫的注入點。測試以 overrides 換掉整組相依，正式路徑用預設值。
 final clockProvider = Provider<Clock>((_) => SystemClock());
 
-final buildFlagsProvider =
-    Provider<BuildFlags>((_) => const BuildFlags.debug());
+final buildFlagsProvider = Provider<BuildFlags>(
+  (_) => const BuildFlags.debug(),
+);
 
 /// 圖資由外部注入。通用引擎不得自己建立特定城市的模組。
 final mapManifestProvider = Provider<OverworldMapManifest>(
@@ -45,8 +46,9 @@ final permissionGatewayProvider = Provider<LocationPermissionGateway>(
 );
 
 final permissionResolverProvider = Provider<PermissionResolver>((ref) {
-  final resolver =
-      PermissionResolver(gateway: ref.watch(permissionGatewayProvider));
+  final resolver = PermissionResolver(
+    gateway: ref.watch(permissionGatewayProvider),
+  );
   ref.onDispose(resolver.dispose);
   return resolver;
 });
@@ -69,7 +71,9 @@ final virtualSourceProvider = Provider<VirtualLocationSource>((ref) {
 
 /// GPS 訂閱的生命週期與省電。虛擬來源不經過它——它沒有平台訂閱要管，
 /// 也不該因為進背景就停下方向鍵。
-final subscriptionManagerProvider = Provider<LocationSubscriptionManager>((ref) {
+final subscriptionManagerProvider = Provider<LocationSubscriptionManager>((
+  ref,
+) {
   final manager = LocationSubscriptionManager(
     source: ref.watch(realSourceProvider),
     clock: ref.watch(clockProvider),
@@ -90,12 +94,14 @@ final fixThrottleProvider = Provider<FixThrottle>((ref) {
 });
 
 /// 螢幕喚醒鎖（REQ-C-16）。不是抽象——見 WakelockControl 的文件註解。
-final wakelockControlProvider =
-    Provider<WakelockControl>((_) => WakelockControl());
+final wakelockControlProvider = Provider<WakelockControl>(
+  (_) => WakelockControl(),
+);
 
 final locationControllerProvider =
     NotifierProvider<LocationNotifier, LocationControllerState>(
-        LocationNotifier.new);
+      LocationNotifier.new,
+    );
 
 /// 定位狀態的唯一寫入點在 Riverpod 側的門面。
 ///
@@ -230,8 +236,9 @@ class LocationNotifier extends Notifier<LocationControllerState> {
       PermissionState.unavailable,
     };
     // 定位不可用時連 powerMode 一起降下來（REQ-C-11 規則 3），恢復時升回。
-    await _subscriptions
-        .setPowerMode(unusable.contains(permission) ? PowerMode.suspended : PowerMode.active);
+    await _subscriptions.setPowerMode(
+      unusable.contains(permission) ? PowerMode.suspended : PowerMode.active,
+    );
 
     final mode = _controller.state.status.mode;
     if (mode != previousMode) await _bindSource(mode);
@@ -274,6 +281,16 @@ class LocationNotifier extends Notifier<LocationControllerState> {
   Future<void> switchToVirtual() async {
     _controller.switchMode(SourceMode.virtual, automatic: false);
     await _bindSource(SourceMode.virtual);
+    state = _controller.state;
+  }
+
+  Future<void> switchManifest(
+    OverworldMapManifest manifest, {
+    Vector2? newSpawnPixel,
+  }) async {
+    _controller.switchLayer(manifest, newSpawnPixel: newSpawnPixel);
+    _virtual.switchManifest(manifest, newSpawnPixel: newSpawnPixel);
+    _subscriptions.switchManifest(manifest);
     state = _controller.state;
   }
 }

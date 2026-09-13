@@ -36,7 +36,7 @@ class UniversalOverworldGame extends FlameGame
     this.initialDirection = CharacterDirection.front,
   });
 
-  final OverworldMapManifest manifest;
+  OverworldMapManifest manifest;
 
   /// 每幀交還給 domain 推進平滑。引擎不自己算位置。
   final void Function(double dt) onTick;
@@ -65,10 +65,10 @@ class UniversalOverworldGame extends FlameGame
 
   late final World mapWorld;
   late final CameraComponent cameraComponent;
-  late final SpriteComponent mapComponent;
+  late SpriteComponent mapComponent;
   late final PlayerComponent playerComponent;
-  late final AttractionLayerComponent attractionLayer;
-  late final TimeOfDayLightingComponent lightingComponent;
+  late AttractionLayerComponent attractionLayer;
+  late TimeOfDayLightingComponent lightingComponent;
 
   double _baseZoom = 1.0;
   final double minZoom = 0.5;
@@ -196,6 +196,48 @@ class UniversalOverworldGame extends FlameGame
 
   /// 回到我的位置。
   void recenterOnPlayer() => cameraFollow.recenter();
+
+  Future<void> switchMap(
+    OverworldMapManifest next, {
+    Vector2? newSpawnPixel,
+  }) async {
+    manifest = next;
+    if (!_playerCreated) return;
+
+    mapComponent.removeFromParent();
+    final sprite = await loadSprite(next.assetPath);
+    mapComponent = SpriteComponent(
+      sprite: sprite,
+      size: next.mapDimensions,
+      paint: Paint()..filterQuality = FilterQuality.none,
+    );
+    await mapWorld.add(mapComponent);
+
+    attractionLayer.removeFromParent();
+    attractionLayer = AttractionLayerComponent(
+      manifest: next,
+      onAttractionTapped: (attraction) {
+        attractionLayer.selectAttraction(attraction);
+        onAttractionSelected?.call(attraction);
+      },
+      onDistrictChanged: onDistrictRevealed,
+    );
+    await mapWorld.add(attractionLayer);
+
+    lightingComponent.removeFromParent();
+    lightingComponent = TimeOfDayLightingComponent(
+      mapSize: next.mapDimensions,
+      timeOfDayGetter: timeOfDayGetter ?? () => TourTimeOfDay.dawn,
+      playerPositionGetter: () => playerComponent.position,
+      lightPositionsGetter: () =>
+          next.districtAttractions.map((a) => a.pixel).toList(),
+      priority: 25,
+    );
+    await mapWorld.add(lightingComponent);
+
+    playerComponent.syncTo(newSpawnPixel ?? next.defaultSpawnPixel);
+    cameraComponent.viewfinder.position = playerComponent.position;
+  }
 
   void playPlayerAction(CharacterAction action) {
     if (_playerCreated) {

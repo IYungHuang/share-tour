@@ -47,18 +47,18 @@ class LocationController {
     required Clock clock,
     required BuildFlags flags,
     bool ignoreMockedFlag = false,
-  })  : _manifest = manifest,
-        _clock = clock,
-        _flags = flags,
-        _ignoreMocked = ignoreMockedFlag,
-        _pipeline = LocationPipeline(manifest: manifest, clock: clock),
-        _events = MovementEventFactory(uuid: const Uuid()),
-        _smoother = PositionSmoother(
-          manifest: manifest,
-          halfLife: const Duration(seconds: 1),
-          arrivalMeters: 2,
-          headingMeters: 5,
-        ) {
+  }) : _manifest = manifest,
+       _clock = clock,
+       _flags = flags,
+       _ignoreMocked = ignoreMockedFlag,
+       _pipeline = LocationPipeline(manifest: manifest, clock: clock),
+       _events = MovementEventFactory(uuid: const Uuid()),
+       _smoother = PositionSmoother(
+         manifest: manifest,
+         halfLife: const Duration(seconds: 1),
+         arrivalMeters: 2,
+         headingMeters: 5,
+       ) {
     _smoother.jumpTo(manifest.defaultSpawnPixel);
   }
 
@@ -121,7 +121,7 @@ class LocationController {
   ///
   /// 分桶距離以公尺計、與圖層無關，故不清零：里程是玩家走出來的，
   /// 不會因為換了一張圖就不算數。
-  void switchLayer(OverworldMapManifest next) {
+  void switchLayer(OverworldMapManifest next, {Vector2? newSpawnPixel}) {
     _manifest = next;
     _pipeline = LocationPipeline(manifest: next, clock: _clock);
     _smoother = PositionSmoother(
@@ -132,7 +132,10 @@ class LocationController {
     );
 
     final last = _lastGeo;
-    if (last != null && next.containsGeo(last.latitude, last.longitude)) {
+    if (newSpawnPixel != null) {
+      _smoother.jumpTo(newSpawnPixel);
+    } else if (last != null &&
+        next.containsGeo(last.latitude, last.longitude)) {
       _smoother.jumpTo(next.projectToPixel(last.latitude, last.longitude));
     } else {
       _smoother.jumpTo(next.defaultSpawnPixel);
@@ -175,13 +178,15 @@ class LocationController {
 
   void switchMode(SourceMode mode, {required bool automatic}) {
     if (_status.mode == mode) return;
-    _log.add(_events.modeChanged(
-      from: _status.mode,
-      to: mode,
-      automatic: automatic,
-      reason: automatic ? 'locationUnavailable' : 'manual',
-      timestampUtc: _clock.nowUtc(),
-    ));
+    _log.add(
+      _events.modeChanged(
+        from: _status.mode,
+        to: mode,
+        automatic: automatic,
+        reason: automatic ? 'locationUnavailable' : 'manual',
+        timestampUtc: _clock.nowUtc(),
+      ),
+    );
     lastSwitchWasAutomatic = automatic;
     _status = _status.copyWith(mode: mode);
 
@@ -227,14 +232,16 @@ class LocationController {
     // 逐筆追蹤。只在明確開啟時輸出——它在真機診斷時不可或缺，
     // 但會淹沒測試輸出，而測試本來就有更精確的斷言。
     if (traceIngestion && !_flags.isRelease) {
-      debugPrint('[TRACK] lat=${fix.latitude.toStringAsFixed(6)} '
-          'lng=${fix.longitude.toStringAsFixed(6)} '
-          'acc=${fix.accuracyMeters} hasAcc=${fix.hasAccuracy} '
-          'spd=${fix.speedMetersPerSecond.toStringAsFixed(2)} '
-          'hasSpd=${fix.hasSpeed} spdAcc=${fix.speedAccuracy.toStringAsFixed(2)} '
-          'mocked=${fix.isMocked} mode=${attributed.sourceMode.name} '
-          'rej=${out.rejection?.name} target=${out.targetPixel} '
-          'events=${out.events.length} cov=${_manifest.containsGeo(fix.latitude, fix.longitude)}');
+      debugPrint(
+        '[TRACK] lat=${fix.latitude.toStringAsFixed(6)} '
+        'lng=${fix.longitude.toStringAsFixed(6)} '
+        'acc=${fix.accuracyMeters} hasAcc=${fix.hasAccuracy} '
+        'spd=${fix.speedMetersPerSecond.toStringAsFixed(2)} '
+        'hasSpd=${fix.hasSpeed} spdAcc=${fix.speedAccuracy.toStringAsFixed(2)} '
+        'mocked=${fix.isMocked} mode=${attributed.sourceMode.name} '
+        'rej=${out.rejection?.name} target=${out.targetPixel} '
+        'events=${out.events.length} cov=${_manifest.containsGeo(fix.latitude, fix.longitude)}',
+      );
     }
 
     if (out.rejection != null) {

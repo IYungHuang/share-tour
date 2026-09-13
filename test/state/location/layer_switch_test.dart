@@ -9,18 +9,18 @@ import '../../fakes/fake_clock.dart';
 import '../../fakes/fake_map_manifest.dart';
 
 GeoFix at({required double metersNorth, int second = 0}) => GeoFix(
-      latitude: 24.0 + metersNorth / 110574.0,
-      longitude: 121.0,
-      accuracyMeters: 20,
-      hasAccuracy: true,
-      speedMetersPerSecond: 1.4,
-      hasSpeed: true,
-      speedAccuracy: 0.5,
-      hasSpeedAccuracy: true,
-      timestampUtc: DateTime.utc(2026, 1, 1).add(Duration(seconds: second)),
-      isMocked: false,
-      sourceMode: SourceMode.gps,
-    );
+  latitude: 24.0 + metersNorth / 110574.0,
+  longitude: 121.0,
+  accuracyMeters: 20,
+  hasAccuracy: true,
+  speedMetersPerSecond: 1.4,
+  hasSpeed: true,
+  speedAccuracy: 0.5,
+  hasSpeedAccuracy: true,
+  timestampUtc: DateTime.utc(2026, 1, 1).add(Duration(seconds: second)),
+  isMocked: false,
+  sourceMode: SourceMode.gps,
+);
 
 void main() {
   late FakeMapManifest layerA;
@@ -51,9 +51,13 @@ void main() {
     c.ingest(at(metersNorth: 60, second: 1));
     final before = c.events.whereType<RelocationEvent>().length;
     c.switchLayer(layerB);
-    expect(c.events.whereType<RelocationEvent>().length, before,
-        reason: '大跨距判準是地理位移，換層時地理位置不變 → 位移為 0，'
-            '該路徑在建構上不可達');
+    expect(
+      c.events.whereType<RelocationEvent>().length,
+      before,
+      reason:
+          '大跨距判準是地理位移，換層時地理位置不變 → 位移為 0，'
+          '該路徑在建構上不可達',
+    );
   });
 
   test('AC-15.3 換層前後分桶距離連續', () {
@@ -71,8 +75,11 @@ void main() {
     expect(c.state.realDistanceMeters, before, reason: '首筆只重建基準');
 
     c.ingest(at(metersNorth: 180, second: 3));
-    expect(c.state.realDistanceMeters, greaterThan(before),
-        reason: '基準建立後恢復累計');
+    expect(
+      c.state.realDistanceMeters,
+      greaterThan(before),
+      reason: '基準建立後恢復累計',
+    );
   });
 
   test('AC-15.4 換層後首筆 Fix 不因速度規則被丟棄', () {
@@ -99,5 +106,17 @@ void main() {
     expect(c.activeManifest, far, reason: '不得拒絕換層，否則玩家卡在舊圖層');
     c.ingest(at(metersNorth: 60, second: 1));
     expect(c.state.status.coverage, CoverageState.outside);
+  });
+
+  test('換層可套用指定 spawn，且不產生傳送事件', () {
+    final spawn = Vector2(321, 123);
+    c.ingest(at(metersNorth: 0));
+    final relocationsBefore = c.events.whereType<RelocationEvent>().length;
+
+    c.switchLayer(layerB, newSpawnPixel: spawn);
+
+    expect(c.state.renderedPixel, spawn);
+    expect(c.state.targetPixel, isNull);
+    expect(c.events.whereType<RelocationEvent>().length, relocationsBefore);
   });
 }
