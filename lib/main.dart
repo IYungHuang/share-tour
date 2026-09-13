@@ -930,7 +930,6 @@ class _ModeToggleState extends ConsumerState<ModeToggle>
     required Widget icon,
     required String label,
     required Color textColor,
-    double perspectiveAngle = 0.0,
   }) {
     return GestureDetector(
       key: key,
@@ -939,40 +938,36 @@ class _ModeToggleState extends ConsumerState<ModeToggle>
         _closeWheel();
         onTap();
       },
-      child: Transform.rotate(
-        angle: perspectiveAngle,
-        alignment: Alignment.centerRight,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 6),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            border: Border.all(color: borderColor, width: 2.5),
-            borderRadius: BorderRadius.circular(4),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black54,
-                blurRadius: 4,
-                offset: Offset(2, 3),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          border: Border.all(color: borderColor, width: 2.5),
+          borderRadius: BorderRadius.circular(4),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black54,
+              blurRadius: 4,
+              offset: Offset(2, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            icon,
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 11,
+                color: textColor,
+                letterSpacing: 0.2,
               ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              icon,
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11,
-                  color: textColor,
-                  letterSpacing: 0.2,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -993,120 +988,32 @@ class _ModeToggleState extends ConsumerState<ModeToggle>
       child: Align(
         alignment: Alignment.bottomRight,
         child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
+          padding: const EdgeInsets.only(right: 14, bottom: 14),
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // 1. 堆疊滾輪主體 (展開時以滾輪弧度與立體層次堆疊浮現)
-              SizeTransition(
-                sizeFactor: _expandAnimation,
-                axisAlignment: 1.0,
-                child: FadeTransition(
-                  opacity: _expandAnimation,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        // 頂層輪盤項：街區漫步 / 返回盆地
-                        if (widget.onSwitchHierarchy != null ||
-                            widget.onOpenDistrictSelector != null ||
-                            widget.onReturnToBasin != null)
-                          _buildWheelItem(
-                            key: const Key('map_hierarchy_toggle_button'),
-                            backgroundColor: isStreet
-                                ? const Color(0xFF065F46)
-                                : const Color(0xFF831843),
-                            borderColor: Colors.amber,
-                            icon: Icon(
-                              isStreet ? Icons.public : Icons.holiday_village,
-                              size: 15,
-                              color: Colors.amber,
-                            ),
-                            label: isStreet ? '🗺️ 返回盆地全覽' : '🏮 街區漫步',
-                            textColor: Colors.white,
-                            perspectiveAngle: -0.02,
-                            onTap: () {
-                              if (isStreet) {
-                                if (widget.onReturnToBasin != null) {
-                                  widget.onReturnToBasin!();
-                                } else {
-                                  widget.onSwitchHierarchy?.call(
-                                    targetManifest:
-                                        const KyotoNightMapManifest(),
-                                    targetTitle: '京都盆地全覽（宏觀大地圖）',
-                                    spawnPixel: Vector2(665.0, 395.0),
-                                  );
-                                }
-                              } else {
-                                if (widget.onOpenDistrictSelector != null) {
-                                  widget.onOpenDistrictSelector!();
-                                } else {
-                                  widget.onSwitchHierarchy?.call(
-                                    targetManifest:
-                                        const KyotoStreetBlockManifest(),
-                                    targetTitle: '洛中・河原町街區散步道（中觀町家）',
-                                    spawnPixel: Vector2(512.0, 512.0),
-                                  );
-                                }
-                              }
-                            },
-                          ),
-
-                        // 中層輪盤項：黑市裝備
-                        if (widget.onOpenGearShop != null)
-                          _buildWheelItem(
-                            key: const Key('gear_shop_launcher_button'),
-                            backgroundColor: const Color(0xFF1E293B),
-                            borderColor: Colors.amber,
-                            icon: const Icon(Icons.storefront,
-                                size: 15, color: Colors.amber),
-                            label: '🛒 黑市裝備',
-                            textColor: Colors.amber,
-                            perspectiveAngle: -0.01,
-                            onTap: widget.onOpenGearShop!,
-                          ),
-
-                        // 底層輪盤項：策展工作台
-                        _buildWheelItem(
-                          key: const Key('curator_studio_launcher_button'),
-                          backgroundColor: const Color(0xFFF59E0B),
-                          borderColor: Colors.black,
-                          icon: const Icon(Icons.assignment,
-                              size: 15, color: Colors.black),
-                          label: '📑 策展工作台',
-                          textColor: Colors.black,
-                          perspectiveAngle: 0.0,
-                          onTap: widget.onOpenStudio,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // 權限警示提示
-              if (!isGps && permission != PermissionState.ready)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 6),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  color: Colors.black87,
-                  child: Text(
-                    _hintFor(permission),
-                    style: const TextStyle(fontSize: 9, color: Colors.white),
-                  ),
-                ),
-
-              // 2. 底部緊湊操作列 (GPS 切換 + 堆疊滾輪選單觸發按鈕)
-              Row(
+              // 1. 左側：GPS 定位模式切換與權限提示
+              Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // GPS 切換按鈕 (緊湊膠囊)
+                  if (!isGps && permission != PermissionState.ready)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      color: Colors.black87,
+                      child: Text(
+                        _hintFor(permission),
+                        style: const TextStyle(
+                          fontSize: 9,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
                   GestureDetector(
                     onTap: () => isGps
                         ? notifier.switchToVirtual()
@@ -1139,8 +1046,9 @@ class _ModeToggleState extends ConsumerState<ModeToggle>
                           Icon(
                             isGps ? Icons.gps_fixed : Icons.gps_not_fixed,
                             size: 14,
-                            color:
-                                isGps ? Colors.white : const Color(0xFF94A3B8),
+                            color: isGps
+                                ? Colors.white
+                                : const Color(0xFF94A3B8),
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -1157,10 +1065,106 @@ class _ModeToggleState extends ConsumerState<ModeToggle>
                       ),
                     ),
                   ),
+                ],
+              ),
 
-                  const SizedBox(width: 8),
+              const SizedBox(width: 8),
 
-                  // 堆疊滾輪展開/收合觸發按鈕
+              // 2. 右側：行動選單專屬垂直欄（完全靠右，展開時在觸發鈕正上方展開）
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  // 展開的堆疊選單項目
+                  SizeTransition(
+                    sizeFactor: _expandAnimation,
+                    axisAlignment: 1.0,
+                    child: FadeTransition(
+                      opacity: _expandAnimation,
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            // 頂層：街區漫步 / 返回盆地
+                            if (widget.onSwitchHierarchy != null ||
+                                widget.onOpenDistrictSelector != null ||
+                                widget.onReturnToBasin != null)
+                              _buildWheelItem(
+                                key: const Key('map_hierarchy_toggle_button'),
+                                backgroundColor: isStreet
+                                    ? const Color(0xFF065F46)
+                                    : const Color(0xFF831843),
+                                borderColor: Colors.amber,
+                                icon: Icon(
+                                  isStreet
+                                      ? Icons.public
+                                      : Icons.holiday_village,
+                                  size: 15,
+                                  color: Colors.amber,
+                                ),
+                                label: isStreet ? '🗺️ 返回盆地全覽' : '🏮 街區漫步',
+                                textColor: Colors.white,
+                                onTap: () {
+                                  if (isStreet) {
+                                    if (widget.onReturnToBasin != null) {
+                                      widget.onReturnToBasin!();
+                                    } else {
+                                      widget.onSwitchHierarchy?.call(
+                                        targetManifest:
+                                            const KyotoNightMapManifest(),
+                                        targetTitle: '京都盆地全覽（宏觀大地圖）',
+                                        spawnPixel: Vector2(665.0, 395.0),
+                                      );
+                                    }
+                                  } else {
+                                    if (widget.onOpenDistrictSelector != null) {
+                                      widget.onOpenDistrictSelector!();
+                                    } else {
+                                      widget.onSwitchHierarchy?.call(
+                                        targetManifest:
+                                            const KyotoStreetBlockManifest(),
+                                        targetTitle:
+                                            '洛中・河原町街區散步道（中觀町家）',
+                                        spawnPixel: Vector2(512.0, 512.0),
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+
+                            // 中層：黑市裝備
+                            if (widget.onOpenGearShop != null)
+                              _buildWheelItem(
+                                key: const Key('gear_shop_launcher_button'),
+                                backgroundColor: const Color(0xFF1E293B),
+                                borderColor: Colors.amber,
+                                icon: const Icon(Icons.storefront,
+                                    size: 15, color: Colors.amber),
+                                label: '🛒 黑市裝備',
+                                textColor: Colors.amber,
+                                onTap: widget.onOpenGearShop!,
+                              ),
+
+                            // 底層：策展工作台
+                            _buildWheelItem(
+                              key: const Key('curator_studio_launcher_button'),
+                              backgroundColor: const Color(0xFFF59E0B),
+                              borderColor: Colors.black,
+                              icon: const Icon(Icons.assignment,
+                                  size: 15, color: Colors.black),
+                              label: '📑 策展工作台',
+                              textColor: Colors.black,
+                              onTap: widget.onOpenStudio,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // 底部觸發按鈕 (靠右貼齊)
                   GestureDetector(
                     key: const Key('stacked_wheel_trigger'),
                     behavior: HitTestBehavior.opaque,
@@ -1193,8 +1197,9 @@ class _ModeToggleState extends ConsumerState<ModeToggle>
                           Icon(
                             _isWheelExpanded ? Icons.close : Icons.tune,
                             size: 15,
-                            color:
-                                _isWheelExpanded ? Colors.white : Colors.amber,
+                            color: _isWheelExpanded
+                                ? Colors.white
+                                : Colors.amber,
                           ),
                           const SizedBox(width: 4),
                           Text(
@@ -1202,8 +1207,9 @@ class _ModeToggleState extends ConsumerState<ModeToggle>
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 11,
-                              color:
-                                  _isWheelExpanded ? Colors.white : Colors.amber,
+                              color: _isWheelExpanded
+                                  ? Colors.white
+                                  : Colors.amber,
                             ),
                           ),
                         ],

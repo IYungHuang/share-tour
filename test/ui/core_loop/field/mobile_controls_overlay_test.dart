@@ -214,6 +214,14 @@ void main() {
       expect(gearShopBtn, findsOneWidget);
       expect(studioBtn, findsOneWidget);
 
+      // 驗證選單展開時位置靠右貼齊觸發按鈕，且完全位於 GPS 按鈕右側
+      final triggerRight = tester.getBottomRight(trigger).dx;
+      final gearShopRight = tester.getBottomRight(gearShopBtn).dx;
+      final gpsBtn = find.text('USE GPS');
+      final gpsRight = tester.getBottomRight(gpsBtn).dx;
+      expect(gearShopRight, equals(triggerRight), reason: '選單項目右側應與觸發按鈕完全貼齊');
+      expect(gearShopRight, greaterThan(gpsRight), reason: '行動選單應完全位於 GPS 開關右側，不遮擋 GPS');
+
       // 3. 點擊其中一項 (黑市裝備)，驗證回調被調用且選單自動收合
       await tester.tap(gearShopBtn);
       await tester.pumpAndSettle();
