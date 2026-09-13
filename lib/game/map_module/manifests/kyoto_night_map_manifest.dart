@@ -53,11 +53,11 @@ class KyotoNightMapManifest implements OverworldMapManifest {
           code: 'kyoto_nakagyo',
           name: '洛中・河原町街區',
           centerGeo: const GeoPoint(35.0060, 135.7680),
-          centerPixel: Vector2(380.0, 430.0),
+          centerPixel: Vector2(400.0, 430.0),
           additionalCenters: [
             Vector2(420.0, 480.0), // 先斗町・木屋町鴨川西岸聚類
             Vector2(430.0, 370.0), // 三條星巴克納涼床聚類
-            Vector2(280.0, 500.0), // 四條大宮立飲西側聚類
+            Vector2(368.0, 500.0), // 四條大宮立飲町家街區聚類
           ],
           minZoomForSpots: 0.5,
           radiusPixels: 140.0,
