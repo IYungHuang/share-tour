@@ -1,5 +1,6 @@
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'game/characters/guide_character_manifest.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/engine_pause_coordinator.dart';
@@ -48,8 +49,9 @@ ProviderScope buildProductionApp({
     // 圖資與城市 DLC 在此注入。通用引擎與狀態層都不知道自己跑的是哪座城市。
     overrides: [
       activeMapManifestStateProvider.overrideWith((ref) => activeManifest),
-      mapManifestProvider
-          .overrideWith((ref) => ref.watch(activeMapManifestStateProvider)),
+      mapManifestProvider.overrideWith(
+        (ref) => ref.watch(activeMapManifestStateProvider),
+      ),
       curatorMaterialPoolProvider.overrideWithValue(kyotoNightMaterials),
       poiMaterialResolverProvider.overrideWithValue(
         const KyotoPoiMaterialResolver(),
@@ -113,10 +115,9 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
       onMidpoint: () async {
         ref.read(activeMapManifestStateProvider.notifier).state =
             targetManifest;
-        ref.read(locationControllerProvider.notifier).switchManifest(
-              targetManifest,
-              newSpawnPixel: spawnPixel,
-            );
+        ref
+            .read(locationControllerProvider.notifier)
+            .switchManifest(targetManifest, newSpawnPixel: spawnPixel);
         await _game.switchMap(targetManifest, newSpawnPixel: spawnPixel);
         _selectedAttraction.value = null;
       },
@@ -183,9 +184,8 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
     }
     try {
       await _showModalSafely(
-        (ctx) => CuratorBriefingModal(
-          onOpenGearShop: () => _openGearShopSafely(),
-        ),
+        (ctx) =>
+            CuratorBriefingModal(onOpenGearShop: () => _openGearShopSafely()),
       );
     } finally {
       _isBriefingModalOpen = false;
@@ -274,6 +274,8 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
         clock: ref.read(clockProvider),
         returnDelay: const Duration(seconds: 3),
       ),
+      characterManifest: guideCharacterManifest,
+      characterId: 'guide',
       onAttractionSelected: (a) => _selectedAttraction.value = a,
       onDistrictRevealed: (d, count) => _focusedDistrict.value = (d, count),
       timeOfDayGetter: () {
@@ -281,7 +283,8 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
         return TourTimeOfDay.fromHpAndPhase(
           currentHp: runState.resources.hp,
           maxHp: runState.resources.maxHp,
-          isNightEditing: runState.phase == CuratorRunPhase.nightEditing ||
+          isNightEditing:
+              runState.phase == CuratorRunPhase.nightEditing ||
               runState.phase == CuratorRunPhase.clientReview ||
               runState.phase == CuratorRunPhase.settled,
         );
@@ -318,7 +321,8 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
     });
 
     final currentManifest = ref.watch(mapManifestProvider);
-    final isStreetBlock = currentManifest is KyotoDistrictStreetManifest ||
+    final isStreetBlock =
+        currentManifest is KyotoDistrictStreetManifest ||
         currentManifest.mapId == 'kyoto_street_block' ||
         currentManifest.mapId.startsWith('kyoto_street_');
 
@@ -336,21 +340,20 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
           ),
           'RetroHUD': (context, game) =>
               _RetroHudOverlay(focusedDistrict: _focusedDistrict),
-          'DistrictDiscovery': (context, game) =>
-              _DistrictDiscoveryBanner(
-                focusedDistrict: _focusedDistrict,
-                isStreetBlock: isStreetBlock,
-                onEnterDistrict: (districtType) => _switchMapHierarchy(
-                  targetManifest: KyotoDistrictStreetManifest(districtType),
-                  targetTitle: '${districtType.name}散步道',
-                  spawnPixel: districtType.defaultSpawnPixel,
-                ),
-                onEnterStreet: () => _switchMapHierarchy(
-                  targetManifest: const KyotoStreetBlockManifest(),
-                  targetTitle: '洛中・河原町街區散步道（町家街區）',
-                  spawnPixel: Vector2(512.0, 512.0),
-                ),
-              ),
+          'DistrictDiscovery': (context, game) => _DistrictDiscoveryBanner(
+            focusedDistrict: _focusedDistrict,
+            isStreetBlock: isStreetBlock,
+            onEnterDistrict: (districtType) => _switchMapHierarchy(
+              targetManifest: KyotoDistrictStreetManifest(districtType),
+              targetTitle: '${districtType.name}散步道',
+              spawnPixel: districtType.defaultSpawnPixel,
+            ),
+            onEnterStreet: () => _switchMapHierarchy(
+              targetManifest: const KyotoStreetBlockManifest(),
+              targetTitle: '洛中・河原町街區散步道（町家街區）',
+              spawnPixel: Vector2(512.0, 512.0),
+            ),
+          ),
           'AttractionDetail': (context, game) => AttractionDetailCard(
             selectedAttraction: _selectedAttraction,
             onFocusCamera: () {
@@ -385,15 +388,16 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
               targetTitle: '京都盆地全覽（宏觀大地圖）',
               spawnPixel: _getSpawnPixelForBasinReturn(currentManifest),
             ),
-            onSwitchHierarchy: ({
-              required OverworldMapManifest targetManifest,
-              required String targetTitle,
-              Vector2? spawnPixel,
-            }) => _switchMapHierarchy(
-              targetManifest: targetManifest,
-              targetTitle: targetTitle,
-              spawnPixel: spawnPixel,
-            ),
+            onSwitchHierarchy:
+                ({
+                  required OverworldMapManifest targetManifest,
+                  required String targetTitle,
+                  Vector2? spawnPixel,
+                }) => _switchMapHierarchy(
+                  targetManifest: targetManifest,
+                  targetTitle: targetTitle,
+                  spawnPixel: spawnPixel,
+                ),
           ),
         },
         initialActiveOverlays: const [
@@ -650,7 +654,8 @@ class _ModeToggle extends ConsumerWidget {
     required OverworldMapManifest targetManifest,
     required String targetTitle,
     Vector2? spawnPixel,
-  })? onSwitchHierarchy;
+  })?
+  onSwitchHierarchy;
   final VoidCallback? onOpenDistrictSelector;
   final VoidCallback? onReturnToBasin;
 
@@ -659,7 +664,8 @@ class _ModeToggle extends ConsumerWidget {
     final mode = ref.watch(locationControllerProvider).status.mode;
     final permission = ref.watch(locationControllerProvider).status.permission;
     final manifest = ref.watch(mapManifestProvider);
-    final isStreet = manifest is KyotoDistrictStreetManifest ||
+    final isStreet =
+        manifest is KyotoDistrictStreetManifest ||
         manifest.mapId == 'kyoto_street_block' ||
         manifest.mapId.startsWith('kyoto_street_');
     final notifier = ref.read(locationControllerProvider.notifier);
@@ -882,7 +888,8 @@ class _DistrictDiscoveryBanner extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final manifest = ref.watch(mapManifestProvider);
-    final inStreet = isStreetBlock ||
+    final inStreet =
+        isStreetBlock ||
         manifest is KyotoDistrictStreetManifest ||
         manifest.mapId == 'kyoto_street_block' ||
         manifest.mapId.startsWith('kyoto_street_');
@@ -895,7 +902,8 @@ class _DistrictDiscoveryBanner extends ConsumerWidget {
         if (district == null || count == 0) return const SizedBox.shrink();
 
         final districtType = KyotoDistrictType.fromCode(district.code);
-        final canEnter = districtType != null || district.code.contains('nakagyo');
+        final canEnter =
+            districtType != null || district.code.contains('nakagyo');
 
         return SafeArea(
           child: Align(
@@ -962,8 +970,11 @@ class _DistrictDiscoveryBanner extends ConsumerWidget {
                               ),
                             ),
                             const SizedBox(width: 2),
-                            const Icon(Icons.arrow_forward_ios,
-                                size: 9, color: Colors.white),
+                            const Icon(
+                              Icons.arrow_forward_ios,
+                              size: 9,
+                              color: Colors.white,
+                            ),
                           ],
                         ),
                       ),

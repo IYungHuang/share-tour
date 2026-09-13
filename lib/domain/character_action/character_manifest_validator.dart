@@ -1,3 +1,4 @@
+import 'character_action.dart';
 import 'character_animation_manifest.dart';
 import 'character_direction.dart';
 
@@ -147,7 +148,10 @@ class CharacterManifestValidator {
 
     for (final character in actionsByCharacter.keys) {
       final hasIdle = manifest.assets.any(
-        (asset) => asset.characterId == character && asset.actionId == 'idle',
+        (asset) =>
+            asset.characterId == character &&
+            (asset.actionId == 'idle' ||
+                asset.actionId == const CharacterAction().canonicalKey),
       );
       if (!hasIdle) {
         errors.add('$character must declare idle');
