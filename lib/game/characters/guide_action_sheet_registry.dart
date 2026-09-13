@@ -157,12 +157,12 @@ const femaleGuideActionSheetRegistry = <CharacterActionSheetCell>[
 
 final guideActionSheetAnimations = _makeDirectionalAnimations(
   'guide',
-  'guide_directional_locomotion_sheet_v1_generated.png',
+  'guide_directional_locomotion_sheet_v2_generated.png',
 );
 
 final femaleGuideActionSheetAnimations = _makeDirectionalAnimations(
   'guide_female',
-  'guide_female_directional_locomotion_sheet_v1_generated.png',
+  'guide_female_directional_locomotion_sheet_v2_generated.png',
 );
 
 List<CharacterActionSheetAnimation> _makeDirectionalAnimations(
