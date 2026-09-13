@@ -34,7 +34,34 @@ class CameraFollow {
   /// 累積起來、在下一次求值時一次套用並歸零，才能讓「同一次平移只生效一次」。
   final Vector2 _pendingPan = Vector2.zero();
 
+  /// QTE 期間累積的暫停位移（REQ-M5-10.7）。從 [_lastInteraction] 起算的
+  /// 經過時間會扣掉這段累積量，讓暫停期間「不計時」，且不需要碰共用的
+  /// 注入時鐘——`suspend`/`resume` 只操作這個局域欄位。
+  Duration _suspendedShift = Duration.zero;
+  Duration? _suspendStartedAt;
+
   CameraMode get mode => _mode;
+
+  /// 供測試讀取的 side-effect-free 狀態（AC-M5-4.3a）。
+  /// 命名刻意帶 `ForTest` 後綴，避免生產程式碼誤用作正常讀取路徑——
+  /// 正常路徑一律透過 [targetCenter] 求值。
+  Vector2? get frozenCenterForTest => _frozenCenter?.clone();
+  Vector2 get pendingPanForTest => _pendingPan.clone();
+  Duration? get lastInteractionForTest => _lastInteraction;
+
+  /// 暫停回歸計時（REQ-M5-10.7，QTE 開始時呼叫）。重複呼叫是 no-op。
+  void suspend() {
+    _suspendStartedAt ??= _clock.elapsed;
+  }
+
+  /// 恢復回歸計時（QTE 結束時呼叫）。把暫停期間的經過時間計入累積位移，
+  /// 之後 [targetCenter] 比較 `returnDelay` 時會扣掉這段時間。
+  void resume() {
+    final startedAt = _suspendStartedAt;
+    if (startedAt == null) return;
+    _suspendedShift += _clock.elapsed - startedAt;
+    _suspendStartedAt = null;
+  }
 
   /// 手勢平移：交出控制權，並記下位移量。
   ///
@@ -59,6 +86,8 @@ class CameraFollow {
     _frozenCenter = null;
     _lastInteraction = null;
     _pendingPan.setZero();
+    _suspendedShift = Duration.zero;
+    _suspendStartedAt = null;
   }
 
   Vector2 targetCenter({
@@ -80,7 +109,8 @@ class CameraFollow {
         _frozenCenter = panned;
 
         final since = _lastInteraction;
-        if (since != null && _clock.elapsed - since >= returnDelay) {
+        if (since != null &&
+            _clock.elapsed - since - _suspendedShift >= returnDelay) {
           _mode = CameraMode.returning;
         }
         // 回傳副本：交出內部狀態的參考，呼叫端一改就靜默改到凍結中心。

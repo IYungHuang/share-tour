@@ -151,6 +151,13 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
   /// 回到我的位置。
   void recenterOnPlayer() => cameraFollow.recenter();
 
+  /// 快門 QTE 開始時呼叫：暫停相機回歸計時（REQ-M5-10.7）。
+  /// 薄轉接——QTE 本體住在 `ui/`，這裡只暴露相機暫停開關。
+  void suspendCameraForQte() => cameraFollow.suspend();
+
+  /// 快門 QTE 結束時呼叫：恢復相機回歸計時。
+  void resumeCameraFromQte() => cameraFollow.resume();
+
   @override
   void onScaleUpdate(ScaleUpdateInfo info) {
     final currentZoom = cameraComponent.viewfinder.zoom;
