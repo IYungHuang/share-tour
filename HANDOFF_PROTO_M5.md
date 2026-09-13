@@ -274,3 +274,23 @@ git worktree remove .claude/worktrees/m5-shutter-feel   # 確認不再需要之�
 它們都不是靠推論能發現的 —— 一個要真的看著畫面不知道要幹嘛，一個要真的按住不放。
 
 合理的做法是**第一輪覆核之後就先做原型**，而不是把同一份 spec 改到第四版、派六個覆核 agent。手感本來就只能實機驗，而「看不懂怎麼玩」這種問題，一個能跑的原型半小時就會撞到。
+
+---
+
+## 8. 收尾更新（2026-09-13，同日稍晚）：G1~G14 已全數施工完成
+
+使用者明確授權「整個 M5 一路做到底，不要再等我點頭」，跳過 `CLAUDE.md` §1 每關等點頭的常態流程，於同一 worktree（`proto/m5-shutter-feel` 分支）直接完成 plan（`PLAN_MVP_MICRO_ACTION.md`）與 G1~G14 的全部施工，逐任務 TDD、逐任務 commit。
+
+**§6「收尾時要做的事」已不適用**：不是把 `shutter_verdict.dart` 搬進 `domain/` 再刪原型——是直接依 SPEC v9／PLAN v1 在 `domain/core_loop/shutter/` 重新寫出判定核心（`shutter_judge.dart`／`shutter_result.dart`／`indicator_state.dart`／`shutter_params.dart` 等），參數已對齊 v9 定案值（`photographer` 完美窗 160ms、絕景專屬 `tierFactor` 表、$c=0.36$），原型檔案本身仍留在 worktree 內但不再是唯一事實來源。
+
+**驗收現況**（G14 全域回歸）：
+
+- `flutter analyze lib/domain lib/state lib/data lib/game lib/ui lib/core test`：0 errors / 0 warnings。
+- `flutter test`：676 passed / 3 skipped / 1 known failing（`test/app_bootstrap_test.dart`，肇因 `lib/main.dart` 呼叫另一支平行分支——地方層地圖切換——遺留的未定義方法，非 M5 造成，詳見 `CLAUDE.md` §0）。
+- `flutter test --tags slow`：AC-M5-9 系列全母體效果驗收與 golden 指紋回歸全綠。
+- `flutter test test/domain/`：333 passed，純 domain 套件零框架相依成立（`dart test test/domain/` 因 pubspec 未宣告裸 `test` 套件而無法直接跑，屬既有文件過期，非本輪引入）。
+- `test/architecture/layer_boundaries_test.dart` 五條全綠。
+
+**已知延後、不在本輪範圍**（詳見 `SPEC_MVP_MICRO_ACTION.md` §7、`PLAN_MVP_MICRO_ACTION.md` §5）：`lib/main.dart` 的 `switchManifest`／`switchMap` 既有缺陷（另一支平行分支的未完成整合）未修復；§6 待決 5（另量節奏）、待決 6（`W_n` 與 `failed` 不可達）延續原型階段的判斷，未在本輪重新驗證。
+
+worktree 是否清理、分支是否保留，維持第 6 節原判斷不變（本輪未動這部分決策）。
