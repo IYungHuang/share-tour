@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/review_outcome.dart';
+import 'package:share_tour/domain/core_loop/models/shot_tier.dart';
 import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 
+import 'components/shutter_result_badge.dart';
 import 'gear_shop/gear_shop_modal.dart';
 
 /// 雙客戶動態審查跳分與 Near Miss 結算彈窗 (ReviewSettlementModal)
@@ -721,6 +723,14 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
       }
     }
 
+    // 5. 快門手感歸因（REQ-M5-11.4：三態徽章三處之一，另二處見腰包抽屜、
+    // 4 槽位卡面）——只列非 normal 者，normal 是沉默的預設值不特別歸因。
+    for (var i = 0; i < runState.itinerary.slots.length; i++) {
+      final card = runState.itinerary.slots[i];
+      if (card == null || card.shotTier == ShotTier.normal) continue;
+      items.add(_buildAttributionBadgeRow('Slot $i · ${card.name}', card.shotTier));
+    }
+
     if (items.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -753,6 +763,30 @@ class _ReviewSettlementModalState extends ConsumerState<ReviewSettlementModal> {
           ),
           const SizedBox(height: 6),
           ...items,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttributionBadgeRow(String label, ShotTier tier) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Flexible(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF991B1B),
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 6),
+          ShutterResultBadge(tier: tier, compact: true),
         ],
       ),
     );

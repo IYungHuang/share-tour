@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_tour/domain/core_loop/models/tour_time_of_day.dart';
+import 'package:share_tour/domain/core_loop/review/best_four_estimate.dart';
+import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_phase.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 
@@ -16,6 +18,14 @@ class CuratorFieldHud extends ConsumerWidget {
     final runState = ref.watch(curatorRunControllerProvider);
     final resources = runState.resources;
     final inventory = runState.inventory;
+
+    final client = runState.client;
+    final bestEstimate = bestFourSecondLayerEstimate(
+      inventory.materials,
+      clientType: client.type,
+      difficulty: runState.shutterDifficulty,
+    );
+    final isHypeClient = client.type == ClientType.hypeInfluencer;
 
     final hp = resources.hp;
     final maxHp = resources.maxHp;
@@ -40,7 +50,7 @@ class CuratorFieldHud extends ConsumerWidget {
     return Container(
       height: 38,
       margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       decoration: BoxDecoration(
         color: const Color(0xFF1E2430),
         border: Border.all(color: Colors.black, width: 2.5),
@@ -88,7 +98,7 @@ class CuratorFieldHud extends ConsumerWidget {
             ),
           ),
 
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
 
           // 2. 預算餘額
           Row(
@@ -116,7 +126,7 @@ class CuratorFieldHud extends ConsumerWidget {
             ],
           ),
 
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
 
           // 3. 腰包容量
           Row(
@@ -144,9 +154,24 @@ class CuratorFieldHud extends ConsumerWidget {
             ],
           ),
 
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
 
-          // 4. 當前四幕時段與光照標記 (晨曦 06:00 / 午後 11:00 / 黃昏 16:00 📷 / 深夜 19:00+)
+          // 4. 野外即時預估：對現有素材窮舉 C(n,4) 取該客戶第二層公式真
+          // argmax（REQ-M5-11.5），不含 c 折算——顯示的是 reach／CP 本身。
+          Text(
+            key: const Key('field_hud_best_four_estimate'),
+            isHypeClient ? '🎯${bestEstimate.round()}' : '💹${bestEstimate.round()}',
+            style: const TextStyle(
+              color: Color(0xFF9AE6B4),
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+
+          const SizedBox(width: 4),
+
+          // 5. 當前四幕時段與光照標記 (晨曦 06:00 / 午後 11:00 / 黃昏 16:00 📷 / 深夜 19:00+)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             decoration: BoxDecoration(

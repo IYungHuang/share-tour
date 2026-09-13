@@ -133,6 +133,53 @@ void main() {
     });
   });
 
+  group('REQ-M5-07.2: replaceGatheredPoi 亦支援 shotTier（換牌路徑先抽屜、通過後才進 QTE）', () {
+    const otherMaterial = TravelMaterial(
+      id: 'mat_2',
+      name: '換牌素材',
+      tags: [],
+      themeValue: 15,
+      hypeValue: 25,
+      cost: 80,
+      riskLevel: 1,
+    );
+
+    late ProviderContainer localContainer;
+
+    setUp(() {
+      localContainer = ProviderContainer(
+        overrides: [
+          curatorMaterialPoolProvider.overrideWithValue([sampleMaterial, otherMaterial]),
+          poiMaterialResolverProvider.overrideWithValue(
+            FakePoiMaterialResolver({'poi_1': sampleMaterial, 'poi_2': otherMaterial}),
+          ),
+        ],
+      );
+    });
+
+    tearDown(() => localContainer.dispose());
+
+    test('傳入 shotTier: perfect，替換入袋的素材帶有 perfect', () {
+      final controller = localContainer.read(curatorRunControllerProvider.notifier);
+      controller.gatherPoi('poi_1');
+      final result = controller.replaceGatheredPoi(
+        poiId: 'poi_2',
+        dropIndex: 0,
+        shotTier: ShotTier.perfect,
+      );
+      expect(result!.material.shotTier, ShotTier.perfect);
+      final state = localContainer.read(curatorRunControllerProvider);
+      expect(state.inventory.materials.first.shotTier, ShotTier.perfect);
+    });
+
+    test('未指定 shotTier 時預設 normal（既有呼叫零改動）', () {
+      final controller = localContainer.read(curatorRunControllerProvider.notifier);
+      controller.gatherPoi('poi_1');
+      final result = controller.replaceGatheredPoi(poiId: 'poi_2', dropIndex: 0);
+      expect(result!.material.shotTier, ShotTier.normal);
+    });
+  });
+
   group('難度選定與中斷記錄接線', () {
     test('selectDifficulty 寫入狀態並追加事件（不拋例外）', () {
       final controller = container.read(curatorRunControllerProvider.notifier);

@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../domain/core_loop/models/shutter_difficulty.dart';
 import '../../../domain/core_loop/models/travel_philosophy.dart';
 import '../../../domain/core_loop/review/client_spec.dart';
 import '../../../state/core_loop/curator_run_providers.dart';
+
+/// 難度顯示名稱（純呈現層，REQ-M5-05.1：難度是唯一的 QTE 旋鈕）。
+const Map<ShutterDifficulty, (String, String)> _kDifficultyPresentation = {
+  ShutterDifficulty.tourist: ('觀光客', '零失手，慢'),
+  ShutterDifficulty.photographer: ('攝影師', '中等窗寬'),
+  ShutterDifficulty.decisiveMoment: ('決定性瞬間', '窄窗，高賭注'),
+};
 
 /// 阿導行前委託底抽屜彈窗 (Task M5, 360dp 防破版)
 class CuratorBriefingModal extends ConsumerWidget {
@@ -24,6 +32,7 @@ class CuratorBriefingModal extends ConsumerWidget {
     final canDepart = state.canDepart;
     final nextRerollCost = state.nextRerollCost;
     final canReroll = state.canReroll;
+    final selectedDifficulty = state.shutterDifficulty;
 
     return Container(
       decoration: const BoxDecoration(
@@ -119,6 +128,34 @@ class CuratorBriefingModal extends ConsumerWidget {
                       ),
                       const SizedBox(height: 8),
                     ],
+
+                    const SizedBox(height: 4),
+                    const Text(
+                      '📸 選擇快門難度',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        for (final difficulty in ShutterDifficulty.values) ...[
+                          Expanded(
+                            child: _buildDifficultyPill(
+                              difficulty: difficulty,
+                              isSelected: selectedDifficulty == difficulty,
+                              onTap: () => ref
+                                  .read(curatorRunControllerProvider.notifier)
+                                  .selectDifficulty(difficulty),
+                            ),
+                          ),
+                          if (difficulty != ShutterDifficulty.values.last)
+                            const SizedBox(width: 6),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -295,6 +332,53 @@ class CuratorBriefingModal extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDifficultyPill({
+    required ShutterDifficulty difficulty,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final (label, hint) = _kDifficultyPresentation[difficulty]!;
+    final borderColor = isSelected ? const Color(0xFF42A5F5) : const Color(0xFF333333);
+    final bgColor = isSelected ? const Color(0xFF1E2A38) : const Color(0xFF222222);
+
+    return InkWell(
+      key: Key('difficulty_pill_${difficulty.name}'),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: borderColor, width: isSelected ? 2.0 : 1.0),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF42A5F5) : Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              hint,
+              style: const TextStyle(color: Colors.white54, fontSize: 9),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }

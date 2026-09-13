@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_tour/domain/core_loop/models/core_loop_exceptions.dart';
+import 'package:share_tour/domain/core_loop/models/shot_tier.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 import 'package:share_tour/domain/location/models/district_attraction.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 import 'package:share_tour/state/location/location_providers.dart';
 
+import '../field/shutter_qte_overlay.dart';
 import 'gathering_replace_bottom_sheet.dart';
 
 /// 點選景點時在畫面底部彈出的 JRPG 像素風格詳細資訊與取材卡 (REQ-M3-02, REQ-M3-03, G4)
@@ -18,11 +21,19 @@ class AttractionDetailCard extends ConsumerWidget {
     required this.selectedAttraction,
     this.onFocusCamera,
     this.onGathered,
+    this.onSuspendCameraForQte,
+    this.onResumeCameraFromQte,
   });
 
   final ValueNotifier<DistrictAttraction?> selectedAttraction;
   final VoidCallback? onFocusCamera;
   final void Function(TravelMaterial material, int deltaHp)? onGathered;
+
+  /// QTE 開始/結束時呼叫，暫停/恢復相機回歸計時（REQ-M5-10.7）。薄轉接
+  /// ——不在此處直接依賴 `game/` 型別，維持 ui/ 與 game/ 之間僅靠
+  /// `main.dart` 接線，不新增跨層 import。
+  final VoidCallback? onSuspendCameraForQte;
+  final VoidCallback? onResumeCameraFromQte;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -236,6 +247,8 @@ class AttractionDetailCard extends ConsumerWidget {
                             attraction: attraction,
                             material: material,
                             onGathered: onGathered,
+                            onSuspendCameraForQte: onSuspendCameraForQte,
+                            onResumeCameraFromQte: onResumeCameraFromQte,
                           ),
                         ],
                       ),
@@ -293,11 +306,43 @@ class _AttractionGatherActionButton extends ConsumerWidget {
     required this.attraction,
     required this.material,
     this.onGathered,
+    this.onSuspendCameraForQte,
+    this.onResumeCameraFromQte,
   });
 
   final DistrictAttraction attraction;
   final TravelMaterial? material;
   final void Function(TravelMaterial material, int deltaHp)? onGathered;
+  final VoidCallback? onSuspendCameraForQte;
+  final VoidCallback? onResumeCameraFromQte;
+
+  /// 開啟 QTE 覆蓋層，等判定就緒後回傳結果（REQ-M5-01、G12 產物）。
+  /// 中斷（`onInterrupted`）額外呼叫 `controller.recordShutterInterruption()`
+  /// 疊加本局 ×0.9（REQ-M5-04.2），但仍照 `onResolved` 給出的三態走正常
+  /// 取材流程——中斷不是跳過，是照算後打折扣。
+  Future<ShotTier?> _runQte({
+    required BuildContext context,
+    required WidgetRef ref,
+    required bool isSpotlight,
+  }) {
+    final difficulty = ref.read(
+      curatorRunControllerProvider.select((s) => s.shutterDifficulty),
+    );
+    final controller = ref.read(curatorRunControllerProvider.notifier);
+    onSuspendCameraForQte?.call();
+
+    return showGeneralDialog<ShotTier>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      pageBuilder: (dialogContext, _, _) => ShutterQteOverlay(
+        difficulty: difficulty,
+        isSpotlight: isSpotlight,
+        onResolved: (result) => Navigator.of(dialogContext).pop(result),
+        onInterrupted: controller.recordShutterInterruption,
+      ),
+    ).whenComplete(() => onResumeCameraFromQte?.call());
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -340,12 +385,31 @@ class _AttractionGatherActionButton extends ConsumerWidget {
 
               if (eligibility == GatheringEligibility.ready) {
                 if (effectiveMaterial != null) {
-                  final result = controller.gatherPoi(
-                    effectiveAttraction.id,
-                    manifest: manifest,
-                    playerPixel: playerPixel,
+                  // 鎖定當下目標（REQ-M5-07.1）：QTE 判定期間玩家可能移動，
+                  // 判定完成後以此 ID 為準，變了就整次取消，不做任何狀態變更。
+                  final lockedPoiId = effectiveAttraction.id;
+                  final shotTier = await _runQte(
+                    context: context,
+                    ref: ref,
+                    isSpotlight: effectiveMaterial.isSpotlight,
                   );
-                  onGathered?.call(result.material, result.hpSpent);
+                  if (shotTier == null || !context.mounted) return;
+                  final freshPlayerPixel = ref.read(
+                    locationControllerProvider.select((s) => s.renderedPixel),
+                  );
+                  try {
+                    final result = controller.gatherPoi(
+                      lockedPoiId,
+                      manifest: manifest,
+                      playerPixel: freshPlayerPixel,
+                      expectedPoiId: lockedPoiId,
+                      shotTier: shotTier,
+                    );
+                    onGathered?.call(result.material, result.hpSpent);
+                  } on PoiTargetChangedException {
+                    // 目標已變更，靜默取消——QTE 判定前未扣過任何資源，
+                    // 沒有狀態需要復原（REQ-M5-07.1）。
+                  }
                 }
               } else if (eligibility == GatheringEligibility.inventoryFull) {
                 if (effectiveMaterial != null) {
@@ -357,13 +421,26 @@ class _AttractionGatherActionButton extends ConsumerWidget {
                     newMaterial: effectiveMaterial,
                     currentMaterials: currentMaterials,
                   );
+                  // 先抽屜、通過後才進 QTE（REQ-M5-07.2）——選「放棄」
+                  // (dropIndex == null) 就不進 QTE，不扣資源。
                   if (dropIndex != null && context.mounted) {
+                    final lockedPoiId = effectiveAttraction.id;
+                    final shotTier = await _runQte(
+                      context: context,
+                      ref: ref,
+                      isSpotlight: effectiveMaterial.isSpotlight,
+                    );
+                    if (shotTier == null || !context.mounted) return;
+                    final freshPlayerPixel = ref.read(
+                      locationControllerProvider.select((s) => s.renderedPixel),
+                    );
                     final result = controller.replaceGatheredPoi(
-                      poiId: effectiveAttraction.id,
+                      poiId: lockedPoiId,
                       dropIndex: dropIndex,
                       manifest: manifest,
-                      playerPixel: playerPixel,
-                      expectedPoiId: effectiveAttraction.id,
+                      playerPixel: freshPlayerPixel,
+                      expectedPoiId: lockedPoiId,
+                      shotTier: shotTier,
                     );
                     if (result != null) {
                       onGathered?.call(result.material, result.hpSpent);

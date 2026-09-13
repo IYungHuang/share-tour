@@ -151,12 +151,16 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
   ///
   /// 接受 expectedPoiId 防止底抽屜等待期間候選改變。
   /// 命令重新求最近點，若 expectedPoiId 失配或無最近點，保持零副作用並回傳 null。
+  ///
+  /// [shotTier] 同 [gatherPoi]：換牌路徑先過抽屜、通過後才進 QTE
+  /// （REQ-M5-07.2），預設 `normal`。
   ({DistrictAttraction attraction, TravelMaterial material, int hpSpent})? replaceGatheredPoi({
     required String poiId,
     required int dropIndex,
     OverworldMapManifest? manifest,
     Vector2? playerPixel,
     String? expectedPoiId,
+    ShotTier shotTier = ShotTier.normal,
   }) {
     final resolver = _resolver;
     if (resolver == null) {
@@ -206,6 +210,10 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
             reviewCount: 0,
             category: AttractionCategory.sightseeing,
           );
+    }
+
+    if (shotTier != ShotTier.normal) {
+      targetMaterial = targetMaterial.copyWith(shotTier: shotTier);
     }
 
     final hpBefore = state.resources.currentHp;
