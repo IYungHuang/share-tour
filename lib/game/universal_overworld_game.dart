@@ -2,16 +2,26 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import '../domain/character_action/character_action.dart';
+import '../domain/character_action/character_action_controller.dart';
+import '../domain/character_action/character_action_descriptor.dart';
+import '../domain/character_action/character_animation_manifest.dart';
+import '../domain/character_action/character_animation_resolver.dart';
+import '../domain/character_action/character_capability_registry.dart';
+import '../domain/character_action/character_direction.dart';
 import '../domain/core_loop/models/tour_time_of_day.dart';
 import '../domain/location/camera/camera_follow.dart';
 import '../domain/location/models/district_attraction.dart';
 import 'components/attraction_layer_component.dart';
+import 'characters/character_asset_loader.dart';
+import 'components/character_component.dart';
 import 'components/ocean_waves_component.dart';
 import 'components/player_component.dart';
 import 'components/time_of_day_lighting_component.dart';
 import 'map_module/overworld_map_manifest.dart';
 
-class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks {
+class UniversalOverworldGame extends FlameGame
+    with ScaleDetector, TapCallbacks {
   UniversalOverworldGame({
     required this.manifest,
     required this.onTick,
@@ -20,6 +30,10 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
     this.onAttractionSelected,
     this.onDistrictRevealed,
     this.timeOfDayGetter,
+    this.characterManifest,
+    this.characterId = 'guide',
+    this.initialAction = const CharacterAction(),
+    this.initialDirection = CharacterDirection.front,
   });
 
   final OverworldMapManifest manifest;
@@ -38,8 +52,16 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
 
   /// 縮放聚焦行政區變更回調
   final void Function(AdministrativeDistrict? district, int visibleCount)?
-      onDistrictRevealed;
+  onDistrictRevealed;
   final TourTimeOfDay Function()? timeOfDayGetter;
+  final CharacterAnimationManifest? characterManifest;
+  final String characterId;
+  final CharacterAction initialAction;
+  final CharacterDirection initialDirection;
+
+  CharacterAction? _pendingAction;
+  CharacterDirection? _pendingDirection;
+  bool _playerCreated = false;
 
   late final World mapWorld;
   late final CameraComponent cameraComponent;
@@ -91,10 +113,34 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
       await mapWorld.add(OceanWavesComponent(waveImage: waveImage));
     }
 
-    // 3. 加入玩家佔位圖標 (像素紅點小人)
-    playerComponent =
-        PlayerComponent(position: manifest.defaultSpawnPixel.clone());
+    // 3. 加入玩家角色；沒有 manifest 時保留紅點 placeholder。
+    final character = characterManifest == null
+        ? null
+        : CharacterComponent(
+            controller: CharacterActionController(
+              characterId: characterId,
+              descriptors: CharacterActionDescriptorRegistry.standard(),
+              resolver: CharacterAnimationResolver(characterManifest!),
+              capabilities: CharacterCapabilityRegistry(const {}),
+              initialAction: initialAction,
+              initialDirection: initialDirection,
+            ),
+            loader: CharacterAssetLoader(),
+          );
+    playerComponent = PlayerComponent(
+      position: manifest.defaultSpawnPixel.clone(),
+      characterComponent: character,
+    );
+    _playerCreated = true;
     await mapWorld.add(playerComponent);
+    final pendingAction = _pendingAction;
+    final pendingDirection = _pendingDirection;
+    _pendingAction = null;
+    _pendingDirection = null;
+    if (pendingAction != null) playerComponent.play(pendingAction);
+    if (pendingDirection != null) {
+      playerComponent.setDirection(pendingDirection);
+    }
 
     // 4. 加入行政區熱門旅遊景點圖層 (雙手放大地圖時動態增添揭露)
     attractionLayer = AttractionLayerComponent(
@@ -151,6 +197,22 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
   /// 回到我的位置。
   void recenterOnPlayer() => cameraFollow.recenter();
 
+  void playPlayerAction(CharacterAction action) {
+    if (_playerCreated) {
+      playerComponent.play(action);
+    } else {
+      _pendingAction = action;
+    }
+  }
+
+  void setPlayerDirection(CharacterDirection direction) {
+    if (_playerCreated) {
+      playerComponent.setDirection(direction);
+    } else {
+      _pendingDirection = direction;
+    }
+  }
+
   @override
   void onScaleUpdate(ScaleUpdateInfo info) {
     final currentZoom = cameraComponent.viewfinder.zoom;
@@ -158,8 +220,10 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
     // 縮放刻意不算「操作」：捏合只是想看看四周，不該被當成接管相機。
     if (info.scale.global.x != 1.0) {
       cameraFollow.onZoom();
-      cameraComponent.viewfinder.zoom =
-          (_baseZoom * info.scale.global.x).clamp(minZoom, maxZoom);
+      cameraComponent.viewfinder.zoom = (_baseZoom * info.scale.global.x).clamp(
+        minZoom,
+        maxZoom,
+      );
       return;
     }
 
