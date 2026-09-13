@@ -53,7 +53,7 @@ void main() {
         )!.cells.first.sourceOrigin.y,
     ];
 
-    expect(rows, [888, 631, 1332, 631]);
+    expect(rows, [888, 315, 1332, 315]);
     expect(
       actionSheetAnimationFor(
         'guide',

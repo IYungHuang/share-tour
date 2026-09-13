@@ -202,9 +202,7 @@ CharacterActionSheetAnimation _makeDirectionalAnimation({
   final isSide =
       direction == CharacterDirection.left ||
       direction == CharacterDirection.right;
-  final sideRowY = characterId == 'guide_female'
-      ? (locomotion == 'walk' ? 316 : 632)
-      : (locomotion == 'walk' ? 315 : 631);
+  final sideRowY = characterId == 'guide_female' ? 316 : 315;
   final rowIndex = direction.indexInSheet + (locomotion == 'run' ? 4 : 0);
   final assetPath = isSide ? sideAssetPath : directionalAssetPath;
   return CharacterActionSheetAnimation(
