@@ -98,7 +98,7 @@ void main() {
     component.update(0.01);
     await Future<void>.delayed(const Duration(milliseconds: 100));
 
-    expect(component.spriteChild!.sprite!.src.top, 631);
+    expect(component.spriteChild!.sprite!.src.top, 888);
   });
 
   test('advances through run action-sheet frames', () async {
@@ -120,6 +120,6 @@ void main() {
     expect(component.spriteChild!.sprite!.src.left, 0);
 
     component.update(0.2);
-    expect(component.spriteChild!.sprite!.src.left, 311);
+    expect(component.spriteChild!.sprite!.src.left, 222);
   });
 }

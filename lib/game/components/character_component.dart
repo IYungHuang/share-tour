@@ -67,6 +67,7 @@ class CharacterComponent extends PositionComponent {
       final sheet = actionSheetAnimationFor(
         controller.characterId,
         controller.action,
+        controller.direction,
       );
       final loadedAnimation = sheet == null
           ? (await loader.load(asset)).animation

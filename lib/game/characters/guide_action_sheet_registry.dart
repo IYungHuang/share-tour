@@ -1,5 +1,6 @@
 import '../../domain/character_action/character_action.dart';
 import '../../domain/character_action/character_animation_manifest.dart';
+import '../../domain/character_action/character_direction.dart';
 
 class CharacterActionSheetCell {
   const CharacterActionSheetCell({
@@ -35,6 +36,7 @@ class CharacterActionSheetAnimation {
   const CharacterActionSheetAnimation({
     required this.characterId,
     required this.animationId,
+    required this.direction,
     required this.cells,
     required this.fps,
     this.loop = true,
@@ -42,6 +44,7 @@ class CharacterActionSheetAnimation {
 
   final String characterId;
   final String animationId;
+  final CharacterDirection direction;
   final List<CharacterActionSheetCell> cells;
   final double fps;
   final bool loop;
@@ -152,50 +155,63 @@ const femaleGuideActionSheetRegistry = <CharacterActionSheetCell>[
   ),
 ];
 
-final guideActionSheetAnimations = <CharacterActionSheetAnimation>[
-  _makeAnimation('guide', _malePath, 'walk', 315, 'walk_cycle'),
-  _makeAnimation('guide', _malePath, 'run', 631, 'run_cycle'),
-];
+final guideActionSheetAnimations = _makeDirectionalAnimations(
+  'guide',
+  'guide_directional_locomotion_sheet_v1_generated.png',
+);
 
-final femaleGuideActionSheetAnimations = <CharacterActionSheetAnimation>[
-  _makeAnimation('guide_female', _femalePath, 'walk', 315, 'walk_cycle'),
-  _makeAnimation('guide_female', _femalePath, 'run', 631, 'run_cycle'),
-];
+final femaleGuideActionSheetAnimations = _makeDirectionalAnimations(
+  'guide_female',
+  'guide_female_directional_locomotion_sheet_v1_generated.png',
+);
 
-CharacterActionSheetAnimation _makeAnimation(
+List<CharacterActionSheetAnimation> _makeDirectionalAnimations(
   String characterId,
   String assetPath,
-  String animationId,
-  int y,
-  String semanticCandidate,
 ) {
-  const origins = [0, 311, 623, 934];
-  const widths = [311, 312, 311, 312];
-  return CharacterActionSheetAnimation(
-    characterId: characterId,
-    animationId: animationId,
-    cells: [
-      for (var index = 0; index < origins.length; index++)
-        CharacterActionSheetCell(
+  const directions = CharacterDirection.values;
+  return [
+    for (
+      var directionIndex = 0;
+      directionIndex < directions.length;
+      directionIndex++
+    )
+      for (final locomotion in ['walk', 'run'])
+        CharacterActionSheetAnimation(
           characterId: characterId,
-          cellId: '${characterId}_action_r${y == 315 ? 2 : 3}_c${index + 1}',
-          assetPath: assetPath,
-          sourceOrigin: PixelPoint(origins[index], y),
-          frameWidth: widths[index],
-          frameHeight: characterId == 'guide' && y == 315 ? 315 : 316,
-          renderWidth: 24,
-          renderHeight: 24,
-          observationalTags: [semanticCandidate],
-          semanticCandidates: [semanticCandidate],
+          animationId: locomotion,
+          direction: directions[directionIndex],
+          cells: [
+            for (var frameIndex = 0; frameIndex < 4; frameIndex++)
+              CharacterActionSheetCell(
+                characterId: characterId,
+                cellId:
+                    '${characterId}_${locomotion}_${directions[directionIndex].name}_f${frameIndex + 1}',
+                assetPath: assetPath,
+                sourceOrigin: PixelPoint(
+                  frameIndex * 222,
+                  (directionIndex + (locomotion == 'run' ? 4 : 0)) * 222,
+                ),
+                frameWidth: 222,
+                frameHeight: 222,
+                renderWidth: 24,
+                renderHeight: 24,
+                observationalTags: [
+                  '${directions[directionIndex].name}_facing',
+                  '${locomotion}_cycle',
+                ],
+                semanticCandidates: ['${locomotion}_cycle'],
+              ),
+          ],
+          fps: 8,
         ),
-    ],
-    fps: 8,
-  );
+  ];
 }
 
 CharacterActionSheetAnimation? actionSheetAnimationFor(
   String characterId,
   CharacterAction action,
+  CharacterDirection direction,
 ) {
   final animations = characterId == 'guide'
       ? guideActionSheetAnimations
@@ -209,7 +225,10 @@ CharacterActionSheetAnimation? actionSheetAnimationFor(
   };
   if (animationId == null) return null;
   for (final animation in animations) {
-    if (animation.animationId == animationId) return animation;
+    if (animation.animationId == animationId &&
+        animation.direction == direction) {
+      return animation;
+    }
   }
   return null;
 }
