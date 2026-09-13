@@ -33,8 +33,8 @@ class CuratorFieldHud extends ConsumerWidget {
     final period = timeSnapshot.period;
 
     return Container(
-      height: 38,
-      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      height: 34,
+      margin: const EdgeInsets.only(left: 10, top: 4, bottom: 4),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: const Color(0xFF1E2430),
@@ -44,43 +44,28 @@ class CuratorFieldHud extends ConsumerWidget {
         ],
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // 1. HP 體力與血條 (Expanded 自適應)
-          Expanded(
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.favorite,
-                  size: 13,
-                  color: Color(0xFFFF4757),
+          // 1. HP 體力（移除長條量表，僅保留精簡數值，佔比極小化）
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.favorite,
+                size: 13,
+                color: hpColor,
+              ),
+              const SizedBox(width: 3),
+              Text(
+                '$hp/$maxHp',
+                style: TextStyle(
+                  color: hpColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  fontFeatures: const [FontFeature.tabularFigures()],
                 ),
-                const SizedBox(width: 3),
-                Text(
-                  '$hp/$maxHp',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    fontFeatures: [FontFeature.tabularFigures()],
-                  ),
-                ),
-                const SizedBox(width: 5),
-                Expanded(
-                  child: Container(
-                    height: 6,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.black87, width: 1),
-                      color: Colors.black38,
-                    ),
-                    child: FractionallySizedBox(
-                      alignment: Alignment.centerLeft,
-                      widthFactor: hpRatio,
-                      child: Container(color: hpColor),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
 
           const SizedBox(width: 8),

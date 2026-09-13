@@ -334,7 +334,7 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
               MosaicTransitionOverlay(controller: _mosaicController),
           'CuratorHUD': (context, game) => const SafeArea(
             child: Align(
-              alignment: Alignment.topCenter,
+              alignment: Alignment.topLeft,
               child: CuratorFieldHud(),
             ),
           ),
