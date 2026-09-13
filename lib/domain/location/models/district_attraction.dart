@@ -100,6 +100,7 @@ class AdministrativeDistrict {
     required this.name,
     required this.centerGeo,
     required this.centerPixel,
+    this.additionalCenters = const [],
     this.minZoomForSpots = 1.2,
     this.radiusPixels = 120.0,
   });
@@ -113,8 +114,11 @@ class AdministrativeDistrict {
   /// 中心經緯度
   final GeoPoint centerGeo;
 
-  /// 中心像素座標
+  /// 主核心中心像素座標
   final Vector2 centerPixel;
+
+  /// 次要或多核心聚類中心像素（適用於幅員廣闊或多節點街區，如伏見 + 宇治 + 鞍馬）
+  final List<Vector2> additionalCenters;
 
   /// 放大至何種縮放倍率時開始顯現該區密集景點
   final double minZoomForSpots;
@@ -122,8 +126,17 @@ class AdministrativeDistrict {
   /// 判定角色踏入此行政區的感應半徑（預設 120 像素）
   final double radiusPixels;
 
-  /// 計算相機中心或玩家座標距此行政區中心的像素距離
-  double distanceToPixel(Vector2 point) => centerPixel.distanceTo(point);
+  /// 計算相機中心或玩家座標距此行政區（包含所有聚類中心）的最小像素距離
+  double distanceToPixel(Vector2 point) {
+    double minDistance = centerPixel.distanceTo(point);
+    for (final extra in additionalCenters) {
+      final d = extra.distanceTo(point);
+      if (d < minDistance) {
+        minDistance = d;
+      }
+    }
+    return minDistance;
+  }
 
   /// 判定指定座標是否踏入此行政區地理感應圈
   bool containsPixel(Vector2 point) => distanceToPixel(point) <= radiusPixels;

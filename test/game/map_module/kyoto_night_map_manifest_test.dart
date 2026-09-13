@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vector_math/vector_math.dart';
 import 'package:share_tour/data/core_loop/kyoto_night_catalog.dart';
+import 'package:share_tour/domain/location/models/district_attraction.dart';
 import 'package:share_tour/game/map_module/manifests/kyoto_night_map_manifest.dart';
 
 void main() {
@@ -137,6 +138,23 @@ void main() {
       final image = frame.image;
       expect(image.width, 1024);
       expect(image.height, 1024);
+    });
+
+    test('9. 多核心行政區地理邊界：32 處 POI 在其像素位置均 100% 精確匹配所屬行政區', () {
+      final districts = manifest.administrativeDistricts;
+      final attractions = manifest.districtAttractions;
+
+      for (final spot in attractions) {
+        final matched = AttractionFilter.findDistrictAtPosition(
+          districts: districts,
+          playerPosition: spot.pixel,
+        );
+        expect(matched, isNotNull,
+            reason: '景點 ${spot.title} (${spot.id}) 於座標 ${spot.pixel} 應落入行政區內');
+        expect(matched!.code, equals(spot.districtCode),
+            reason:
+                '景點 ${spot.title} (${spot.id}) 應屬於 ${spot.districtCode}，實際判定為 ${matched.code}');
+      }
     });
   });
 }

@@ -233,5 +233,49 @@ void main() {
       );
       expect(inHigashiyama?.code, 'higashiyama');
     });
+
+    test('多核心聚類判定：支援主中心與次要中心 (additionalCenters) 精確觸發同行政區', () {
+      final multiClusterDistricts = [
+        AdministrativeDistrict(
+          code: 'kyoto_fushimi_uji',
+          name: '洛南・伏見宇治',
+          centerGeo: const GeoPoint(34.9400, 135.7700),
+          centerPixel: Vector2(416.0, 818.0),
+          additionalCenters: [
+            Vector2(899.2, 954.4), // 宇治川浮島鵜飼中心
+            Vector2(615.4, 55.0),   // 鞍馬深山列車衛星中心
+          ],
+          radiusPixels: 130.0,
+        ),
+      ];
+
+      // 1. 玩家在主核心（伏見稻荷 443, 815 附近）
+      final atFushimi = AttractionFilter.findDistrictAtPosition(
+        districts: multiClusterDistricts,
+        playerPosition: Vector2(440.0, 815.0),
+      );
+      expect(atFushimi?.code, 'kyoto_fushimi_uji');
+
+      // 2. 玩家在次核心（宇治川 900, 950 附近）
+      final atUji = AttractionFilter.findDistrictAtPosition(
+        districts: multiClusterDistricts,
+        playerPosition: Vector2(900.0, 950.0),
+      );
+      expect(atUji?.code, 'kyoto_fushimi_uji');
+
+      // 3. 玩家在衛星中心（鞍馬深山 615, 60 附近）
+      final atKurama = AttractionFilter.findDistrictAtPosition(
+        districts: multiClusterDistricts,
+        playerPosition: Vector2(615.0, 60.0),
+      );
+      expect(atKurama?.code, 'kyoto_fushimi_uji');
+
+      // 4. 玩家在無人空曠區 (300, 300)
+      final atEmpty = AttractionFilter.findDistrictAtPosition(
+        districts: multiClusterDistricts,
+        playerPosition: Vector2(300.0, 300.0),
+      );
+      expect(atEmpty, isNull);
+    });
   });
 }
