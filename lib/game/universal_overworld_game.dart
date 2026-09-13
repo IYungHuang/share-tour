@@ -262,6 +262,14 @@ class UniversalOverworldGame extends FlameGame
     }
   }
 
+  void setPlayerMoving(bool moving) {
+    playPlayerAction(
+      moving
+          ? const CharacterAction(locomotion: CharacterLocomotion.run)
+          : const CharacterAction(),
+    );
+  }
+
   Future<bool> playPlayerActionCell(String cellId) async {
     final cells = characterId == 'guide'
         ? guideActionSheetRegistry

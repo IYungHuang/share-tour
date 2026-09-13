@@ -48,6 +48,8 @@ void main() {
       () => game.setPlayerDirection(CharacterDirection.back),
       returnsNormally,
     );
+    expect(() => game.setPlayerMoving(true), returnsNormally);
+    expect(() => game.setPlayerMoving(false), returnsNormally);
   });
 
   test('尚未載入時 switchMap 更新 manifest 且不存取 Flame 元件', () async {

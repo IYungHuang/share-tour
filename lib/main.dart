@@ -12,6 +12,7 @@ import 'data/core_loop/local_persistence_repository.dart';
 import 'domain/core_loop/models/curator_save_data.dart';
 import 'domain/core_loop/models/persistence_repository.dart';
 import 'domain/core_loop/models/tour_time_of_day.dart';
+import 'domain/character_action/character_direction.dart';
 import 'domain/core_loop/run/curator_run_phase.dart';
 import 'domain/location/camera/camera_follow.dart';
 import 'domain/location/models/district_attraction.dart';
@@ -583,10 +584,18 @@ class _DPadOverlay extends ConsumerWidget {
         onPointerDown: (_) {
           if (canExplore) {
             notifier.setDirection(dx, dy);
+            game.setPlayerDirection(_directionFor(dx, dy));
+            game.setPlayerMoving(true);
           }
         },
-        onPointerUp: (_) => notifier.stopMoving(),
-        onPointerCancel: (_) => notifier.stopMoving(),
+        onPointerUp: (_) {
+          notifier.stopMoving();
+          game.setPlayerMoving(false);
+        },
+        onPointerCancel: (_) {
+          notifier.stopMoving();
+          game.setPlayerMoving(false);
+        },
         child: Container(
           width: 48,
           height: 48,
@@ -639,6 +648,13 @@ class _DPadOverlay extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  CharacterDirection _directionFor(double dx, double dy) {
+    if (dx < 0) return CharacterDirection.left;
+    if (dx > 0) return CharacterDirection.right;
+    if (dy < 0) return CharacterDirection.back;
+    return CharacterDirection.front;
   }
 }
 
