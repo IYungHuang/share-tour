@@ -100,4 +100,26 @@ void main() {
 
     expect(component.spriteChild!.sprite!.src.top, 631);
   });
+
+  test('advances through run action-sheet frames', () async {
+    final controller = CharacterActionController(
+      characterId: 'guide',
+      descriptors: CharacterActionDescriptorRegistry.standard(),
+      resolver: CharacterAnimationResolver(guideCharacterManifest),
+      capabilities: CharacterCapabilityRegistry(const {}),
+    );
+    final component = CharacterComponent(
+      controller: controller,
+      loader: CharacterAssetLoader(images: Images()),
+    );
+
+    await component.onLoad();
+    controller.play(const CharacterAction(locomotion: CharacterLocomotion.run));
+    component.update(0.01);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(component.spriteChild!.sprite!.src.left, 0);
+
+    component.update(0.2);
+    expect(component.spriteChild!.sprite!.src.left, 311);
+  });
 }

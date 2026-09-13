@@ -22,6 +22,9 @@ class CharacterComponent extends PositionComponent {
   SpriteAnimation? _animation;
   String? _loadedAnimationKey;
   String? _loadingAnimationKey;
+  bool _usingSheetAnimation = false;
+  int _sheetFrameIndex = 0;
+  double _sheetElapsed = 0;
   CharacterActionSheetCell? _activeCell;
   double _cellElapsed = 0;
 
@@ -71,10 +74,13 @@ class CharacterComponent extends PositionComponent {
       if (controller.resolvedAnimation?.asset.animationKey != key) return;
       _animation = loadedAnimation;
       _loadedAnimationKey = key;
+      _usingSheetAnimation = sheet != null;
+      _sheetFrameIndex = 0;
+      _sheetElapsed = 0;
       final child = _spriteChild;
       if (child == null && createChild) {
         _spriteChild = SpriteComponent(
-          sprite: _animation!.frames[controller.frameIndex].sprite,
+          sprite: _animation!.frames[_displayFrameIndex].sprite,
           autoResize: false,
           size: Vector2(asset.renderWidth, asset.renderHeight),
           position: Vector2.zero(),
@@ -82,7 +88,7 @@ class CharacterComponent extends PositionComponent {
         )..paint.filterQuality = FilterQuality.none;
         add(_spriteChild!);
       } else if (child != null) {
-        child.sprite = _animation!.frames[controller.frameIndex].sprite;
+        child.sprite = _animation!.frames[_displayFrameIndex].sprite;
         child.size.setValues(asset.renderWidth, asset.renderHeight);
         child.anchor = Anchor(asset.anchor.x, asset.anchor.y);
       }
@@ -112,8 +118,21 @@ class CharacterComponent extends PositionComponent {
     final child = _spriteChild;
     final animation = _animation;
     if (child != null && animation != null && _activeCell == null) {
-      child.sprite = animation.frames[controller.frameIndex].sprite;
+      if (_usingSheetAnimation && animation.frames.isNotEmpty) {
+        _sheetElapsed += dt;
+        final stepTime = animation.frames[_sheetFrameIndex].stepTime;
+        while (_sheetElapsed >= stepTime) {
+          _sheetElapsed -= stepTime;
+          _sheetFrameIndex = (_sheetFrameIndex + 1) % animation.frames.length;
+        }
+      } else {
+        _sheetFrameIndex = controller.frameIndex;
+      }
+      child.sprite = animation.frames[_displayFrameIndex].sprite;
     }
     super.update(dt);
   }
+
+  int get _displayFrameIndex =>
+      _usingSheetAnimation ? _sheetFrameIndex : controller.frameIndex;
 }
