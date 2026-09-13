@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -376,8 +378,8 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
               GatheringFloatingFeedbackOverlay(
                 controller: _gatheringFeedbackController,
               ),
-          'DPad': (context, game) => _DPadOverlay(game: game),
-          'ModeToggle': (context, game) => _ModeToggle(
+          'DPad': (context, game) => DPadOverlay(game: game),
+          'ModeToggle': (context, game) => ModeToggle(
             game: game,
             onOpenStudio: _openCuratorStudioSafely,
             onOpenGearShop: _openGearShopSafely,
@@ -401,7 +403,6 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
         initialActiveOverlays: const [
           'MosaicTransition',
           'CuratorHUD',
-          'RetroHUD',
           'DistrictDiscovery',
           'DPad',
           'ModeToggle',
@@ -559,74 +560,285 @@ class _RetroPanel extends StatelessWidget {
   );
 }
 
-/// 方向鍵。正式玩法的一部分，不是除錯工具。
-class _DPadOverlay extends ConsumerWidget {
-  const _DPadOverlay({required this.game});
+/// 手機版模擬搖桿 (Virtual Analog Joystick) 與定位鍵。
+///
+/// 支援 360° 連續滑動方向控制、彈簧回彈、死區防誤觸，
+/// 並在右上肩部整合一鍵回到主角的定位鍵 (Recenter Button)。
+class DPadOverlay extends ConsumerStatefulWidget {
+  const DPadOverlay({super.key, required this.game});
   final UniversalOverworldGame game;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final notifier = ref.read(locationControllerProvider.notifier);
-    final canExplore = ref.watch(canExploreProvider);
+  ConsumerState<DPadOverlay> createState() => _DPadOverlayState();
+}
 
-    Widget arrow(IconData icon, double dx, double dy) => Opacity(
-      opacity: canExplore ? 1.0 : 0.4,
-      child: Listener(
-        onPointerDown: (_) {
-          if (canExplore) {
-            notifier.setDirection(dx, dy);
-          }
-        },
-        onPointerUp: (_) => notifier.stopMoving(),
-        onPointerCancel: (_) => notifier.stopMoving(),
-        child: Container(
-          width: 48,
-          height: 48,
-          margin: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            color: const Color(0xFFC0834B),
-            border: Border.all(color: Colors.black, width: 3),
-          ),
-          child: Icon(icon, size: 22, color: Colors.black),
-        ),
-      ),
-    );
+class _DPadOverlayState extends ConsumerState<DPadOverlay>
+    with SingleTickerProviderStateMixin {
+  Offset _knobOffset = Offset.zero;
+  bool _isDragging = false;
+  late AnimationController _springController;
+  late Animation<Offset> _springAnimation;
+
+  static const double _baseRadius = 58.0;
+  static const double _knobRadius = 24.0;
+  static const double _maxDistance = 35.0;
+  static const double _deadZone = 4.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _springController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 140),
+    )..addListener(() {
+        setState(() {
+          _knobOffset = _springAnimation.value;
+        });
+      });
+  }
+
+  @override
+  void dispose() {
+    _springController.dispose();
+    super.dispose();
+  }
+
+  void _handlePanStart(DragStartDetails details, bool canExplore) {
+    if (!canExplore) return;
+    _springController.stop();
+    _updateOffset(details.localPosition, canExplore);
+  }
+
+  void _handlePanUpdate(DragUpdateDetails details, bool canExplore) {
+    if (!canExplore) return;
+    _updateOffset(details.localPosition, canExplore);
+  }
+
+  void _updateOffset(Offset localPos, bool canExplore) {
+    if (!canExplore) return;
+    final delta = localPos - const Offset(_baseRadius, _baseRadius);
+    final distance = delta.distance;
+
+    final notifier = ref.read(locationControllerProvider.notifier);
+
+    if (distance < _deadZone) {
+      notifier.stopMoving();
+      setState(() {
+        _isDragging = true;
+        _knobOffset = delta;
+      });
+      return;
+    }
+
+    final clampedDistance = math.min(distance, _maxDistance);
+    final unitVector = delta / distance;
+    final clampedOffset = unitVector * clampedDistance;
+
+    setState(() {
+      _isDragging = true;
+      _knobOffset = clampedOffset;
+    });
+
+    notifier.setDirection(unitVector.dx, unitVector.dy);
+  }
+
+  void _handlePanEnd(bool canExplore) {
+    if (!canExplore) return;
+    final notifier = ref.read(locationControllerProvider.notifier);
+    notifier.stopMoving();
+
+    _springAnimation = Tween<Offset>(
+      begin: _knobOffset,
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _springController,
+      curve: Curves.easeOutQuad,
+    ));
+    _springController.forward(from: 0);
+
+    setState(() {
+      _isDragging = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canExplore = ref.watch(canExploreProvider);
 
     return SafeArea(
       child: Align(
         alignment: Alignment.bottomLeft,
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              arrow(Icons.keyboard_arrow_up, 0, -1),
-              Row(
-                mainAxisSize: MainAxisSize.min,
+          padding: const EdgeInsets.only(left: 14, bottom: 14),
+          child: Opacity(
+            opacity: canExplore ? 1.0 : 0.4,
+            child: SizedBox(
+              width: _baseRadius * 2 + 16,
+              height: _baseRadius * 2 + 16,
+              child: Stack(
+                clipBehavior: Clip.none,
                 children: [
-                  arrow(Icons.keyboard_arrow_left, -1, 0),
-                  GestureDetector(
-                    onTap: game.recenterOnPlayer,
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      margin: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: Colors.black, width: 3),
-                      ),
-                      child: const Icon(
-                        Icons.my_location,
-                        size: 20,
-                        color: Colors.black,
+                  // 1. 模擬搖桿底座與觸控感應區
+                  Positioned(
+                    left: 0,
+                    bottom: 0,
+                    width: _baseRadius * 2,
+                    height: _baseRadius * 2,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onPanStart: (d) => _handlePanStart(d, canExplore),
+                      onPanUpdate: (d) => _handlePanUpdate(d, canExplore),
+                      onPanEnd: (_) => _handlePanEnd(canExplore),
+                      onPanCancel: () => _handlePanEnd(canExplore),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xD91E2430),
+                          border: Border.all(
+                            color: const Color(0xFFC0834B),
+                            width: 2.5,
+                          ),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black54,
+                              blurRadius: 6,
+                              offset: Offset(2, 3),
+                            ),
+                          ],
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            // 刻度箭頭標記
+                            Positioned(
+                              top: 5,
+                              child: Text(
+                                '▲',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.amber.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 5,
+                              child: Text(
+                                '▼',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.amber.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              left: 5,
+                              child: Text(
+                                '◀',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.amber.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              right: 5,
+                              child: Text(
+                                '▶',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.amber.withValues(alpha: 0.5),
+                                ),
+                              ),
+                            ),
+                            // 搖桿頭 (Knob)
+                            Transform.translate(
+                              offset: _knobOffset,
+                              child: Container(
+                                width: _knobRadius * 2,
+                                height: _knobRadius * 2,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: RadialGradient(
+                                    colors: _isDragging
+                                        ? [
+                                            const Color(0xFFF59E0B),
+                                            const Color(0xFFB45309),
+                                          ]
+                                        : [
+                                            const Color(0xFFD97706),
+                                            const Color(0xFF78350F),
+                                          ],
+                                  ),
+                                  border: Border.all(
+                                    color: Colors.black,
+                                    width: 2.5,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: _isDragging
+                                          ? const Color(0x99F59E0B)
+                                          : Colors.black54,
+                                      blurRadius: _isDragging ? 8 : 4,
+                                      offset: const Offset(1, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Center(
+                                  child: Container(
+                                    width: 14,
+                                    height: 14,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.amberAccent
+                                            .withValues(alpha: 0.8),
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                  arrow(Icons.keyboard_arrow_right, 1, 0),
+
+                  // 2. 獨立懸浮定位鍵 (Recenter Button 🎯 / my_location)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: GestureDetector(
+                      key: const Key('recenter_button'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: widget.game.recenterOnPlayer,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.black, width: 2.5),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Colors.black45,
+                              blurRadius: 4,
+                              offset: Offset(2, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.my_location,
+                          size: 18,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-              arrow(Icons.keyboard_arrow_down, 0, 1),
-            ],
+            ),
           ),
         ),
       ),
@@ -634,10 +846,14 @@ class _DPadOverlay extends ConsumerWidget {
   }
 }
 
-/// 模式切換。權限對話框在玩家按下 GPS 時才出現——開場就跳，玩家還不知道
-/// 這是什麼遊戲就被要求定位。
-class _ModeToggle extends ConsumerWidget {
-  const _ModeToggle({
+/// 模式切換與右下角操作選單。
+///
+/// 採用極簡空間的「堆疊滾輪式選單 (Stacked Wheel Menu)」呈現：
+/// 平時僅佔用底部極小角落空間，點擊展開後以立體堆疊輪盤方式呈現
+/// 街區漫步、黑市裝備、策展工作台三大核心行動，兼顧指尖順暢度與畫面開闊度。
+class ModeToggle extends ConsumerStatefulWidget {
+  const ModeToggle({
+    super.key,
     required this.game,
     required this.onOpenStudio,
     this.onOpenGearShop,
@@ -645,6 +861,7 @@ class _ModeToggle extends ConsumerWidget {
     this.onOpenDistrictSelector,
     this.onReturnToBasin,
   });
+
   final UniversalOverworldGame game;
   final VoidCallback onOpenStudio;
   final VoidCallback? onOpenGearShop;
@@ -657,7 +874,112 @@ class _ModeToggle extends ConsumerWidget {
   final VoidCallback? onReturnToBasin;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ModeToggle> createState() => _ModeToggleState();
+}
+
+class _ModeToggleState extends ConsumerState<ModeToggle>
+    with SingleTickerProviderStateMixin {
+  bool _isWheelExpanded = false;
+  late AnimationController _wheelAnimController;
+  late Animation<double> _expandAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _wheelAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+    );
+    _expandAnimation = CurvedAnimation(
+      parent: _wheelAnimController,
+      curve: Curves.easeOutBack,
+      reverseCurve: Curves.easeInQuad,
+    );
+  }
+
+  @override
+  void dispose() {
+    _wheelAnimController.dispose();
+    super.dispose();
+  }
+
+  void _toggleWheel() {
+    setState(() {
+      _isWheelExpanded = !_isWheelExpanded;
+      if (_isWheelExpanded) {
+        _wheelAnimController.forward();
+      } else {
+        _wheelAnimController.reverse();
+      }
+    });
+  }
+
+  void _closeWheel() {
+    if (!_isWheelExpanded) return;
+    setState(() {
+      _isWheelExpanded = false;
+      _wheelAnimController.reverse();
+    });
+  }
+
+  Widget _buildWheelItem({
+    required Key key,
+    required VoidCallback onTap,
+    required Color backgroundColor,
+    required Color borderColor,
+    required Widget icon,
+    required String label,
+    required Color textColor,
+    double perspectiveAngle = 0.0,
+  }) {
+    return GestureDetector(
+      key: key,
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        _closeWheel();
+        onTap();
+      },
+      child: Transform.rotate(
+        angle: perspectiveAngle,
+        alignment: Alignment.centerRight,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            border: Border.all(color: borderColor, width: 2.5),
+            borderRadius: BorderRadius.circular(4),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black54,
+                blurRadius: 4,
+                offset: Offset(2, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              icon,
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                  color: textColor,
+                  letterSpacing: 0.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final mode = ref.watch(locationControllerProvider).status.mode;
     final permission = ref.watch(locationControllerProvider).status.permission;
     final manifest = ref.watch(mapManifestProvider);
@@ -671,184 +993,224 @@ class _ModeToggle extends ConsumerWidget {
       child: Align(
         alignment: Alignment.bottomRight,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // 地圖尺度分進層次切換按鈕（宏觀盆地 ⇄ 中觀街區散步）
-              if (onSwitchHierarchy != null ||
-                  onOpenDistrictSelector != null ||
-                  onReturnToBasin != null)
-                GestureDetector(
-                  key: const Key('map_hierarchy_toggle_button'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    if (isStreet) {
-                      if (onReturnToBasin != null) {
-                        onReturnToBasin!();
-                      } else {
-                        onSwitchHierarchy?.call(
-                          targetManifest: const KyotoNightMapManifest(),
-                          targetTitle: '京都盆地全覽（宏觀大地圖）',
-                          spawnPixel: Vector2(665.0, 395.0),
-                        );
-                      }
-                    } else {
-                      if (onOpenDistrictSelector != null) {
-                        onOpenDistrictSelector!();
-                      } else {
-                        onSwitchHierarchy?.call(
-                          targetManifest: const KyotoStreetBlockManifest(),
-                          targetTitle: '洛中・河原町街區散步道（中觀町家）',
-                          spawnPixel: Vector2(512.0, 512.0),
-                        );
-                      }
-                    }
-                  },
+              // 1. 堆疊滾輪主體 (展開時以滾輪弧度與立體層次堆疊浮現)
+              SizeTransition(
+                sizeFactor: _expandAnimation,
+                axisAlignment: 1.0,
+                child: FadeTransition(
+                  opacity: _expandAnimation,
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 9,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isStreet
-                          ? const Color(0xFF065F46)
-                          : const Color(0xFF831843),
-                      border: Border.all(color: Colors.amber, width: 3),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black, offset: Offset(3, 3)),
-                      ],
-                    ),
-                    child: Row(
+                    child: Column(
                       mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Icon(
-                          isStreet ? Icons.public : Icons.holiday_village,
-                          size: 16,
-                          color: Colors.amber,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          isStreet ? '🗺️ 返回盆地全覽' : '🏮 街區漫步',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                            color: Colors.white,
+                        // 頂層輪盤項：街區漫步 / 返回盆地
+                        if (widget.onSwitchHierarchy != null ||
+                            widget.onOpenDistrictSelector != null ||
+                            widget.onReturnToBasin != null)
+                          _buildWheelItem(
+                            key: const Key('map_hierarchy_toggle_button'),
+                            backgroundColor: isStreet
+                                ? const Color(0xFF065F46)
+                                : const Color(0xFF831843),
+                            borderColor: Colors.amber,
+                            icon: Icon(
+                              isStreet ? Icons.public : Icons.holiday_village,
+                              size: 15,
+                              color: Colors.amber,
+                            ),
+                            label: isStreet ? '🗺️ 返回盆地全覽' : '🏮 街區漫步',
+                            textColor: Colors.white,
+                            perspectiveAngle: -0.02,
+                            onTap: () {
+                              if (isStreet) {
+                                if (widget.onReturnToBasin != null) {
+                                  widget.onReturnToBasin!();
+                                } else {
+                                  widget.onSwitchHierarchy?.call(
+                                    targetManifest:
+                                        const KyotoNightMapManifest(),
+                                    targetTitle: '京都盆地全覽（宏觀大地圖）',
+                                    spawnPixel: Vector2(665.0, 395.0),
+                                  );
+                                }
+                              } else {
+                                if (widget.onOpenDistrictSelector != null) {
+                                  widget.onOpenDistrictSelector!();
+                                } else {
+                                  widget.onSwitchHierarchy?.call(
+                                    targetManifest:
+                                        const KyotoStreetBlockManifest(),
+                                    targetTitle: '洛中・河原町街區散步道（中觀町家）',
+                                    spawnPixel: Vector2(512.0, 512.0),
+                                  );
+                                }
+                              }
+                            },
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              // 黑市裝備入口按鈕
-              if (onOpenGearShop != null)
-                GestureDetector(
-                  key: const Key('gear_shop_launcher_button'),
-                  onTap: onOpenGearShop,
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
-                      border: Border.all(color: Colors.amber, width: 3),
-                      boxShadow: const [
-                        BoxShadow(color: Colors.black, offset: Offset(3, 3)),
-                      ],
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.storefront, size: 16, color: Colors.amber),
-                        SizedBox(width: 4),
-                        Text(
-                          '🛒 黑市裝備',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11,
-                            color: Colors.amber,
+
+                        // 中層輪盤項：黑市裝備
+                        if (widget.onOpenGearShop != null)
+                          _buildWheelItem(
+                            key: const Key('gear_shop_launcher_button'),
+                            backgroundColor: const Color(0xFF1E293B),
+                            borderColor: Colors.amber,
+                            icon: const Icon(Icons.storefront,
+                                size: 15, color: Colors.amber),
+                            label: '🛒 黑市裝備',
+                            textColor: Colors.amber,
+                            perspectiveAngle: -0.01,
+                            onTap: widget.onOpenGearShop!,
                           ),
+
+                        // 底層輪盤項：策展工作台
+                        _buildWheelItem(
+                          key: const Key('curator_studio_launcher_button'),
+                          backgroundColor: const Color(0xFFF59E0B),
+                          borderColor: Colors.black,
+                          icon: const Icon(Icons.assignment,
+                              size: 15, color: Colors.black),
+                          label: '📑 策展工作台',
+                          textColor: Colors.black,
+                          perspectiveAngle: 0.0,
+                          onTap: widget.onOpenStudio,
                         ),
                       ],
                     ),
-                  ),
-                ),
-              // 策展工作台入口按鈕 (開啟時掛起 Flame 引擎以防穿透與降溫省電)
-              GestureDetector(
-                key: const Key('curator_studio_launcher_button'),
-                onTap: onOpenStudio,
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B),
-                    border: Border.all(color: Colors.black, width: 3),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black, offset: Offset(3, 3)),
-                    ],
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.assignment, size: 16, color: Colors.black),
-                      SizedBox(width: 4),
-                      Text(
-                        '📑 策展工作台',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               ),
+
+              // 權限警示提示
               if (!isGps && permission != PermissionState.ready)
                 Container(
                   margin: const EdgeInsets.only(bottom: 6),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
-                    vertical: 4,
+                    vertical: 3,
                   ),
                   color: Colors.black87,
                   child: Text(
                     _hintFor(permission),
-                    style: const TextStyle(fontSize: 10, color: Colors.white),
+                    style: const TextStyle(fontSize: 9, color: Colors.white),
                   ),
                 ),
-              GestureDetector(
-                onTap: () => isGps
-                    ? notifier.switchToVirtual()
-                    : notifier.requestGpsMode(),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isGps ? const Color(0xFF48BB78) : Colors.white,
-                    border: Border.all(color: Colors.black, width: 3),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black, offset: Offset(3, 3)),
-                    ],
-                  ),
-                  child: Text(
-                    isGps ? 'GPS ON' : 'USE GPS',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11,
-                      color: Colors.black,
+
+              // 2. 底部緊湊操作列 (GPS 切換 + 堆疊滾輪選單觸發按鈕)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // GPS 切換按鈕 (緊湊膠囊)
+                  GestureDetector(
+                    onTap: () => isGps
+                        ? notifier.switchToVirtual()
+                        : notifier.requestGpsMode(),
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isGps
+                            ? const Color(0xFF15803D)
+                            : const Color(0xFF1E2430),
+                        border: Border.all(
+                          color: isGps ? Colors.white : Colors.black,
+                          width: 2.5,
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black54,
+                            offset: Offset(2, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isGps ? Icons.gps_fixed : Icons.gps_not_fixed,
+                            size: 14,
+                            color:
+                                isGps ? Colors.white : const Color(0xFF94A3B8),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isGps ? 'GPS ON' : 'USE GPS',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 10,
+                              color: isGps
+                                  ? Colors.white
+                                  : const Color(0xFFE2E8F0),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
+
+                  const SizedBox(width: 8),
+
+                  // 堆疊滾輪展開/收合觸發按鈕
+                  GestureDetector(
+                    key: const Key('stacked_wheel_trigger'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _toggleWheel,
+                    child: Container(
+                      height: 36,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _isWheelExpanded
+                            ? const Color(0xFFD97706)
+                            : const Color(0xFF1E2430),
+                        border: Border.all(
+                          color: _isWheelExpanded ? Colors.white : Colors.amber,
+                          width: 2.5,
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black54,
+                            offset: Offset(2, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _isWheelExpanded ? Icons.close : Icons.tune,
+                            size: 15,
+                            color:
+                                _isWheelExpanded ? Colors.white : Colors.amber,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _isWheelExpanded ? '收合' : '🎡 行動選單 ▾',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11,
+                              color:
+                                  _isWheelExpanded ? Colors.white : Colors.amber,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -903,7 +1265,7 @@ class _DistrictDiscoveryBanner extends ConsumerWidget {
           child: Align(
             alignment: Alignment.topCenter,
             child: Container(
-              margin: const EdgeInsets.only(top: 175, left: 12, right: 12),
+              margin: const EdgeInsets.only(top: 48, left: 12, right: 12),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: const Color(0xFF1E293B),
