@@ -386,9 +386,13 @@ class _ShutterProtoPageState extends State<ShutterProtoPage>
               '  p95 ${_jitter.p95Abs.toStringAsFixed(1)} ms',
             ),
             Text(
-              '      n=${_jitter.count}  丟棄 $_jitterDropped'
-              '（閒置 > ${JitterStats.idleGap.inMilliseconds} ms）'
+              '      n=${_jitter.count}  丟棄 $_jitterDropped（離群 > 1000 ms）'
               '  建議窗寬 ${_jitter.recommendedWindowMs.toStringAsFixed(0)} ms',
+            ),
+            Text(
+              '      連續子集 n=${_jitter.continuousCount}'
+              '  穩健σ ${_jitter.continuousRobustSigma.toStringAsFixed(1)} ms'
+              '（對照用，裁決以全樣本為準）',
             ),
             Text('裁決  $verdictText', style: TextStyle(color: verdictColour)),
           ],

@@ -6,7 +6,13 @@
 /// **實測修正史**：第一版用 σ 當主統計，結果 n=32 時得 12.8 ms、n=69 時得
 /// 40.2 ms —— 3 倍跳幅。原因是 σ 對離群值極度敏感，而「閒置之後的第一次按壓」
 /// 會帶著主 isolate 從空閒喚醒的延遲。故改用**穩健統計**（MAD）為主，σ 僅
-/// 併列參考，並排除閒置後的第一筆。
+/// 併列參考。
+///
+/// 第二版另外排除了閒置後的第一筆，門檻 1500 ms —— **那是錯的，已移除**。
+/// 實測每次 15.1 s，42 筆裡 39 筆被丟棄，n 只剩 3。門檻設在人的再進入時間
+/// （看結果、重新握好、決定再按，實測 3.8~6.4 s）以下，於是永遠通不過。
+/// 且方向也錯：兩次取材之間玩家要走路，「閒置後按下」正是遊戲內的典型情境，
+/// 排除它會讓抖動估計偏樂觀。現在全部收下，靠 MAD 擋離群值。
 library;
 
 import 'dart:math' as math;
@@ -33,13 +39,16 @@ class JitterStats {
   /// 濾波都會把全部樣本丟掉（實際踩過：n 一直是 0）。
   double? _baseline;
 
-  /// 上一次收樣的本地時刻，用於偵測閒置。
+  /// 連續按壓的子集：與前一筆間隔在 [idleGap] 之內者。
+  ///
+  /// **不參與裁決**，只作對照 —— 它與全樣本的差距就是「閒置喚醒延遲」的量。
+  /// 兩者分歧大，代表遊戲內的走路間隔會實質推高抖動。
+  final List<double> _continuous = [];
+
+  /// 上一次收樣的本地時刻，用於分辨連續與閒置。
   Duration? _lastAt;
 
-  /// 閒置門檻：間隔超過此值的那一筆丟棄。
-  ///
-  /// 主 isolate 從空閒喚醒的第一個事件延遲明顯偏高，而那不是玩家連續操作
-  /// 時會遇到的狀況 —— 遊戲裡的取材是一連串動作，不是間隔數秒的單次點擊。
+  /// 連續／閒置的分界。**只用來分類，不再用來丟棄。**
   static const idleGap = Duration(milliseconds: 1500);
 
   /// 收一筆樣本。
@@ -58,21 +67,31 @@ class JitterStats {
     // 扣掉基準後仍離群的才是真雜訊（例如 App 被切出去又切回來）。
     if (centred.abs() > 1000) return false;
 
-    // 閒置後的第一筆丟棄（第一筆本身沒有前筆可比，保留）。
-    if (previous != null && at - previous > idleGap) return false;
-
     _samples.add(centred);
     if (_samples.length > capacity) _samples.removeAt(0);
+
+    // 第一筆沒有前筆可比，不算連續。
+    if (previous != null && at - previous <= idleGap) {
+      _continuous.add(centred);
+      if (_continuous.length > capacity) _continuous.removeAt(0);
+    }
     return true;
   }
 
   void clear() {
     _samples.clear();
+    _continuous.clear();
     _baseline = null;
     _lastAt = null;
   }
 
   int get count => _samples.length;
+
+  /// 連續子集的樣本數。與 [count] 的差就是閒置後按下的次數。
+  int get continuousCount => _continuous.length;
+
+  /// 連續子集的穩健抖動估計 —— 對照用，不是裁決依據。
+  double get continuousRobustSigma => 1.4826 * _madOf(_continuous);
 
   List<double> get _sorted => [..._samples]..sort();
 
@@ -92,10 +111,13 @@ class JitterStats {
   }
 
   /// 中位數絕對偏差。常態分佈下 $\sigma \approx 1.4826 \times \text{MAD}$。
-  double get mad {
-    if (_samples.isEmpty) return 0;
-    final m = median;
-    final deviations = _samples.map((x) => (x - m).abs()).toList()..sort();
+  double get mad => _madOf(_samples);
+
+  static double _madOf(List<double> xs) {
+    if (xs.isEmpty) return 0;
+    final sorted = [...xs]..sort();
+    final m = sorted[xs.length ~/ 2];
+    final deviations = xs.map((x) => (x - m).abs()).toList()..sort();
     return deviations[deviations.length ~/ 2];
   }
 

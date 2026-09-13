@@ -60,23 +60,61 @@ void main() {
     });
   });
 
-  group('閒置丟棄', () {
-    test('間隔超過門檻的那一筆不採計', () {
+  group('閒置樣本（回歸：1500 ms 門檻設在人的再進入時間之下，42 筆丟掉 39 筆）', () {
+    test('閒置後的第一筆須被採計 —— 它正是遊戲內的典型情境', () {
       final s = JitterStats();
       var t = Duration.zero;
       for (var i = 0; i < 5; i++) {
         t += const Duration(milliseconds: 300);
         expect(s.add(10, t), isTrue);
       }
-      t += JitterStats.idleGap + const Duration(milliseconds: 1);
-      expect(s.add(10, t), isFalse, reason: '閒置後的第一筆帶著喚醒延遲');
-      expect(s.count, 5);
+      t += const Duration(seconds: 15);
+      expect(
+        s.add(10, t),
+        isTrue,
+        reason: '兩次取材之間玩家要走路，閒置後按下不是雜訊',
+      );
+      expect(s.count, 6);
     });
 
-    test('第一筆沒有前筆可比，須採計', () {
+    test('實測節奏（每次 15.1 s）下不得清空母體', () {
+      final s = JitterStats();
+      var t = Duration.zero;
+      for (var i = 0; i < 42; i++) {
+        t += const Duration(milliseconds: 15100);
+        s.add(i.isEven ? 8 : -8, t);
+      }
+      expect(s.count, 42, reason: '正常節奏按滿 42 次就該有 42 筆');
+      expect(s.verdictFor(120), isNot(JitterVerdict.insufficientData));
+    });
+
+    test('連續子集與全樣本併列，閒置後的按壓只計入全樣本', () {
+      // 組成比照實測：少數連打，多數是走過去才按 —— 後者帶著喚醒延遲。
+      final s = JitterStats();
+      var t = Duration.zero;
+      for (var i = 0; i < 5; i++) {
+        t += const Duration(milliseconds: 300);
+        s.add(10, t);
+      }
+      for (var i = 0; i < 10; i++) {
+        t += const Duration(seconds: 15);
+        s.add(i.isEven ? 60 : -40, t);
+      }
+
+      expect(s.count, 15);
+      expect(s.continuousCount, 4, reason: '第一筆無前筆可比，不算連續');
+      expect(
+        s.continuousRobustSigma,
+        lessThan(s.robustSigma),
+        reason: '排除閒置樣本會讓估計偏樂觀 —— 這正是要併列兩者的理由',
+      );
+    });
+
+    test('第一筆沒有前筆可比，計入全樣本但不計入連續子集', () {
       final s = JitterStats();
       expect(s.add(10, const Duration(seconds: 99)), isTrue);
       expect(s.count, 1);
+      expect(s.continuousCount, 0);
     });
 
     test('扣掉基準後仍離群的丟棄（例如切出去又切回來）', () {
@@ -140,11 +178,12 @@ void main() {
     });
   });
 
-  test('clear 會一併清掉基準與閒置狀態', () {
+  test('clear 會一併清掉基準、連續子集與閒置狀態', () {
     final s = JitterStats();
     s.add(999999, const Duration(milliseconds: 100));
     s.clear();
     expect(s.add(0, const Duration(milliseconds: 200)), isTrue);
+    expect(s.continuousCount, 0);
     expect(s.count, 1);
   });
 }
