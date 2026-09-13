@@ -13,16 +13,17 @@ import 'map_module/overworld_map_manifest.dart';
 
 class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks {
   UniversalOverworldGame({
-    required this.manifest,
+    required OverworldMapManifest manifest,
     required this.onTick,
     required this.renderedPixelOf,
     required this.cameraFollow,
     this.onAttractionSelected,
     this.onDistrictRevealed,
     this.timeOfDayGetter,
-  });
+  }) : _manifest = manifest;
 
-  final OverworldMapManifest manifest;
+  OverworldMapManifest _manifest;
+  OverworldMapManifest get manifest => _manifest;
 
   /// 每幀交還給 domain 推進平滑。引擎不自己算位置。
   final void Function(double dt) onTick;
@@ -174,16 +175,42 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
   void onTapUp(TapUpEvent event) {
     super.onTapUp(event);
     final zoom = cameraComponent.viewfinder.zoom;
-    final center = cameraComponent.viewfinder.position;
-    final viewportSize = cameraComponent.viewport.size;
-    final screenPos = event.canvasPosition;
-    final worldPoint = center + (screenPos - viewportSize / 2) / zoom;
+    final worldPoint = cameraComponent.globalToLocal(event.canvasPosition);
 
     final hit = attractionLayer.findAttractionAt(
       worldPoint,
-      thresholdPixels: 24.0 / zoom.clamp(0.5, 4.0),
+      thresholdPixels: 48.0 / zoom.clamp(0.5, 4.0),
     );
     attractionLayer.selectAttraction(hit);
     onAttractionSelected?.call(hit);
+  }
+
+  /// 實作地圖分進層次熱切換（宏觀盆地 ⇄ 中觀街區）
+  Future<void> switchMap(
+    OverworldMapManifest newManifest, {
+    Vector2? newSpawnPixel,
+  }) async {
+    _manifest = newManifest;
+
+    // 1. 換掉底圖 Sprite
+    final sprite = await loadSprite(newManifest.assetPath);
+    mapComponent.sprite = sprite;
+    mapComponent.size = newManifest.mapDimensions;
+
+    // 2. 換掉景點圖層
+    attractionLayer.switchManifest(newManifest);
+
+    // 3. 換掉動態光照組件
+    lightingComponent.switchMap(
+      mapSize: newManifest.mapDimensions,
+      lightPositions:
+          newManifest.districtAttractions.map((a) => a.pixel).toList(),
+    );
+
+    // 4. 重設玩家座標與相機視口
+    final spawn = newSpawnPixel ?? newManifest.defaultSpawnPixel;
+    playerComponent.position = spawn.clone();
+    cameraComponent.viewfinder.position = spawn.clone();
+    cameraFollow.recenter();
   }
 }

@@ -211,6 +211,22 @@ class LocationController {
   void markDiscontinuity(RelocationNote note) =>
       _pipeline.markDiscontinuity(note);
 
+  /// 切換當前圖資模組（宏觀盆地 ⇄ 中觀街區）
+  void switchManifest(OverworldMapManifest newManifest, {Vector2? newSpawnPixel}) {
+    _manifest = newManifest;
+    _pipeline = LocationPipeline(manifest: newManifest, clock: _clock);
+    _smoother = PositionSmoother(
+      manifest: newManifest,
+      halfLife: const Duration(seconds: 1),
+      arrivalMeters: 2,
+      headingMeters: 5,
+    );
+    final spawn = newSpawnPixel ?? newManifest.defaultSpawnPixel;
+    _smoother.jumpTo(spawn);
+    _targetPixel = spawn;
+    _pipeline.markDiscontinuity(RelocationNote.modeSwitch);
+  }
+
   void ingest(GeoFix fix) {
     _currentAccuracy = fix.accuracyMeters;
 

@@ -13,11 +13,11 @@ enum CameraMode { following, free, returning }
 /// 邊界限制也在此：相機中心不得越出地圖，而地圖小於視口時取地圖中點——
 /// 那是縮到很遠或小型地方層地圖的必然情形，不是邊緣案例。
 class CameraFollow {
-  CameraFollow({required Clock clock, required this.returnDelay})
+  CameraFollow({required Clock clock, this.returnDelay})
       : _clock = clock;
 
   final Clock _clock;
-  final Duration returnDelay;
+  final Duration? returnDelay;
 
   /// 回歸時每幀收斂的比例。純數值狀態機沒有 dt，用固定比例即可——
   /// 回歸是一次性的視覺過渡，不像位置平滑那樣需要幀率無關。
@@ -80,7 +80,9 @@ class CameraFollow {
         _frozenCenter = panned;
 
         final since = _lastInteraction;
-        if (since != null && _clock.elapsed - since >= returnDelay) {
+        if (returnDelay != null &&
+            since != null &&
+            _clock.elapsed - since >= returnDelay!) {
           _mode = CameraMode.returning;
         }
         // 回傳副本：交出內部狀態的參考，呼叫端一改就靜默改到凍結中心。

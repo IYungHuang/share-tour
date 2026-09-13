@@ -142,4 +142,24 @@ void main() {
     expect(center(player: Vector2(1024, 576)).x, closeTo(924, 0.01));
   });
 
+  test('當 returnDelay 為 null 時，平移後永遠留在 free 模式，不自動回歸', () {
+    final freeCam = CameraFollow(clock: clock, returnDelay: null);
+    expect(freeCam.mode, CameraMode.following);
+    freeCam.onPan(Vector2(50, 50));
+    expect(freeCam.mode, CameraMode.free);
+
+    // 時間推進 10 分鐘，依然留在 free
+    clock.advance(const Duration(minutes: 10));
+    freeCam.targetCenter(
+      player: Vector2(400, 300),
+      zoom: 1.0,
+      viewportSize: Vector2(800, 600),
+      mapSize: Vector2(2048, 1152),
+    );
+    expect(freeCam.mode, CameraMode.free);
+
+    // 只有呼叫 recenter 才回到 following
+    freeCam.recenter();
+    expect(freeCam.mode, CameraMode.following);
+  });
 }

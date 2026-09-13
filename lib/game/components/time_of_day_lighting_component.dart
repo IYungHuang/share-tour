@@ -9,19 +9,30 @@ import 'package:share_tour/domain/core_loop/models/tour_time_of_day.dart';
 /// 並在黃昏入夜時為景點地標與策展人渲染 JRPG 暖黃燈火光暈 (Lantern Halos)。
 class TimeOfDayLightingComponent extends Component {
   TimeOfDayLightingComponent({
-    required this.mapSize,
+    required Vector2 mapSize,
     required this.timeOfDayGetter,
     this.playerPositionGetter,
     this.lightPositionsGetter,
     int priority = 15,
-  }) : super(priority: priority);
+  })  : _mapSize = mapSize,
+        super(priority: priority);
 
-  final Vector2 mapSize;
+  Vector2 _mapSize;
+  Vector2 get mapSize => _mapSize;
   final TourTimeOfDay Function() timeOfDayGetter;
   final Vector2 Function()? playerPositionGetter;
   final List<Vector2> Function()? lightPositionsGetter;
+  List<Vector2>? _overrideLightPositions;
 
   final Paint _ambientPaint = Paint()..filterQuality = FilterQuality.none;
+
+  void switchMap({
+    required Vector2 mapSize,
+    required List<Vector2> lightPositions,
+  }) {
+    _mapSize = mapSize;
+    _overrideLightPositions = lightPositions;
+  }
 
   @override
   void render(Canvas canvas) {
@@ -46,7 +57,7 @@ class TimeOfDayLightingComponent extends Component {
     final isNight = timeOfDay == TourTimeOfDay.night;
 
     // A. 景點街區石燈籠 / 暖簾燈火
-    final positions = lightPositionsGetter?.call();
+    final positions = _overrideLightPositions ?? lightPositionsGetter?.call();
     if (positions != null && positions.isNotEmpty) {
       final double glowRadius = isNight ? 26.0 : 16.0;
       final Color glowColor =

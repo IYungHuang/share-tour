@@ -276,4 +276,11 @@ class LocationNotifier extends Notifier<LocationControllerState> {
     await _bindSource(SourceMode.virtual);
     state = _controller.state;
   }
+
+  /// 切換當前圖資模組（宏觀盆地 ⇄ 中觀街區）
+  void switchManifest(OverworldMapManifest newManifest, {Vector2? newSpawnPixel}) {
+    _controller.switchManifest(newManifest, newSpawnPixel: newSpawnPixel);
+    _syncDiagnostics();
+    state = _controller.state;
+  }
 }

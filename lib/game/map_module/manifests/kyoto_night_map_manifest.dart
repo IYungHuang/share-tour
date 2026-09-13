@@ -15,7 +15,7 @@ class KyotoNightMapManifest implements OverworldMapManifest {
       const KyotoNightMapManifest();
 
   static const double minLat = 34.8800;
-  static const double maxLat = 35.0800;
+  static const double maxLat = 35.0920;
   static const double minLng = 135.6600;
   static const double maxLng = 135.8200;
 

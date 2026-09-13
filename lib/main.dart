@@ -272,7 +272,7 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
       renderedPixelOf: () => notifier.controller.state.renderedPixel,
       cameraFollow: CameraFollow(
         clock: ref.read(clockProvider),
-        returnDelay: const Duration(seconds: 3),
+        returnDelay: null, // 自由漫遊探索模式：取消 3 秒強制回彈，由方向鍵中央 🎯 按鈕手動歸位
       ),
       onAttractionSelected: (a) => _selectedAttraction.value = a,
       onDistrictRevealed: (d, count) => _focusedDistrict.value = (d, count),
