@@ -1,11 +1,40 @@
 # SPEC — 《Share Tour：奇葩旅行策展人》Milestone M5：快門微動作與雙層結算
 
-狀態：**Draft v6 — 待覆核**
+狀態：**Draft v7 — 待覆核**
 流程位置：`spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核`
 上位文件：`CROSS_CUTTING_CONSTRAINTS.md`、`CLAUDE.md`、`SPEC_MVP_CORE_LOOP.md`（牴觸時以其為準）
 相關文件：`SPEC_MVP_POI_GATHERING.md`（本 SPEC 解除其 §1.3 的「微動作」排除條款）、`SPEC_MVP_CAUSAL_FEEDBACK.md`（**M5 必須排在其施工完成之後**，見 §5）、`SPEC_MVP_AMENDMENT_01.md`（數值包絡）
 
 > **命名澄清**：本文件的「M5」指**里程碑 M5**。`PLAN_MVP_META_PROGRESSION.md` 內的 `Task M5` 是 M4 施工計劃的任務編號，兩者無關。
+
+---
+
+> ## v7 修訂摘要（相對 v6）：第五輪雙軌覆核，9 條 P0
+
+> 第五輪雙軌覆核（企劃軌 5 條 P0、工程軌 4 條 P0，兩軌皆判不可進 plan）。全部已複驗並修正，其中一條是我自己在 v6 抄錯的事實。
+
+**企劃軌的 5 條**：
+
+1. **`c = 0.43` 的最壞情況我原先寫錯了母體事實**（不影響 $c$ 本身當時的推算）：v6 誤記「16 張分析池只含 2 張絕景」，經卡表原始資料重建證實為 **4 張**（`spotlightLadder` 頂階本就可在池內取樣）。$c = 0.43$ 在 v6 的絕景表下覆算成立，根因單純是「v5 只驗了 `normal` 態」，與池的絕景覆蓋無關——§4.3／§8.5 的說法已刪除誤導字句。**$c$ 後續因下一條的絕景專屬 `tierFactor` 再度下修為 0.36**，見下。
+2. **中斷修法留了一個沒堵的路徑**：v6 只堵了時機面的正 EV，沒堵絕景構圖——中斷路徑上 $d_c$ 無定義（放開前才有取樣，中斷沒有放開），玩家可拉歪取景框、時機命中完美窗時故意中斷，繞過構圖降階。已補「絕景中斷視為構圖不通過」（REQ-M5-04.2）。`AC-M5-3.7` 也還寫著 v5 被廢除的「一律判 normal」，已同步。
+3. **首發 37 段文案與既有的 `AC-M5-12.1／12.3`（三版兩兩相異、不得互為子字串）直接互斥**——27 張非絕景 `failed` 回退成與 `normal` 逐位元相同，那兩條 AC 必然為假。已將 12.1~12.3 的範圍界定為「僅比對有撰寫版本者」。
+4. **野外 HUD「最佳 4 張」的選取規則對兩個客戶都不是 argmax**：用 $\text{hype} \times \text{tierFactor}$ 簡單排序，網紅端會漏掉湊滿絕景階梯的組合、社畜端完全忽略成本（覆核給出社畜反例，HUD 低報達 3 倍）。已改為窮舉 $\binom{n}{4}$ 子集取真實 argmax，並新增 AC-M5-11.4b 用會讓兩種規則分岔的反例腰包驗證（原 AC 在錯誤規則下仍恆真）。
+5. **§7.9（絕景把玩家推向風險反轉的最佳牌組）與 P1-D（$c$ 使金幣通道封閉解鎖死在低個位數百分比）已裁決**：絕景另訂一套 `tierFactor`（見 REQ-M5-02.3），連帶把 $c$ 下修至 **0.36**；L2 金幣重新定位為紀錄性風味而非報酬通道，不動引擎（見 REQ-M5-02.6）。
+
+**工程軌的 4 條**：
+
+1. **同一種病的第三個變體，這次在中斷路徑**：v6 把中斷判定改成「比照 REQ-M5-01.3」，但沒指定時戳來源——`didChangeAppLifecycleState` 不攜帶任何時戳，若照字面實作只能用幀時鐘或 `Stopwatch`，正是逾時界線那條病原地復發。已定案：時戳取自終止指標事件（`PointerCancelEvent`）的 `timeStamp`，`AC-M5-3.7` 的測試手段也一併改為 `gesture.cancel(timeStamp:)`（`handleAppLifecycleStateChanged` 本身測不出這件事）。
+2. **`indicatorState` 純函式化解決了「寫不寫得出測試」，沒解決「會不會被誤用」**：判定與指示若都吃裸 `int ms`，沒有任何東西擋著把視覺 dt 誤餵進判定路徑。已加型別隔離要求與靜態檢查（AC-M5-1.13）。
+3. **resolver 介面零成員變更是對的方向，但沒有落地成具體資料模型**：v6 只說「自由函式或資料表」，沒說吃什麼參數、誰呼叫——這個模糊會在 plan 階段被重新猜一次。已定案：三態文案是 `TravelMaterial` 自帶的 `perfectDescription`／`failedDescription` 兩個新欄位（皆具預設值 `null`），加一個 `descriptionFor(tier)` 方法，`PoiMaterialResolver` 完全不涉入。`AC-M5-7.3` 從空轉的「Fake 可解析」改寫成有實質內容的「方法本身正確」。
+4. **`REQ-M5-02.5` 的「`ItineraryStats` 新增聚合欄位」選項在 `calculateStats` 簽章凍結下不可行**：`tierFactor` 需要難度，`calculateStats` 沒有難度參數。已拆解：`ItineraryStats` 新增難度無關的 `hypeSumByTier`（依 shotTier 分組的 hype 和），`tierFactor` 的套用移到 `evaluate()`（新增 `difficulty`／`interruptionDiscount` 兩個預設參數）。另補 `AC-M5-9.6`：`evaluate` 的 59 個呼叫點（結算與因果歸因兩條路徑）須算出同一個 L2 值，防止其中一條忘記傳難度而靜默歸零。
+
+**另外定案（原屬 §5 前置 10，工程軌標為「不足以排入 plan」）**：`shotQuality` 的因果載體——新增 `CausalDomain.shotQuality`（與既有 `spotlight` 分開），`CodexEntry` 不變，三態文字寄生於 `CausalFact.sourceSignifier`。
+
+**其餘 P1（一併吸收，不逐條列舉於此）**：計時器與遲到 `up` 事件的優先序、`AC-M5-4.3a` 須涵蓋四項相機狀態而非只有 `mode`、`AC-M5-4.4` 補一條 game 層接線斷言、`AC-M5-4.6` 的「單一時刻單一指示」須先固定宿主層、`AC-M5-3.8b` 補接線版、回退刻意性改用白名單集合比對而非「回退後相等」。
+
+三、四輪覆核期間 agent 曾在我編輯檔案的過程中同時進行，已在報告中主動說明依哪個 baseline 判定並標出哪幾項已被工作區修補關閉——這個透明度值得記錄，往後的覆核 prompt 可以更明確允許這種情況。
+
+詳細裁決見 §8.6。
 
 ---
 
@@ -102,16 +131,18 @@
 
 第二層是 $\sum(\text{hype}_i \times \text{tierFactor}_i)$ 形式的**乘性量**：沒有天花板、沒有門檻、沒有 clamp，**每一次快門都必然改變它**，且改變量是比例而非絕對點數。玩家看到的不是「滿意度 87 → 90」，是「觸及 7.2 萬 → 19.7 萬」（以 §4.2 實測的 `normal` 中位數 116 為基準，`decisiveMoment` 全 `failed` 為 72、全 `perfect` 為 197，**2.74 倍**）。
 
-**第二層是局內回饋，不是成就系統。** 它由 `ClientReviewEngine` 從提交的行程算出、在結算面板由客戶本人講出、由因果面板歸因、折成尾款金幣。它和滿意度走同一條路，只是不撞天花板。
+**第二層是局內回饋，不是成就系統。** 它由 `ClientReviewEngine` 從提交的行程算出、在結算面板由客戶本人講出、由因果面板歸因。它和滿意度走同一條路，只是不撞天花板。
+**核心回饋是 reach／valueIndex 這個數字本身，不是它折出的金幣**（v7 重新定位，見 REQ-M5-02.6）：`normal`→`perfect` 有 2.74 倍量級的變化，訊號通道完整無損；折成的 L2 金幣只是紀錄性風味（受 15% 上界與不 clamp 的封閉解限制，中位數鎖在佣金低個位數百分比），不是驅動難度選擇的經濟誘因——真正的經濟誘因在難度的**絕對期望值**上（§1.4 意圖 2、AC-M5-5.5）。
 
-**語氣約束（必須守住）**：第二層**沒有等級、沒有及格線、沒有失敗**，只有一個數字與「本局 / 歷史最高」。它是紀錄，不是評價。小林說「這趟每千元換到 128 點，比上次划算」，**不得**說「你的 CP 值不合格」。
+**語氣約束（必須守住）**：第二層**沒有等級、沒有及格線、沒有失敗**，只有一個數字與「本局 / 歷史最高」。它是紀錄，不是評價。**不得**說「你的 CP 值不合格」。
+**CP 值的範例台詞不得暗示固定匯率**（v7 修正，覆核 P1）：CP 分母有 2000 的地板（REQ-M5-02.4），全母體 69.8% 的行程成本落在地板下，此時 CP 與實際花費無關——「這趟每千元換到 128 點」這種說法在七成情況下不成立。改用「這趟 CP 值 128，比上次划算」（只講數字本身、不宣稱換算比率）。
 
 ### 1.4 設計意圖（施工時不得順手改掉）
 
 1. **第二層排列無關，因此可在野外即時預估。** 每採一張卡，野外 HUD 的「本局素材觸及」當場往上跳；失手時跳得少。這是「維持不失手」的正向節拍感 —— 而它**只有在第二層與排列解耦時才做得到**。由 AC-M5-9.5 保護。
 
 2. **難度是賭你自己。** `tierFactor` 乘性 ⇒ 期望值可精確計算。熟練玩家（$\sigma = 55$，實測值）在 `decisiveMoment` 拿 **1.508**，生疏玩家（$\sigma = 220$）在同一檔只拿 **0.976** —— 比他留在 `tourist` 的 1.047 還差 6.8%。翻轉點在 $\sigma \approx 173$ ms。由 AC-M5-5.5 保護。
-   **但這只對 27 張非絕景成立**：4 絕景行程的翻轉點只剩約 110 ms（§7.9），而絕景堆滿正是網紅端的最佳解。
+   **絕景（網紅端的最佳解，見規則 3）用獨立一套 `tierFactor` 對稱地保有這條承諾**（v7，REQ-M5-02.3）：4 絕景行程的翻轉點同樣落在 $\sigma \approx 173$ ms，不再因拖曳取景框造成的誤差膨脹而在中等技術就提前翻負（由 AC-M5-5.5c 保護）。
 
 3. **`isSpotlight` 在三態間凍結**：`failed` 的絕景仍計入絕景階梯。絕景階梯是網紅端最大的單一槓桿（因果 SPEC 消融實測 mean|Δ| = 17.44），快門失手不奪走它是刻意的減震。
 
@@ -164,6 +195,9 @@
    v5 寫的是「動畫全長結束仍未放開」，而動畫走幀時鐘 —— 規則 5 明文禁用幀時間算判定，於是三態中有一態的界線落在被禁用的時軸上。兩軸在 jank 或 `timeDilation` 下可差一整幀以上，後果是指標時戳說 1190 ms（該判 `failed`）卻已被動畫先鎖成 `timedOut`，而 REQ-M5-01.13 剛把這兩者規定為不得合併的不同結果。
    **動畫只是這條界線的視覺投影**，不是它的來源。由 AC-M5-1.11 守。
 
+   **計時器只負責結束儀式，不得搶在遲到的 up 事件前面裁定結果**（v7 新增，覆核 P1）。
+   結構上必須有一個計時器在 $L$ 附近收尾（沒有 up 事件就沒有時戳可比對），但 jank 或系統排程延遲可能讓計時器先於 up 事件的實際送達時刻觸發，即使 up 對應的持標時戳 $T_{up} - T_0 \le L$（玩家其實按對了）。**優先序**：計時器觸發時若判定尚未收到 up，先進入「等待遲到事件」狀態而非立即定案；只有再等過一個送達餘裕視窗（建議 100 ms，與 §4.4 端到端延遲量級一致）後仍未收到 up，才真正判 `timedOut`。這個餘裕視窗本身可用幀時鐘計時（它只決定「還要不要等」，不影響 $\Delta t$ 的計算），但**最終判定一旦收到 up 一律以指標時戳重算**，不因計時器已觸發而鎖死。
+
 8. **難度參數表**（初始值，以毫秒為調校單位）：
 
    | 難度 | $t_{\text{吻合}}$ | 完美窗 $W_p$ | 普通窗 $W_n$ | 動畫全長 |
@@ -192,7 +226,7 @@
     **離散化約定（v6 寫死，AC 的實算值依此產生）**：$r$ 取 $0, 1, \dots, L$ 共 $L+1$ 個整數毫秒點（**端點含 $0$ 與 $L$**），權重為常態機率密度、除以總和正規化；$\Delta t = |r - t_{\text{吻合}}|$ 為整數；三態邊界皆為**閉區間**。
     v5 的期望表以連續積分算得 1.505，兩軌覆核以 1 ms 離散各自算得 1.5077 與 1.508 —— **差值來自未明定的約定，不是誰算錯**。$\sigma = 220$ 那列 `tourist` 1.047 與 `photographer` 1.038 只差 0.009，與該誤差同量級，故約定必須寫死。
 
-    **本模型不涵蓋絕景的 $\sigma$ 膨脹。** §4.4 實測絕景把放開誤差由 48 推到 76 ms（×1.58），而 reach 的絕景階梯正把玩家推向絕景堆滿的行程。AC-M5-5.5／5.5b 的所有數值**僅對 27 張非絕景成立**；對 4 絕景行程，$\sigma_{eff} = 1.58\sigma$，翻轉點換算回玩家 $\sigma$ 只剩約 **110 ms**（即模型的「中等」檔）。此為已知限制 9，本里程碑不以雙 $\sigma$ 模型解決。
+    **本模型不涵蓋絕景的 $\sigma$ 膨脹，但其後果由絕景專屬 `tierFactor` 補償，不是靠改模型解決。** §4.4 實測絕景把放開誤差由 48 推到 76 ms（×1.58）。$\sigma_{eff} = 1.58\sigma$ 這個關係本身保留（模型不變），但 REQ-M5-02.3 的絕景表用它反推出補償係數，使 AC-M5-5.5／5.5b 的翻轉點在絕景上也能對稱地落在真實 $\sigma \approx 173$／$205$ ms（AC-M5-5.5c），不再於中等技術（約 110 ms）就翻負。已知限制 9 記錄此事並註明殘留的主觀手感落差。
 
 13. **逾時必須事前可預期。** 這是 `tourist` 無障礙保障（REQ-M5-04.6）的實際載體，不是表現層的裝飾。
 
@@ -213,6 +247,8 @@
     v5 只寫「須改變狀態」而沒要求那個狀態可讀，於是它的兩條守門 AC 只能比像素或斷言「某一瞬間什麼都沒發生」—— 後者是對整棵樹的否定性全稱命題，任何無關的動畫 tick 都會讓它紅或綠得沒有意義。純函式化之後，AC-M5-11.5 是兩點斷言、AC-M5-11.7 是**區間不變量**（1 ms 步長掃 $[0, t_{\text{吻合}})$ 恆為 `beforeMatch`），兩者都能用 `dart test` 跑。
 
     **這條純函式吃的是視覺 dt，不是判定用的指標時戳。** REQ-M5-01.5 未被鬆綁：視覺可用 `dt`，判定不可用。**且明文允許指示與判定在 $t_{\text{吻合}}$ 附近差一幀 —— 任何 AC 不得斷言兩軸一致。**
+
+    **兩條時軸須用不同型別包裝，不能都是裸 `int`**（v7 新增，覆核 P1）。`indicatorState` 與判定函式若都吃 `int ms`，沒有任何型別或 AC 阻止把視覺 elapsed 順手餵進判定路徑 —— 散文約束擋得住刻意違規，擋不住順手犯錯。**判定函式的 $\Delta t$ 須是一個由 `PointerEvent.timeStamp` 相減得出的專屬型別**（例如 `HeldMs`，其建構子或工廠只接受 `Duration` 差值），`indicatorState` 的 `visualElapsedMs` 維持裸 `int` 或另一個不相容的型別（例如 `VisualElapsedMs`）。由 AC-M5-1.13 的靜態檢查守。
 
     **結果文字＝態 × 方向的正交組合**（v6 修正）：態為 `完美` / `普通` / `失手` / `逾時`，方向為 `早` / `晚`（逾時無方向）。
     v5 列的五種字串把方向只給了 `failed`（太早／太晚），於是拿到 `普通` 的玩家**得不到該往哪邊修正的資訊** —— 而 `普通` 是中間檔最常見的非完美結果（$\sigma = 110$ 時 46%）。這正是本條要修的那個病（畫面不傳達資訊），v5 在自己新增的條文裡重蹈一次。
@@ -236,7 +272,7 @@
 
 2. **凍結欄位清單**：`name`、**`hypeValue`**、`themeValue`、`storyValue`、`cost`、`riskLevel`、`isSpotlight`、`tags`。三態間唯一的差異是 `shotTier` 與 `description`。
 
-3. **`tierFactor` 階梯**（初始值）：
+3. **`tierFactor` 階梯**（初始值，**非絕景**）：
 
    | 難度 | `failed` | `normal` | `perfect` | 跨度 $\frac{f_p - f_f}{f_n}$ |
    |---|---|---|---|---|
@@ -245,6 +281,25 @@
    | `decisiveMoment` | 0.62 | 1.00 | 1.70 | 108% |
 
    `normal` 恆為 1.00 —— **`normal` 是這張素材原本的價值**。
+
+   **絕景另訂一套 tierFactor**（v7 定案，覆核 P0——§7.9 的結構性修法）：
+
+   | 難度 | `failed` | `normal` | `perfect` |
+   |---|---|---|---|
+   | `tourist` | 0.90 | 1.00 | 1.05（沿用上表，理由見下） |
+   | `photographer` | **0.938** | 1.00 | **1.292** |
+   | `decisiveMoment` | **0.735** | 1.00 | **2.031** |
+
+   **為什麼需要獨立一套，且方向是「失手不那麼痛、完美更值錢」而非單純調鬆**：絕景需拖曳取景框，實測放開誤差因此膨脹 $1.58\times$（§4.4，48→76 ms）。用同一套 `tierFactor` 表，在**絕景恰好是全卡表 hype 最高的 5 張**（top4 hype 305 vs 非絕景 top4 195，高 56%）這個既有事實下，會產生一個未預期的推論鏈：擴散觸及的 reach 最佳解永遠是堆滿 4 絕景 → 而在那組牌上，1.58 倍的誤差膨脹讓 `decisiveMoment` 對中等技術玩家（真實 $\sigma \approx 110$ ms，換算有效 $\sigma \approx 174$ ms）就已經**劣於留在 `tourist`**（非絕景的翻轉點在真實 $\sigma \approx 173$ ms，兩者相差 63%）。「難度是賭注、熟練者賺」這條頭條承諾，在真正的最佳牌組上只對頂尖高手成立——這不是可接受的角落案例，是設計主線本身的失效。
+
+   **推導方法**：對每個難度，取兩個錨點解出 $(f_{failed}, f_{perfect})$，$f_{normal}$ 固定 1.00：
+
+   1. **熟練錨點**：真實 $\sigma = 55$（有效 $\sigma = 86.9$）時，絕景的期望 `tierFactor` 須等於非絕景在同一真實 $\sigma$ 下的期望值——熟練玩家選絕景不吃虧，也不該白吃虧撿便宜。
+   2. **翻轉點錨點**：絕景與 `tourist` 的翻轉點（以真實 $\sigma$ 衡量）須與非絕景版本相同（`decisiveMoment` 173.4 ms、`photographer` 205.0 ms）——「難度是賭注」的頭條承諾對絕景與非絕景玩家同樣成立，不因素材類型而有兩套規則。
+
+   兩條線性方程式、兩個未知數，唯一解。**`tourist` 不需要獨立表**：其 $W_n$ 無上限，恆無 `failed`，絕景在其上只讓完美率降低但不產生風險反轉；`tourist` 本身也是全部比較的基準，不存在「劣於誰」的問題。
+
+   驗證（1 ms 離散模型）：`decisiveMoment` 熟練期望 1.508（與非絕景熟練值逐位元相同）、翻轉點 173.4 ms（目標值）、真實 $\sigma=110$ 時期望 1.183（> `tourist` 的 1.050，風險反轉已消除）。`photographer` 同理，翻轉點 205.0 ms 精確命中。
 
 4. **第二層分數定義**（只看已排入時間線的素材，**與排列順序無關**）：
 
@@ -256,58 +311,75 @@
    **$\text{hype}_i$ 明定為 `material.hypeValue`（該卡的原始值）**，不是 `ItineraryStats.slotEffectiveHypes`。
    後者含槽位倍率與連鎖加成，是**排列相依**量；誤用它會直接打死 AC-M5-9.5（排列無關）與 REQ-M5-11.5（野外即時預估）。程式碼裡剛好有一個同名而語意不同的量，故此處必須明寫。
 
+   **$\text{tierFactor}_i$ 依 $(\text{難度}, \text{material}_i\text{.isSpotlight})$ 查表**（v7 補正）：`isSpotlight == true` 查規則 3 的絕景表，否則查非絕景表。第二層公式本身不變，只是 $\text{tierFactor}_i$ 的查表多一個維度。
+
    `spotlightLadder` 沿用 `ClientReviewEngine` 既有常數 `[0.70, 0.75, 0.80, 0.85, 1.00]`，不新增。
    **分母下限 2000 是一個實質的設計參數，不只是防除零。** §4.3 實測：地板 500 時 CP 的離散度達 4.9 倍（中位數 108、最大 530），因為「幾乎不花錢的行程」會讓 CP 爆衝；地板 2000 把最大值壓到 148，使 REQ-M5-02.6 的上界在**全母體最大值**上成立而不需要 clamp。
    它同時擋掉一個退化策略：只排免費卡、靠極小分母換取巨大 CP。
 
 5. **第一層一個字元不動。** 實作上只允許在 `_evaluateHypeInfluencer` 與 `_evaluateBudgetWorker` 的 `return` 前**新增**第二層計算，不得修改 `satisfaction` / `outcome` / `storyBonus` / `baseCommission × commissionRate` 的任何一行。由 AC-M5-9.3 的 golden 分佈比對與靜態 diff 守門。
 
-   **但「只新增」不足以讓第二層拿到資料**（v6 補正）：`ClientReviewEngine.evaluate` 現行只收 `(ClientSpec, ItineraryStats, TravelPhilosophy)`，而 `ItineraryStats` 沒有逐卡資料。故必須二選一，且**兩者都只能是加法**：
+   **但「只新增」不足以讓第二層拿到資料**（v6 補正）：`ClientReviewEngine.evaluate` 現行只收 `(ClientSpec, ItineraryStats, TravelPhilosophy)`，而 `ItineraryStats` 沒有逐卡資料。
 
-   - `ItineraryStats` 新增一個聚合欄位（例如 $\sum(\text{hype}_i \times \text{tierFactor}_i)$ 與絕景數），`calculateStats` 簽章不變但輸出內容增加；或
-   - `evaluate` 新增**具預設值的具名參數**。
+   **v6 寫的「`ItineraryStats` 新增 $\sum(\text{hype}_i \times \text{tierFactor}_i)$ 欄位」在 REQ-M5-02.10 的簽章凍結下不可行**（v7 定案，覆核 P0）：`tierFactor` 需要**難度**，而 `calculateStats({philosophy, cameraMultiplier, baseTheme})` 沒有難度參數，同一條又凍結了它的簽章 —— 這個聚合欄位在 `calculateStats` 內部算不出來。**正確分工是兩處各加一塊，缺一不可**：
 
-   **不得新增必填參數** —— `evaluate` 的呼叫點數以十計，必填參數會全爆。中斷折扣（REQ-M5-04.2）也只能走這條路進來。
+   - **`ItineraryStats` 新增一個難度無關的聚合**：依 `shotTier` 分組的 hype 和，例如 `hypeSumByTier`（三個整數：`failed`／`normal`／`perfect` 各自的 $\sum \text{hype}_i$，只看已排入時間線的素材）。`calculateStats` 讀得到每張素材的 `shotTier`（它是素材的既有屬性，不需要難度），故這一步不違反簽章凍結。`spotlightCount` 已存在，不必新增。
+   - **`evaluate` 新增兩個具預設值的具名參數**：`difficulty`（預設 `tourist`）與 `interruptionDiscount`（預設 1.0，中斷時傳入 $0.9^n$）。`tierFactor[difficulty]` 只在 `evaluate` 內部套用到 `hypeSumByTier` 的三個分量上，再乘 `interruptionDiscount`。
 
-6. **第二層折金幣**：$\text{L2 金幣} = \mathrm{round}(\text{第二層分數} \times c)$，$c$ 初始值 **0.43**（v6 由 0.75 下修）。退件局比照 `rejectedStoryRatePercent` 打 **30%**。
+   **不得新增必填參數** —— `evaluate` 的呼叫點實測 **59 處**（生產 3、其餘為測試），必填參數會全爆。
+   **中斷折扣與難度都走這條路進來，且順序固定為「先套 `tierFactor`，後乘 `interruptionDiscount`」**——與 REQ-M5-04.3 條件式負 EV 的證明（折扣作用於已定案的態，不影響 `tierFactor` 的選擇）一致。
+
+   **`evaluate` 的 59 個呼叫點須有跨路徑一致性驗收**（v7 新增，覆核 P1）：結算面板與因果面板歸因（`causal/causal_report_builder.dart` 的呼叫點）若各自忘記傳遞 `difficulty`／`interruptionDiscount`，會靜默把 L2 算成 0 且不報錯——這是可編譯的錯誤，只能靠測試抓。由 AC-M5-9.6 守。
+
+6. **第二層折金幣是紀錄性風味，不是報酬通道**（v7 重新定位，見下方說明）：$\text{L2 金幣} = \mathrm{round}(\text{第二層分數} \times c)$，$c$ 初始值 **0.36**（v7 由 0.43 再下修，見規則 3 絕景表的連帶效應）。退件局比照 `rejectedStoryRatePercent` 打 **30%**。
    **硬性上界**：L2 金幣 $\le$ `client.baseCommission` 的 **15%**（網紅 225、社畜 150）。
    **上界對照 `baseCommission` 而非該局實際佣金** —— 低評等的佣金已被 `commissionRate` 懲罰過，再以它為分母會把 $c$ 壓到 0.42 以下，使第二層形同不存在。
-   **$c = 0.43$ 由 32 張全池的最壞情況反推**（v6 修正）。
 
-   > **v5 的 $c = 0.75$ 在數學上不可能滿足本條上界。** §4.3 反推時只取了 `normal` 態的最大值，但 L2 分數會被 `tierFactor` 整條乘上去 —— `perfect` 態從未進過那個反推。且 §4 的分析母體（16 張池）只含 **2 張絕景**，`spotlightLadder` 的第 3、4 階從未被取樣，而那正是 reach 最大值所在。
+   > **v5 的 $c = 0.75$ 在數學上不可能滿足本條上界。** §4.3 反推時只取了 `normal` 態的最大值，但 L2 分數會被 `tierFactor` 整條乘上去 —— `perfect` 態從未進過那個反推。
    >
-   > 以實際出貨的 32 張池重算：4 絕景（hype 80/80/75/70）、`spotlightLadder[4] = 1.00`、全 `perfect` × `decisiveMoment` ⇒ reach $= 305 \times 1.70 = \mathbf{518.5}$。$c = 0.75$ 得 389 金幣，是上界 225 的 **173%**；連 `tourist` 都得 240（超標）。而 4 絕景堆滿**正是網紅端的最佳解**，不是病態角落。
+   > **根因是單一的，且與母體池的絕景覆蓋無關**（v7 更正）：`reachablePool.take(16)` 的 16 張分析池實際含 **4 張絕景**（`daimonji_night_hike` 80、`fushimi_torii` 75、`gion_tatsumi` 60、`kiyomizu_stage` 80），`spotlightLadder` 的第 4 階（1.00）在池內已可被取樣。§4.3 曾誤記「只含 2 張絕景」，已更正 —— **唯一的根因是只驗了 `normal` 態**，不是母體池的絕景數不足。以此重算得 $c = 0.43$（v6），後因絕景另訂 `tierFactor`（規則 3）再度下修，見下。
 
-   $c = 0.43$ 下的最壞情況（32 張全池）：
+   **$c = 0.43 \to 0.36$：絕景專屬 `tierFactor` 的連帶效應**（v7）。規則 3 為了消除 §7.9 的風險反轉，把絕景 `decisiveMoment` 的 `perfect` 係數從 1.70 提高到 **2.031**（熟練玩家的絕對回報不能因為改難就變差，只能靠拉高完美的上檔補償拉高的失手機率）。這直接把 reach 上界從 $305 \times 1.70 = 518.5$ 推高到 $305 \times 2.031 = \mathbf{619.5}$，$c = 0.43$ 立刻使網紅上界超標（$619.5 \times 0.43 = 266.4 > 225$）——這是解決 §7.9 必然附帶的代價，不是新引入的錯誤。
+
+   $c = 0.36$ 下的最壞情況（32 張全池，用規則 3 的絕景專屬表）：
 
    | 難度 | reach 上界 | L2 金幣 | 網紅上界 225 | CP 上界 | L2 金幣 | 社畜上界 150 |
    |---|---|---|---|---|---|---|
-   | `tourist` | 320.2 | 138 | ✓ | 160.1 | 69 | ✓ |
-   | `photographer` | 372.1 | 160 | ✓ | 186.0 | 80 | ✓ |
-   | `decisiveMoment` | **518.5** | **223** | ✓（餘裕 0.9%） | 259.2 | 111 | ✓ |
+   | `tourist` | 320.3 | 115 | ✓ | 160.1 | 58 | ✓ |
+   | `photographer` | 394.1 | 142 | ✓ | 197.0 | 71 | ✓ |
+   | `decisiveMoment` | **619.5** | **223** | ✓（餘裕 0.9%） | 309.7 | 112 | ✓ |
 
-   **餘裕只有 0.9%（223 對 225），這是刻意貼著上界取的。** 任何提高 hype 上緣的改動（新城市 DLC 的高 hype 卡、`tierFactor` 上調）都會立刻突破。**這是好事** —— AC-M5-5.8 遍歷的是**實際注入池**，新城市若帶更高的 hype 會當場轉紅，而不是靜默超標。
+   **餘裕仍是 0.9%（223 對 225），沿用 v6 的取值慣例**——貼著上界取，讓 AC-M5-5.8 對「實際注入池」保持敏感：任何提高 hype 上緣或再調 `tierFactor` 的改動都會立刻轉紅而非靜默超標。
 
-   **代價已知並接受**：中位數金幣由 87 降為 **50**（`normal` 態 reach 中位數 116），約佔網紅 Pass 佣金 3.3%。本條原文曾寫「$c$ 壓到 0.42 以下使第二層形同不存在」—— 0.43 正好貼著那條線，**這是三條約束（不 clamp ∧ 15% 硬上界 ∧ $c$ 大到有感）至多只能成立兩條時的取捨結果**（§8.5）。
-
-   **不得改用「超過上界就截斷」的實作** —— 那會讓第二層在高分區出現死區，等於重蹈第一層的錯誤（§1.2）。
-   **但「截斷」與「壓縮」是兩回事**：嚴格單調的壓縮（$\sqrt{}$、$\log$）不產生死區，若日後要同時放大 $c$ 與守住上界，那是可走的路，不在本里程碑範圍。
+   **金幣通道的代價已知並接受，且是刻意的重新定位**（v7 裁決，取代 v6 的「代價已知並接受」框架）：中位數金幣由 $c=0.75$ 時代的 87、$c=0.43$ 時代的 50，再降到 **42**（`normal` 態 reach 中位數 116 $\times$ 0.36），約佔網紅 Pass 佣金 **2.8%**。
+   這不是餘裕不足的問題，是**封閉解**——只要「不 clamp ∧ 15% 硬上界 ∧ 上界對最大值」三條件不動，$\dfrac{\text{中位數金幣}}{\text{佣金}} = 15\% \times \dfrac{\text{reach 中位數}}{\text{reach 最大值}}$ 就被鎖死在低個位數百分比，換哪個 $c$ 都一樣。
+   **故 L2 金幣不再定位為「第二層的報酬」，改為「紀錄性風味」**：玩家看到的核心回饋是 reach／valueIndex 本身（`normal`→`perfect` 有 2.74 倍量級的變化，訊號通道完整無損），金幣只是把這個數字換算成一點點尾款、佐證「這趟真的有差」，不是驅動難度選擇的經濟誘因——經濟誘因已經由§1.4 意圖 2／AC-M5-5.5 的**絕對期望值**（1.05 vs 1.51，熟練時差 44%）承接，那個層級才是真正的賭注，不需要靠金幣再加碼一次。
+   **但「截斷」與「壓縮」是兩回事**：嚴格單調的壓縮（$\sqrt{}$、$\log$）不產生死區，若日後要把金幣重新定位回「有感的報酬」，那是可走的路，不在本里程碑範圍——本里程碑的裁決是接受金幣通道薄，換取不動引擎（§8.6）。
 
 7. **L2 金幣須折進 `runSettled` 事件的 `earnedCoins`**（`replayCuratorEvents` 只累加該欄位），不另開欄位。
 
 8. **成本不受三態影響**：體力代價一律由 `gatheringHpCost(material)` 決定（現行為 `riskLevel × 6`），`Budget -= material.cost`，`failed` 亦照常扣除。
 
 9. **`shotTier` 納入 `TravelMaterial` 的相等語意。** 預設值 `normal` 使既有卡表與測試零改動，扁平卡表仍 32 筆，`auditMaterialCatalog()` 的分母不變。
-   **三態不需要 `hypeValue` 變體表** —— 只需一張 64 筆的 `description` 對照表。
+
+   **三態文案的資料模型定案為 `TravelMaterial` 自帶的兩個新欄位**（v7 定案，覆核 P0 —— 原文「64 筆的 description 對照表」沒說清楚它是獨立資料結構還是內建欄位，導致下一版誤讀為需要新介面）：
+
+   - `perfectDescription`（`String?`，預設 `null`）
+   - `failedDescription`（`String?`，預設 `null`）
+
+   兩者皆為**具預設值的新增欄位**，符合 REQ-M5-02.10 的契約約束，`hypeValue` 等既有欄位不受影響。
+   新增方法 `String descriptionFor(ShotTier tier)`：`normal` 回傳既有 `description`；`perfect`／`failed` 回傳對應欄位，**該欄位為 `null` 時回退至 `description`**（非絕景的 27 張 `failed` 正是靠這個回退，見 REQ-M5-12.5）。
+   **此方法是純資料轉換，落在 `domain/core_loop/`，`dart test` 可測，與 `PoiMaterialResolver` 無關** —— resolver 的職責只是「選出哪張卡」，卡本身帶著三版文案，不需要 resolver 知道 tier。
 
 10. **契約約束**：不得改動 `MaterialInventory` 與 `TimelineItinerary` 的元素型別；不得改動 `calculateStats` 的簽章；`ReviewReport` 只允許**新增**具預設值的欄位。
     **v6 補入契約清單**：`ClientReviewEngine.evaluate` 與 `ItineraryStats` 同受此約束 —— 只能新增具預設值的具名參數／欄位，不得改動既有位置與必填性。
 
-11. **`PoiMaterialResolver` 的介面一個成員都不加**（v6 收斂，覆核 P0）。`resolveMaterialFor(String poiId)` 保持原簽章、回傳 `normal` 版。
+11. **`PoiMaterialResolver` 的介面一個成員都不加**（v6 收斂，v7 定案注入路徑，覆核 P0）。`resolveMaterialFor(String poiId)` 保持原簽章、回傳的 `TravelMaterial` 本身依規則 9 攜帶 `perfectDescription`／`failedDescription`。
 
-    **三態文案解析做成獨立的自由函式或資料表，不進介面。**
-    理由是 Dart 語意：`PoiMaterialResolver` 是 `abstract class`，現有 6 個站點全部用 `implements`（2 個生產、4 個測試 Fake），而 `implements` 要求實作**全部**成員 —— 介面一旦加方法，6 個站點無一能不改，**給預設實作也救不了**。v5 同時要求「另加方法」（本條）、「Fake 支援三態」（AC-M5-7.3）與「既有 Fake 未經改寫即通過」（AC-M5-7.5），三者在該語意下不可能同時成立。
-    做成自由函式後三條同時成立，且符合 `CLAUDE.md` §3 ——「城市 DLC 注入」那條軸已由既有的 `poiMaterialResolverProvider` 擋住，不需要第二個介面。
+    **三態文案不經過 resolver，改由 `TravelMaterial.descriptionFor(ShotTier)` 承接**（v7 取代「自由函式或資料表」的模糊寫法）。
+    理由是 Dart 語意：`PoiMaterialResolver` 是 `abstract class`，現有 6 個站點全部用 `implements`（2 個生產、4 個測試 Fake），而 `implements` 要求實作**全部**成員 —— 介面一旦加方法，6 個站點無一能不改，**給預設實作也救不了**。v5 同時要求「另加方法」（本條）、「Fake 支援三態」（AC-M5-7.3）與「既有 Fake 未經改寫即通過」（AC-M5-7.5），三者在該語意下不可能同時成立；v6 改口「自由函式或資料表」但沒定它吃什麼參數、誰呼叫它，同樣的模糊會在 plan 階段重演。
+    **`TravelMaterial` 承接後三者同時成立**：resolver 介面零變更（7.5 成立）；任何 `PoiMaterialResolver`（含測試 Fake）回傳的 `TravelMaterial`，只要該物件帶有 `perfectDescription`／`failedDescription`，就能解析三態（7.3 有真正內容而非空轉——Fake 不需要知道 tier，Fake 只需要能建構帶欄位的 `TravelMaterial`）；且符合 `CLAUDE.md` §3 ——「城市 DLC 注入」那條軸已由既有的 `poiMaterialResolverProvider` 擋住，不需要第二個介面或第二個 provider。
+    京都 64 段文案（v7 已縮為 37 段，見 REQ-M5-12.5）落在 `lib/data/core_loop/kyoto_night_catalog.dart` 的既有卡表定義裡，作為每張卡字面量的一部分，不是獨立檔案。
 
 ---
 
@@ -336,7 +408,7 @@
    （v3 的「取兩者較差」使絕景失手率約為一般卡的 7.8 倍。二元化後 $d_{c,\max}$ 每難度只需**一個**門檻值。）
 
 6. **構圖判定不得受玩家在大世界的縮放狀態影響**，且 **QTE 結束後相機狀態（模式、中心、zoom）須與進入前一致**。
-   **已知障礙（plan 必須解）**：`CameraFollow` 的 `returnDelay` 為 3 秒，而 `tourist` 的單次儀式是 3.2 秒；其 `_lastInteraction` 讀的是自由奔跑的 `Stopwatch`，**暫停引擎擋不住**。故本條隱含一項要求：**QTE 期間不得推進相機的回歸計時**。另 `CameraFollow` 現無 side-effect-free 的狀態讀出點，AC-M5-4.3 需要新增一個。
+   **已知障礙（plan 必須解）**：`CameraFollow` 的 `returnDelay` 為 3 秒，而 `tourist` 的單次儀式是 3.2 秒；其 `_lastInteraction` 讀的是自由奔跑的 `Stopwatch`，**暫停引擎擋不住**。故本條隱含一項要求：**QTE 期間不得推進相機的回歸計時**。另 `CameraFollow` 現無 side-effect-free 的狀態讀出點，AC-M5-4.3a 需要新增一個。
 
 ---
 
@@ -346,6 +418,16 @@
 
 2. **中斷 = 以中斷當刻的持續時間比照 REQ-M5-01.3 判定，且本局第二層分數 × 0.9（可累乘）。** 資源照常扣除。
    觸發條件：QTE 進行中 App 生命週期離開 `resumed`（**含 `inactive`** —— iOS 的下拉通知欄與來電橫幅停在該狀態，玩家按不到螢幕）。
+
+   **「中斷當刻的持續時間」須量在指標軸上，來源是終止指標事件的 `timeStamp`，不得由生命週期回呼或幀時鐘推算**（v7 修正，覆核 P0）。
+   `didChangeAppLifecycleState` 本身不攜帶任何時戳、也不合成指標事件 —— 若照字面實作，唯一手邊的量只有幀時鐘或 `Stopwatch`，那正是 REQ-M5-01.7 剛從逾時界線上趕走的病，原地在中斷路徑復發，且沒有任何條文擋著。
+   **正確來源**：App 離開 `resumed` 時，引擎會對仍在追蹤的指標送出 `PointerCancelEvent`（例如 Android 背景化對應 `ACTION_CANCEL`），它與 `PointerDownEvent`／`PointerUpEvent` 同為 `PointerEvent`，攜帶同軸時戳（REQ-M5-01.4 已涵蓋）。中斷判定即取 $T_{cancel} - T_0$，代入 REQ-M5-01.3 的 $\Delta t$ 公式，與正常放開走同一個純函式。
+   **若生命週期通知先於任何終止指標事件送達**（理論上可能但預期罕見）：以生命週期通知抵達的當下觸發一個等同 `PointerCancelEvent` 的合成終止，其時戳取當下的單調時鐘讀數 —— 這是唯一沒有真實指標事件可用時的後備，且僅在此後備路徑才允許使用非指標時鐘。
+
+   **絕景（`isSpotlight == true`）中斷時，構圖視為不通過**（v7 新增，覆核 P0）。
+   REQ-M5-01.3 只涵蓋時機，REQ-M5-03.5 的構圖判定需要 $d_c$，而 $d_c$ 依 REQ-M5-03.4 取自「**放開前**約 50 ms」的取樣 —— 中斷沒有放開，$d_c$ 在此路徑上無定義。若因此略過構圖檢查，玩家可以在取景框已拉歪、但時機仍落在完美窗內時背景化 App，逃過本應觸發的降階（REQ-M5-03.5）。
+   **故絕景中斷一律視為構圖不通過**，最終態依 REQ-M5-03.5 由時機態降一階，再套用本條的 ×0.9。這是保守值（不利玩家），理由是中斷路徑本來就無法驗證構圖，不得把「無法驗證」當作「驗證通過」。
+   非絕景不受影響，仍為規則 2 的時機判定。
 
    > **v6 修正：v5 的「中斷一律判 `normal`」是可利用的正 EV 漏洞。**
    >
@@ -358,6 +440,10 @@
    > **這不是 v5 的紅圈造成的**（紅圈標的是吻合點，不是必敗點），v4 就有；紅圈只是讓它更順手。**故拿掉紅圈無效**，必須改判定規則。
    >
    > 改為「以中斷當刻判定」後，必敗狀態下中斷仍是 `failed`，收益歸零而折扣照付 —— 恆為負 EV；同時真實來電若發生在窗內仍拿得到該有的態，善意保護不受影響。
+   >
+   > **絕景另有一條路徑必須單獨堵**（v7 補正）：上述證明只涵蓋時機，構圖判定需要放開後才有的取樣，中斷路徑本來就無法驗證構圖。若放任「無法驗證＝視為通過」，玩家可對著已知拉歪的絕景取景框，在時機命中完美窗時故意中斷，繞過構圖降階同時只付時機面的折扣。故規則 2 新增「絕景中斷視為構圖不通過」，把這條路徑的收益也壓到降階後的值，負 EV 證明才涵蓋全部 32 張素材而非僅 27 張非絕景。
+   >
+   > **「以中斷當刻判定」若沒有指定時戳來源，證明本身不成立**（v7 補正）。中斷不像正常放開有 `PointerUpEvent`，若判定路徑改用幀時鐘或 `Stopwatch` 量「持續時間」，就等於在中斷這條路上把 REQ-M5-01.5 的禁令繞過去 —— 而中斷正是最容易被拿來鑽這個漏洞的路徑（玩家可主動選擇何時觸發中斷）。故本條的時戳明定為終止指標事件（`PointerCancelEvent`）的 `timeStamp`，理由與 REQ-M5-01.4／01.7 相同。
 
 3. **負 EV 須在兩種意義下都成立**（v6 強化）：
 
@@ -428,6 +514,11 @@
 1. **新增 `shotQuality` 一個 `reasonCode`**（第 15 個），其 `CuratorCodex` 詞條為**單一條目**，文案依三態切換呈現。
    （`CuratorCodex.lookup` 以 `reasonCode` 為鍵，一個 code 只能有一條詞條。v3「新增第 15 個 code」與「三態各有詞條」自相矛盾，此處裁決為 1 個 code。）
 
+   **因果載體定案**（v7 定案，覆核 P0）：
+   - `CausalDomain` 新增一個值 `shotQuality`，與既有的 `spotlight`（絕景階梯對第一層的影響）分開，不共用——兩者是不同機制，共用會讓因果 UI 把兩件事混報。`CausalDomain` 全 repo 無窮盡 `switch`（僅 `==` 比較與固定 14 條 `entries` 的常數建構），新增列舉值不破壞編譯，不同於 `CuratorEventType`。
+   - `CodexEntry`（`title`／`jargon`／`explanation`／`guideNote` 四個 const 欄位）**維持不變、不新增欄位**：這四個欄位描述的是「快門這個機制本身」（通則性説明），保持單一詞條。
+   - **三態的具體文字落在每一次 `CausalFact` 實例的 `sourceSignifier` 欄位**（既有欄位，`String` 型別）——同一詞條，不同次出現時 `sourceSignifier` 依實際 `shotTier` 帶不同文字（例如「這次快門：完美」／「普通」／「失手」），由 `causal_report_builder.dart` 在建構該筆 `CausalFact` 時依 `shotTier` 選字，不需要新型別、不需要改 `CodexEntry`。
+
 2. **歸因指向第二層，不指向過關與否。** 快門結構上不影響 `satisfaction`，因此**不會**出現在「為什麼沒過關」的歸因裡 —— 這是正確的，不誤導玩家。
 
 3. **順序約束**：因果 SPEC 要求以最新程式碼為基線，故 **M5 必須排在因果可視化施工完成並合入主線之後**。
@@ -471,13 +562,14 @@
 
 ### REQ-M5-10 架構隔離 `[P0]`
 
-1. QTE 的計時迴圈、輸入處理與動畫住在 `game/` 或 `ui/`；`domain/` 只接收已判定的三態結果。
+1. QTE 的計時迴圈、輸入處理與動畫住在 `game/` 或 `ui/`（**擇一，不得兩者並存**——收縮指示與其他 QTE 視覺元件須落在同一層，理由見規則 8）；`domain/` 只接收已判定的三態結果。
 2. 三態判定的數學、難度參數表、`tierFactor` 表、第二層分數公式**皆屬 `domain/`**，為純函式，以 `dart test` 可測。
 3. 難度與三態的列舉須落在 `domain/core_loop/`。
 4. 通用引擎不得出現具名城市。
-5. `FakePoiMaterialResolver` 須支援三態文案解析。
+5. **三態文案解析落在 `TravelMaterial.descriptionFor(tier)`**（v7 更正，見 REQ-M5-02.9／02.11）；`PoiMaterialResolver` 與其 Fake 皆不涉入。
 6. 資料流沿既有形狀：QTE 在 UI/game 產出一個三態值，沿同一條路多帶一個參數進 `gatherPoi()`。**state 層不新增抽象。**
-7. **QTE 期間不得推進 `CameraFollow` 的回歸計時**（REQ-M5-03.6 的已知障礙）。
+7. **QTE 期間不得推進 `CameraFollow` 的回歸計時**（REQ-M5-03.6 的已知障礙），且暫停須為 `CameraFollow` 局域行為 —— 不得暫停與 location 管線共用的 `clockProvider`（`main.dart:273` 的 `Clock` 亦供 GPS 節流使用，暫停它會一併凍住定位）。
+8. **收縮指示（REQ-M5-01.13／REQ-M5-03.3）須有單一、固定的宿主層。** 原型撞到的實際 bug 是收縮環（Flame component）與下緣時間軸（Flutter widget）跨層並存，兩邊「數量恆為 1」的斷言各自為真但畫面上有兩套。規則 1 已規定 QTE 擇一層；本規則進一步規定該層內只能有一個指示元件，由 AC-M5-4.6 守。
 
 ---
 
@@ -491,15 +583,18 @@
 
    > **v6 修正：v5 的「當前累計值」會在結算時崩塌。** HUD 若累計腰包內**全部**素材，而結算只算排進 4 槽的 3~4 張，22 次取材的一局會顯示結算值的數倍，然後在夜間編輯後掉回來 —— 那是在教玩家「多拍就是好」，而規則是「最好的 4 張才算」。一個在結算時自我否證的數字承載不了「維持不失手」的正向節拍感。
 
-   **「最佳 4 張」仍然排列無關、仍然即時**（取 $\text{hype}_i \times \text{tierFactor}_i$ 最大的 4 張求和），故不破壞 AC-M5-9.5。
-   絕景階梯與 CP 分母依該 4 張推定；因玩家尚未編排，**HUD 的值是預估而非承諾**，UI 須標明。
+   **「最佳 4 張」須對該客戶的第二層公式本身取 argmax，不得用 $\text{hype}_i \times \text{tierFactor}_i$ 的簡單排序近似**（v7 更正，覆核 P0）。
+   後者不是任一客戶公式的 argmax：網紅端有 `spotlightLadder` 的非線性加成 —— 排序前 4 名若恰漏掉第 4 張絕景，真實最佳解可能是納入一張分數較低但湊滿絕景階梯的卡；社畜端的分母是 $\max(\sum \text{cost}, 2000)$ —— 排序法完全忽略成本，選到一張 hype 略高但成本極大的卡會使真實 CP 遠低於排除該卡的組合（覆核實算差達 3 倍）。用簡單排序近似會讓 HUD 系統性低報，且新增的 AC-M5-11.4 在該近似規則下仍是恆真（同一輸入比對必然相等），沒有真正驗到「這是不是最佳」。
+   **正確定義**：對腰包中現有的 $n$ 張素材，窮舉全部 $\binom{n}{4}$ 種 4 張子集（腰包上限 10 張，最多 $\binom{10}{4}=210$ 組，即時可算），代入該客戶的第二層公式（REQ-M5-02.4），取最大值。**仍然排列無關**（公式本身排列無關）、**仍然即時**，故不破壞 AC-M5-9.5。
+   絕景階梯與 CP 分母依這組 argmax 推定；因玩家尚未編排，**HUD 的值是預估而非承諾**，UI 須標明。
 6. **結算面板第二層獨立成區**，由客戶本人以紀錄語氣講出（§1.3 的語氣約束）。
 
 ---
 
 ### REQ-M5-12 文案撰寫契約 `[P0]`
 
-1. **規模**：京都 32 張 × 2 個新版本 = **64 段新 `description`**。
+1. **規模**：京都 32 張 × 2 個新版本 = **64 段新 `description`**（理論上限，兩版本皆全撰寫時）。
+   **首發規模縮為 37 段**（v7，見規則 5）：32 段 `perfect` ＋ 5 段絕景 `failed`；其餘 27 段非絕景 `failed` delayed。
 
 2. **語域不變**：三版都是同一位攝影者在現場的第一人稱觀察，不評價、不吐槽。
    **實際卡表的 `description` 完全不毒舌**，是抒情的旅行散文；毒舌住在客戶台詞與阿導旁白。
@@ -544,17 +639,21 @@
 - **AC-M5-1.6** 判定函式的輸入為和型別：以 `timedOut` 呼叫不需提供 $\Delta t$，且不存在能以 $\Delta t$ 表達逾時的路徑。
 - **AC-M5-1.7** 同一輸入重複呼叫 1000 次結果一致；靜態檢查：判定模組不出現 `DateTime.now`、不出現 `Random`。
 - **AC-M5-1.8** 靜態檢查：判定與參數表模組的原始碼不出現 `riskLevel`、`cameraLevel`。
-- **AC-M5-1.9** 以 `TestGesture.down(...)` / `up(timeStamp:)` 指定相差 1 ms 的兩個放開時戳，跨過 $W_p/2$ 邊界時判定結果必須改變（證明時戳取自指標事件而非幀時間）。
+- **AC-M5-1.9** 以 `tester.createGesture()` → `down(loc, timeStamp: 0)` → **固定的短暫 `pump`（遠小於 $L$，例如 50 ms）** → `up(timeStamp:)` 指定相差 1 ms 的兩個放開時戳，跨過 $W_p/2$ 邊界時判定結果必須改變（證明時戳取自指標事件而非幀時間）。
+  **`pump` 時長須固定且遠小於 $L$，只由 `up` 的 `timeStamp` 決定跨界**（v7 補正，覆核 P1）：`tester.startGesture()` 不接受 `timeStamp` 參數，必須用 `createGesture()` 手動控制 `down`／`up` 的時戳；若改成 `pump(L±1ms)` 讓 pump 時長本身跨過邊界，兩軸會被測試自己對齊，幀時鐘的錯誤實作也會通過 —— 這條 AC 就驗不到規則 5 要擋的東西。
 - **AC-M5-1.10** 靜態檢查：`lib/` 不出現 `resamplingEnabled = true`。
-- **AC-M5-1.11** **逾時界線與 $\Delta t$ 同軸**（REQ-M5-01.7）：以指定時戳的 down/up 構造 $T_{up} - T_0 = L \pm 1$ ms 兩例，結果須不同（$L-1$ 依窗寬判態、$L+1$ 判 `timedOut`），且**不得**由動畫結束事件決定。
+- **AC-M5-1.11** **逾時界線與 $\Delta t$ 同軸**（REQ-M5-01.7）：以 `createGesture()` → `down(timeStamp: 0)` → **固定的短暫 `pump`（同 AC-M5-1.9，遠小於 $L$）** → `up(timeStamp: L±1)` 構造兩例，結果須不同（$L-1$ 依窗寬判態、$L+1$ 判 `timedOut`），且**不得**由動畫結束事件決定。
   附帶靜態檢查：判定路徑不 import 動畫控制器、不訂閱其 status。
+- **AC-M5-1.12** **遲到的 up 不被計時器搶先定案**（REQ-M5-01.7 的計時器優先序，v7 新增）：`down(timeStamp: 0)` → 讓計時器於 $L$ 觸發 → 隨後才送達 `up(timeStamp: L - 50)`（即真實持續時間 $\le L$，只是事件晚到），最終判定須依指標時戳（$\Delta t$ 對應 $L-50$）而非 `timedOut`。
+- **AC-M5-1.13** **判定用時長與視覺用時長型別不相容**（REQ-M5-01.13 的型別隔離，v7 新增）：靜態檢查 —— `indicatorState` 的參數型別與判定函式（`pressed`/`judgeShutter` 等）的 $\Delta t$ 參數型別不同名，且判定函式的引數在呼叫點皆可追溯至由 `PointerEvent.timeStamp` 相減得出（不接受裸 `int` 字面量或 `dt` 累加值）。
 
 ### AC-M5-2 三態屬性與凍結欄位（全卡表機械驗證）
 
-- **AC-M5-2.1** 遍歷**實際注入的素材池**：每個素材 id 皆存在 `perfect` 版；`isSpotlight` 者另存在 `failed` 版。
-  非絕景的 `failed` 解析**回退至 `normal` 版**，且本回退須由測試明文釘住為**刻意**（REQ-M5-12.5 的首發 37 段範圍），不得靜默缺漏。$W_n$ 若日後收窄，本條回退須同時撤除。
+- **AC-M5-2.1** 遍歷**實際注入的素材池**：每個素材 id 皆存在 `perfectDescription`（非 null）；`isSpotlight` 者另存在 `failedDescription`（非 null）。
+  **「回退是刻意而非遺漏」以白名單集合釘住，不能只靠回退後相等的斷言**（v7 定案，覆核 P1）：斷言 $\{id : \text{material.failedDescription == null}\}$ **恰等於** 實際注入池中 $\{id : \neg\text{isSpotlight}\}$ 的集合。單靠「`descriptionFor(failed) == description`」判斷不出「刻意回退」與「忘記寫」的差別；恰等的集合比對能同時抓到兩種偏差——絕景漏寫（該不回退卻回退）與新卡落在白名單外（不屬於任何一類卻沒被涵蓋）。
+  $W_n$ 若日後收窄使非絕景 `failed` 可達，本條的白名單須同步緊縮。
 - **AC-M5-2.2** 同一 id 的三態實體，其 `name`、**`hypeValue`**、`themeValue`、`storyValue`、`cost`、`riskLevel`、`isSpotlight`、`tags` 完全相等（唯一差異為 `shotTier` 與 `description`）。
-- **AC-M5-2.3** `tierFactor` 表逐格等於 REQ-M5-02.3 的表定值，且 `normal` 恆為 1.00。
+- **AC-M5-2.3** `tierFactor` 表逐格等於 REQ-M5-02.3 的表定值（含**非絕景表與絕景專屬表兩張**，v7），且 `normal` 恆為 1.00。
   （本條是常數檢查，非效果驗收 —— 效果由 AC-M5-9 系列負責。明文標示以免被誤讀為設計驗證。）
 - **AC-M5-2.4** 扁平卡表長度不變：`kyotoNightMaterials.length` 與地圖景點數維持 32，`auditMaterialCatalog()` 的分母不變。
 - **AC-M5-2.5** `MaterialInventory` 與 `TimelineItinerary` 的元素型別未變；`calculateStats` 簽章未變；`ReviewReport` 只新增具預設值的欄位。
@@ -568,9 +667,13 @@
 - **AC-M5-3.4** 既有三個例外的觸發條件與時機不變。
 - **AC-M5-3.5** QTE 開始時鎖定的 `poiId` 在判定完成後仍為實際套用的目標。情境以**變更玩家像素座標**構造（不指定注入層）。
 - **AC-M5-3.6** `inventoryFull` 時換牌抽屜的開啟先於 QTE；選「放棄」則不進入 QTE、不扣任何資源。
-- **AC-M5-3.7** 中斷：以 `tester.binding.handleAppLifecycleStateChanged` 送出離開 `resumed`，該次判 `normal`、資源照扣、本局第二層折扣係數變為 0.9；兩次中斷為 0.81。
+- **AC-M5-3.7** 中斷（v7 更正兩處）：以 `tester.createGesture()` 建立指標、`down(timeStamp: 0)`，再以 `gesture.cancel(timeStamp: T)`（**不是**單獨送 `handleAppLifecycleStateChanged`）**同時**觸發生命週期離開 `resumed`，驗證判定依 $T - 0$ 比照 REQ-M5-01.3 計算（**非一律 `normal`**）、資源照扣、本局第二層折扣係數變為 0.9；兩次中斷為 0.81。
+  （v6 誤留 v5 舊文「該次判 `normal`」未同步修改；且原測試手段 `handleAppLifecycleStateChanged` 不攜帶時戳、也不合成指標事件，寫不出「依中斷當刻持續時間判定」——`TestGesture.cancel({Duration timeStamp})` 存在且可指定時戳，才是這條 AC 唯一寫得出來的形狀，v7 一併更正。）
+- **AC-M5-3.7b** **絕景中斷視為構圖不通過**：`isSpotlight == true` 的素材中斷時，最終態較中斷當刻的時機態降一階（依 REQ-M5-03.5），非絕景不受影響。
+- **AC-M5-3.7c** **無終止指標事件時的後備路徑**（v7 新增）：只送 `handleAppLifecycleStateChanged` 而不送任何終止指標事件，判定仍須產生一個結果（不得掛起或拋例外），且該後備路徑須有獨立測試覆蓋（REQ-M5-04.2 的後備規則）。
 - **AC-M5-3.8a** **無條件負 EV**：對三檔難度 × 三個 $\sigma$（參考玩家模型），中斷 $n \ge 1$ 次的期望第二層分數**嚴格低於**不中斷。
-- **AC-M5-3.8b** **條件式負 EV**（v6 新增，v5 缺這一半）：在**已越過 $W_n/2$（失手已確定）**的狀態下中斷，第二層分數**嚴格低於**不中斷。
+- **AC-M5-3.8b** **條件式負 EV**（v6 新增，v5 缺這一半）：在**已越過 $W_n/2$（失手已確定）**的狀態下中斷，第二層分數**嚴格低於**不中斷。母體排除 `tourist`（$W_n$ 無上限，不存在「已越過」的狀態）。
+- **AC-M5-3.8c** **條件式負 EV 的接線版**（v7 新增，覆核 P1）：不只驗算術，另以 AC-M5-3.7 的手段實際觸發一次落在必敗區間的中斷，斷言落地的 `shotTier` 與純函式對同一 $\Delta t$ 的輸出相等 —— 防止 3.8b 的算術驗證與生產路徑各自為政（`CLAUDE.md` §9 的接線教訓）。
   母體須涵蓋 $h_i/H$ 的全分佈，**不得只取等 hype 的四張卡** —— v5 的證明假設等 hype，而實際 $h_i/H$ 中位數 0.276 已越過 `decisiveMoment` 的划算門檻 0.263。
 
 ### AC-M5-4 絕景構圖
@@ -578,12 +681,12 @@
 - **AC-M5-4.1** `isSpotlight == true` 走構圖＋時機，`false` 走純時機。以注入池遍歷驗證分派（京都 5 張／27 張）。
 - **AC-M5-4.2** 構圖為二元：通過則最終態等於時機態；不通過則下降一階（`perfect`→`normal`、`normal`→`failed`、`failed`→`failed`）。真值表 3×2 = 6 格全覆蓋。
 - **AC-M5-4.3** **拆為兩條，因為狀態分屬兩層**（v6 修正）：
-  - **AC-M5-4.3a**（`dart test`）：`CameraFollow` 的模式與內部狀態在 QTE 前後不變。需要新增 side-effect-free 的狀態讀出點 —— 現行 `targetCenter()` 在 `free` 分支會清 `_pendingPan`、寫 `_frozenCenter` 並翻 `_mode`，`mode` getter 是唯一無副作用的讀出點但只給模式。
+  - **AC-M5-4.3a**（`dart test`）：`CameraFollow` 的**四項狀態**（`mode`、`_frozenCenter`、`_pendingPan`、`_lastInteraction`，經新增的讀出點取得）在 QTE 前後不變。**不得只驗 `mode`**（v7 補正，覆核 P1）——`targetCenter` 每幀依當下 zoom 重新 clamp 並回寫 `_frozenCenter`，若 QTE 期間 `update()` 繼續呼叫它（見規則 REQ-M5-10.7 的暫停要求），中心可能被靜默改寫而 `mode` 不變，只驗 `mode` 的版本會綠著放過這個病。現行 `targetCenter()` 在 `free` 分支會清 `_pendingPan`、寫 `_frozenCenter` 並翻 `_mode`，`mode` getter 是唯一既有的無副作用讀出點，其餘三項須新增讀出點。
   - **AC-M5-4.3b**（`game/` 煙霧）：`cameraComponent.viewfinder` 的 zoom 與 center 回復進入前的值。**zoom 不住在 `CameraFollow` 裡**（它是傳入參數），故 4.3a 驗不到這一半。
 - **AC-M5-4.6** **收縮指示的呈現依 `isSpotlight` 分派**（REQ-M5-03.3）：非絕景為環繞標的的同心圓，絕景為取景框邊框收束。以注入池遍歷驗證兩種呈現各自被選用。
-  **「任一時刻只有一套指示」須以可數的形式驗證**：所有屬於「收縮指示」角色的元件帶同一標記型別或 `Key` 前綴，斷言 QTE 畫面中其數量恆為 1。
-  （若只把呈現做成列舉，「一個變數不可能同時是兩個值」使斷言恆真 —— 而原型撞到的實際問題是收縮環與下緣時間軸**兩個 widget 同時在畫**。）
-- **AC-M5-4.4** QTE 期間相機回歸計時不推進：以 `tourist`（儀式 3.2 秒 > `returnDelay` 3 秒）驗證結束後模式未翻為 `returning`。
+  **「任一時刻只有一套指示」須先固定宿主層再以可數形式驗證**（v7 補正，覆核 P1）：REQ-M5-10.1 已規定 QTE 只能落在 `game/` 或 `ui/` 其中一層（不得兩者並存）；本條在**該單一層內**斷言所有屬於「收縮指示」角色的元件帶同一標記型別或 `Key` 前綴，數量恆為 1。
+  （若沒有先固定宿主層，兩層各自「數量恆為 1」的斷言會各自為真，但畫面上仍可能有兩套——原型撞到的實際問題正是收縮環（Flame component）與下緣時間軸（Flutter widget）**跨層並存**，`find.byKey` 看不到 Flame 元件、`game.children.query<T>()` 看不到 widget，兩邊斷言互相看不見對方。）
+- **AC-M5-4.4** QTE 期間相機回歸計時不推進：以 `tourist`（儀式 3.2 秒 > `returnDelay` 3 秒）驗證結束後模式未翻為 `returning`。**須有兩層驗證**（v7 補正，覆核 P1）：`dart test` 層驗 `CameraFollow` 元件本身（暫停後 `mode` 不變）；另加 **`game/` 煙躌測試**驗接線——實際跑完一段 QTE 儀式（透過 game harness 呼叫真正的暫停路徑，而非直接操作 `CameraFollow` 實例）後 `cameraFollow.mode != returning`，防止元件測過但接線沒人測（`CLAUDE.md` §9）。
   **暫停必須是 `CameraFollow` 局域的**（v6 補正）：它讀的是注入的 `Clock`，而該 `Clock` 與 location 管線共用同一個 `clockProvider`。若以「暫停共享時鐘」滿足本條，會一併凍住 GPS 節流與重定位偵測。實作須為自帶可暫停包裝或顯式 `suspend/resume`。
 - **AC-M5-4.5** $d_c$ 取自放開前的取樣：在放開前 10 ms 注入一次偏移，判定結果不受影響。
 
@@ -609,16 +712,18 @@
 - **AC-M5-5.5b** **交叉恰好各一次**（v6 強化）：$\sigma$ 以 1 ms 步長掃過 $[20, 400]$，三對曲線的差值序列**各恰好變號一次**。
   實算翻轉點：`decisiveMoment` × `tourist` **173.4 ms**、`photographer` × `tourist` **205.0 ms**、`decisiveMoment` × `photographer` **159.4 ms**。
   v5 寫的是「翻轉點存在且落在 (110, 220)」，而存在性由端點變號加連續性即得，與 AC-M5-5.5 的兩端斷言同構 —— **它自述要排除多重交叉，卻沒有排除**。掃描版才交付它宣稱的東西。
-  **本條與 5.5 的所有數值僅對非絕景成立**（REQ-M5-01.12 末段）：4 絕景行程的 $\sigma_{eff} = 1.58\sigma$，翻轉點換算回玩家 $\sigma$ 只剩約 110 ms。
+  **本條與 5.5 的所有數值為非絕景表**（REQ-M5-01.12）。
+- **AC-M5-5.5c** **絕景表對稱性**（v7 新增，覆核 P0 的結構性修法）：用絕景專屬 `tierFactor`（REQ-M5-02.3）、有效 $\sigma_{eff} = 1.58\sigma$ 代入同一時機模型，`decisiveMoment`／`photographer` 各自與 `tourist` 的翻轉點（以**真實** $\sigma$ 衡量）須與非絕景版本相等，容差 $\pm 1$ ms：`decisiveMoment` 173.4 ms、`photographer` 205.0 ms。
+  這是 §7.9 修法的驗收——絕景與非絕景在「難度是賭注」這條頭條承諾上須對稱，不因素材類型而有兩套規則。
 - **AC-M5-5.6** L2 金幣計入 `runSettled` 的 `earnedCoins`，重播後金幣總額相符。
 - **AC-M5-5.7** 退件局的 L2 金幣為 30%。
 - **AC-M5-5.8** **L2 金幣 $\le$ `client.baseCommission` × 15%**（網紅 225、社畜 150）。
-  **母體須為實際注入的 32 張全池，且遍歷三態全部組合**（v6 修正）—— 不得只用 §4 的 16 張分析池（只含 2 張絕景，`spotlightLadder` 第 3、4 階從未取樣），也不得只驗 `normal` 態。v5 兩者都犯，得出 $c = 0.75$ 安全的錯誤結論。
-  已知最壞情況：4 絕景全 `perfect` × `decisiveMoment`，reach 518.5、$c = 0.43$ 得 223，**餘裕 0.9%**。
+  **母體須為實際注入的 32 張全池，且遍歷三態全部組合**（v6 修正）—— 16 張分析池雖已含 4 張絕景可取樣到 `spotlightLadder` 頂階，但仍只是**全域可達池的子集**（32 張中的 16 張），其 top-4 hype 組合未必等於 32 張全池的 top-4；本條驗收須用實際注入的 32 張全池，且**不得只驗 `normal` 態**。v5 只驗 `normal` 態，得出 $c = 0.75$ 安全的錯誤結論。
+  已知最壞情況：4 絕景全 `perfect` × `decisiveMoment`，reach **619.5**（絕景專屬 `tierFactor`，REQ-M5-02.3）、$c = 0.36$ 得 223，**餘裕 0.9%**。
 - **AC-M5-5.9** **重跑 `AC-A1-5.4`**：含 L2 金幣後，社畜 Pass 中位數對應三件套升滿級仍落在 **6~10 局**。
 - **AC-M5-5.10** **重跑 `AC-A1-6.4`**：含 L2 金幣後，退件的最高總收入 $\le$ 差一點的最低總收入 × 30%。
   **本條的餘裕會被第二層單向收縮，必須真的跑**（v6 補正）：`rejected` 的 `commissionRate = 0`，退件收入現行只有 `storyBonus`（22~46）；加上 30% 的 L2 金幣後，第二層會成為退件局收入的**主項**。不變式兩側各加一項，左邊是 $0.3 \times L2_{\max}$、右邊是 $0.3 \times L2_{\min}$，餘裕只會變窄。§4.3 的驗算只用 `normal` 態，**對本條不成立**。
-  （反向：**AC-M5-5.9 安全** —— 要跌破 6 局需 L2 金幣中位數 > 180，而社畜實算中位數 53~89。）
+  （反向：**AC-M5-5.9 安全，且 $c=0.36$ 下餘裕更大**（v7 更新）——要跌破 6 局需 L2 金幣中位數 > 180，社畜實算中位數在 $c=0.75$ 時為 53~89，按 $0.36/0.75$ 等比例縮放後為 **25~43**，離門檻更遠。）
 
 ### AC-M5-6 決定性與資料純度
 
@@ -630,7 +735,7 @@
 
 - **AC-M5-7.1** `domain/` 的判定、參數表、`tierFactor` 表、第二層公式不 import `package:flutter`、`package:flame`、`dart:ui`。
 - **AC-M5-7.2** 上述全部測試以 `dart test` 通過。
-- **AC-M5-7.3** `FakePoiMaterialResolver` 可解析三態文案。
+- **AC-M5-7.3** **`descriptionFor(ShotTier)` 對任意 `TravelMaterial` 正確解析**（v7 改寫，原「Fake 可解析三態文案」寫法在 resolver 零變更後空轉）：`normal` 回既有 `description`；設有 `perfectDescription`／`failedDescription` 時回對應值；未設時回退 `description`。測試素材可經 `FakePoiMaterialResolver` 或直接建構 `TravelMaterial` 提供，兩者等價——本條驗的是 `TravelMaterial` 本身的方法，與哪個 resolver 產生它無關。
 - **AC-M5-7.4** 既有**五條**架構測試維持全綠（`test/architecture/layer_boundaries_test.dart`；v5 誤寫為三條）。其中「domain 不得反向相依外層」對 M5 直接相關：判定、參數表、`tierFactor`、第二層公式與 `indicatorState` 進 domain 後不得回頭 import `state/`／`game/`／`ui/`。
 - **AC-M5-7.5** `resolveMaterialFor(String poiId)` 簽章未變，**`PoiMaterialResolver` 的成員數未增**，既有 6 個 `implements` 站點（2 生產 ＋ 4 測試 Fake）未經改寫即通過。
   （v5 同時要求「介面另加方法」與「Fake 未經改寫」，在 Dart `implements` 語意下不可能同時成立 —— v6 已收斂為自由函式，見 REQ-M5-02.11。）
@@ -661,6 +766,7 @@
   （實測佐證：`AC-A1-5.1` 的黃金槽比例在三態混合下為 9.47~9.62%、齊一態 5.00~18.69%，門檻 30%，全數安全。v3 曾推測 `perfect` 會推高該比例，**方向是錯的** —— `perfect` 把更多排列推上天花板造成平手，固定最佳解反而變少；推高它的是 `failed`。）
 - **AC-M5-9.5** **排列無關性**：對任意行程，第二層分數在四槽的全部重排下不變。
   這是 AC-M5-9.4 的結構性證明，也是野外 HUD 即時預估（REQ-M5-11.5）能成立的前提。
+- **AC-M5-9.6** **`evaluate` 呼叫點的跨路徑一致性**（v7 新增，覆核 P1）：結算路徑（`curator_run_controller.dart`／`curator_run_providers.dart`）與因果歸因路徑（`causal_report_builder.dart`）對同一行程、同一難度、同一中斷次數，算出的 L2 分數須相等。防止兩條路徑其中一條忘記傳遞 `difficulty`／`interruptionDiscount` 而靜默算成預設值（`CLAUDE.md` §9 的接線教訓）。
 
 > **測試時間預算**：AC-M5-9.1／9.2／9.5 為純算術（實測約 2 秒）。AC-M5-9.3 與 9.4 需呼叫 `ClientReviewEngine` 做全母體窮舉（單條約 43 秒），**須標 `@Tags(['slow'])` 走獨立任務**，不進預設 `flutter test`。
 
@@ -677,8 +783,10 @@
 - **AC-M5-11.1** 三態各自觸發可區分的 Overlay 回饋（以 `Key` 驗證），`IgnorePointer` 不阻塞點擊。
 - **AC-M5-11.2** `pubspec.yaml` 的相依清單在本里程碑前後無新增項目。
 - **AC-M5-11.3** 三態徽章在腰包抽屜、4 槽位卡面、結算歸因三處皆存在且符號一致。
-- **AC-M5-11.4** 野外 HUD 顯示**腰包中最佳 4 張**的預估第二層分數，每次取材後更新；以同一 4 張輸入時，其值與結算面板的公式輸出相等。
+- **AC-M5-11.4a** 野外 HUD 顯示**對該客戶第二層公式取 argmax 的 4 張**組合，每次取材後更新；以同一 4 張輸入時，其值與結算面板的公式輸出相等。
   （v5 寫「同一公式（同一輸入比對）」而 HUD 累計全腰包 —— 那條 AC 恆真卻放過了「不同輸入集合」，見 REQ-M5-11.5。）
+- **AC-M5-11.4b** **「最佳」須為真 argmax，非排序近似**（v7 新增，覆核 P0）：構造一個反例腰包（例如一張高 hype 但高成本的卡使簡單排序選出的 4 張非最優），驗證 HUD 顯示的是窮舉 $\binom{n}{4}$ 後的真實最大值，而非 $\text{hype} \times \text{tierFactor}$ 排序前 4。
+  （若只用 AC-M5-11.4a 的「同一 4 張輸入比對相等」，在錯誤的排序近似規則下仍會恆真 —— 必須用會讓兩種規則產生不同 4 張組合的反例腰包才驗得到。）
 - **AC-M5-11.5** **逾時事前告知**（REQ-M5-01.13）：`indicatorState(visualElapsedMs, difficulty)` 在 $t_{\text{吻合}}$ 之後回 `pastMatch`、之前回 `beforeMatch`，三檔難度皆然。純函式，`dart test` 可跑。
 - **AC-M5-11.6** **結果文字為態 × 方向的正交組合**：態（完美／普通／失手／逾時）各有相異 `Key`，方向（早／晚）為獨立維度，逾時**不與「太晚」共用**且無方向。列舉為**跨難度聯集** —— `tourist` 無 `failed`，只會出現子集。
 - **AC-M5-11.7** **不得預告完美窗（區間不變量）**：以 1 ms 步長掃 $[0, t_{\text{吻合}})$，`indicatorState` **恆為 `beforeMatch`**，特別是跨越 $t_{\text{吻合}} - W_p/2$ 時不變。
@@ -687,9 +795,10 @@
 
 ### AC-M5-12 文案護欄
 
-- **AC-M5-12.1** 三版 `description` 兩兩相異。
-- **AC-M5-12.2** 三版長度（`String.characters.length`，含標點）的 $\max/\min \le 1.5$。
-- **AC-M5-12.3** `failed` / `perfect` 不包含 `normal` 版作為子字串。
+- **AC-M5-12.1** **對有撰寫版本的組合**（v7 界定範圍，覆核 P0）：`perfect` 對全 32 張、`failed` 對 5 張絕景，皆與 `normal` 版兩兩相異。
+  **非絕景的 `failed`（27 張）不受本條約束** —— 它依 REQ-M5-12.5 刻意回退為 `normal` 版本身，此為設計選擇而非缺漏，由 AC-M5-2.1 另行釘住。
+- **AC-M5-12.2** 三版長度（`String.characters.length`，含標點）的 $\max/\min \le 1.5$（範圍同 12.1：僅比對有撰寫版本者）。
+- **AC-M5-12.3** `failed` / `perfect` 不包含 `normal` 版作為子字串（範圍同 12.1）。
 
 ---
 
@@ -735,9 +844,10 @@ $$R = \frac{\sum h_i f_p - \sum h_i f_f}{\sum h_i f_n} = \frac{f_p - f_f}{f_n}$$
 
 > **§4.2 與 §4.3 的兩處已被 v6 取代，保留為過程紀錄**：
 > 1. **單張降幅（3.3 / 9.3 / 12.7%）是「固定取第 0 槽」量出的**，而池的索引 0~5 含 3 張高 hype 絕景。照 AC 字面的「任意一張」重算為 2.76 / 7.72 / 10.48%（AC-M5-9.2 已據此改門檻）。
-> 2. **$c = 0.75$ 的反推只用 `normal` 態、且母體只含 2 張絕景**，漏掉 `tierFactor` 的整條放大與 `spotlightLadder` 的第 3、4 階。以 32 張全池重算得 $c = 0.43$（REQ-M5-02.6）。
+> 2. **$c = 0.75$ 的反推只用 `normal` 態**，漏掉 `tierFactor` 對 `perfect` 態的整條放大。以 32 張全池、三態全組合重算得 $c = 0.43$（REQ-M5-02.6）。
 >
-> **教訓與 §8 記的同型**：反推上界時，母體與態的覆蓋範圍必須與被驗的 AC 一致 —— AC-M5-5.8 說的是「全母體」，那就不能用 16 張池的 `normal` 態去反推。
+> **教訓與 §8 記的同型**：反推上界時，態的覆蓋範圍必須與被驗的 AC 一致 —— AC-M5-5.8 說的是「全母體、全三態」，那就不能只用 `normal` 態去反推。
+> **v7 更正**：本節曾記「16 張池只含 2 張絕景」為根因之一，經覆核以卡表原始資料重建該池證實為 **4 張絕景**（含 `spotlightLadder` 頂階）—— 池的絕景覆蓋不是問題所在，這句話已刪除以免誤導後人以為 16 張池不可用於其他分析。
 
 ### 4.3 CP 分母下限與 $c$ 係數
 
@@ -815,14 +925,14 @@ $3\sigma_{robust} = 2.1$ ms，對 120 ms 完美窗小了約 **57 倍**。**$W_p 
 2. **因果可視化施工完成並合入主線**（REQ-M5-08.3）。判準包含其守門測試已提交且全綠。
 3. **`SPEC_MVP_POI_GATHERING.md` §1.3 增修**：該節將快門 QTE 列為 Out of Scope，須註記由本 SPEC 承接。
 4. **`gatherPoi()` 補 `expectedPoiId` 防護**（REQ-M5-07.1）。**既有缺陷，建議獨立 commit 與獨立測試。**
-5. **`CameraFollow` 新增 side-effect-free 的狀態讀出點**（AC-M5-4.3），並使其回歸計時可在 QTE 期間暫停（REQ-M5-10.7）。
+5. **`CameraFollow` 新增 side-effect-free 的狀態讀出點**（AC-M5-4.3a，須涵蓋 `mode`／`_frozenCenter`／`_pendingPan`／`_lastInteraction` 四項，不只 `mode`——`targetCenter` 每幀依當下 zoom 重新 clamp 並回寫 `_frozenCenter`，只讀 `mode` 驗不到中心被靜默改寫），並使其回歸計時可在 QTE 期間暫停（REQ-M5-10.7），暫停狀態須有 game 層的接線斷言（AC-M5-4.4 不能只在 `dart test` 層驗元件，須另加一條跑完整段 QTE 儀式後 `cameraFollow.mode != returning` 的煙霧測試）。
 6. **`SPEC_MVP_CORE_LOOP.md` 非涵蓋範圍表增修**：微動作現標註為「引擎層 / 里程碑 M3」，實際落於 M5。
-7. **64 段 `description` 文案交付**：依 REQ-M5-12 撰寫並通過 AC-M5-12。**內容產出工作，會序列阻塞施工**，須確認執行者與交期。
+7. **37 段 `description` 文案交付**（v7 由 64 段縮減，見 REQ-M5-12.5）：32 段 `perfect` ＋ 5 段絕景 `failed`，依 REQ-M5-12 撰寫並通過 AC-M5-12。**內容產出工作，會序列阻塞施工**，須確認執行者與交期。
 8. **預期的破壞性變更**：新增 `CuratorEventType` 會使 `replayCuratorEvents` 的窮盡式 `switch` 編譯失敗（REQ-M5-05.4）。
 
 9. **`CuratorCodex` 條目數硬編 14 的兩條既有測試**（新增第 15 個 `reasonCode` 會打到）：`test/domain/core_loop/curator_codex_test.dart:24`、`test/ui/core_loop/causal_studio_ui_test.dart:248`。v5 只預告了 `replayCuratorEvents` 的窮盡 `switch`。
-10. **`shotQuality` 的因果載體未定**：`CausalFact` 必帶一個 `CausalDomain`，快門屬於哪個既有值或要不要新增列舉值，SPEC 未定；`CodexEntry` 是固定字串的 const，「單一詞條、文案依三態切換」要靠什麼欄位把 tier 帶到 UI（現只有 `intensity` / `sourceSignifier` 可寄生）亦未定。**AC-M5-8.1 在此定案前寫不出測試。**
-11. **$d_c$ 的座標空間須先定案**（現為 §6 待決 2 的一部分）。它是契約決策不是調校值 —— 建議定為「取景框邊長比例、螢幕空間」。**AC-M5-4.3a 與 AC-M5-4.5 在此定案前寫不出來。**
+10. ~~**`shotQuality` 的因果載體未定**~~ **已於 REQ-M5-08.1 定案**（v7）：新增 `CausalDomain.shotQuality`，`CodexEntry` 不變，tier 文字寄生於 `CausalFact.sourceSignifier`。
+11. **$d_c$ 的座標空間須先定案**（現為 §6 待決 2 的一部分）。它是契約決策不是調校值 —— 建議定為「取景框邊長比例、螢幕空間」。**AC-M5-4.2 與 AC-M5-4.5 在此定案前寫不出來**（v7 更正引用——AC-M5-4.3a 驗的是 `CameraFollow` 狀態，與 $d_c$ 座標空間無關）。
 
 > **已清償**：事件日誌的前向相容修復（commit `14f6e92`）。
 >
@@ -839,7 +949,7 @@ $3\sigma_{robust} = 2.1$ ms，對 120 ms 完美窗小了約 **57 倍**。**$W_p 
    - **仍未決**：$W_n$（見待決 6）、絕景 $d_{c,\max}$（待決 2）。
 2. **絕景構圖門檻 $d_{c,\max}$**：每難度一個值（REQ-M5-03.5 已裁決為二元判定）。建議以取景框邊長的比例表達（例如 25% / 18% / 12%），不用絕對像素 —— REQ-M5-03.6 已要求判定不受 zoom 影響。
 3. **`tourist` 是難度還是無障礙模式**：它在安全性上仍支配（0% 失手），這對無障礙是正確的；AC-M5-5.5 已讓它在**報酬**上不再支配。是否進一步改成「輔助：放寬快門判定」開關而不與另兩檔並列，待裁決。
-4. **$c$ 與 CP 地板的最終值**：$c = 0.43$（v6 由 **32 張全池 × 三態全組合**的最壞情況反推，見 REQ-M5-02.6）、地板 2000。須由 AC-M5-5.9／5.10 的正式重跑確認，**其中 5.10 的餘裕會被第二層單向收縮，必須真的跑**。
+4. ~~**$c$ 與 CP 地板的最終值**~~ **已定案（v7）**：$c = 0.36$（32 張全池 × 三態全組合 × 絕景專屬 `tierFactor` 的最壞情況反推，見 REQ-M5-02.6），地板 2000 不動。**仍待 plan／實作階段的正式重跑確認**：AC-M5-5.9／5.10 的分析腳本須套用新的絕景表與 $c$ 值重跑，5.10 的餘裕會被第二層單向收縮，必須真的跑而非沿用估算。
    **地板 2000 的副作用比 v5 寫的嚴重，且 v5 的理由句是事實錯誤**（v6 修正）：
    - 社畜第一層的 `budgetScore` 在 `totalCost <= targetBudget(2000)` 時**一律滿分** —— 花 0 元與花 2000 元同分。第一層獎勵的是**不超支**，不是「省錢」。
    - 第二層的地板 2000 恰等於 `targetBudget`，而全母體 **69.8%** 的行程成本 $\le 2000$。在該區間 CP $= \frac{\sum h_i f_i}{2000} \times 1000$，**與成本完全無關** —— 它退化成「網紅 reach 去掉絕景階梯」的同一個量，社畜與網紅的第二層在七成情況下量的是同一件事。
@@ -884,15 +994,16 @@ $3\sigma_{robust} = 2.1$ ms，對 120 ms 完美窗小了約 **57 倍**。**$W_p 
 8. **實機數據來自單一裝置、單一玩家、單次會話**（CPH2783 / Android 16，2026-09-13）。§4.4 的每個數字都受此限制。
    風險最低的是抖動（要漲 57 倍才咬到窗寬）；風險最高的是 $\sigma = 55$ 這個定錨 —— 它由一位已練過 200 次的玩家反推，直接決定 AC-M5-5.5 的期望表。**若日後有第二位測試者且 $\sigma$ 明顯不同，AC-M5-5.5 的實算值須整表重算，而非只調個別格。**
 
-9. **參考玩家模型不涵蓋絕景的 $\sigma$ 膨脹**（§4.4 實測 ×1.58）。AC-M5-5.5／5.5b 的所有數值僅對 27 張非絕景成立；4 絕景行程的翻轉點換算回玩家 $\sigma$ 只剩約 110 ms（模型的「中等」檔）。而 reach 的絕景階梯正把玩家推向絕景堆滿的行程 —— **賭注在中等技術就已翻負，而那正是最佳解的形狀**。本里程碑不以雙 $\sigma$ 模型解決。
+9. ~~**參考玩家模型不涵蓋絕景的 $\sigma$ 膨脹造成的風險反轉**~~ **已於 v7 定案解決**：絕景另訂一套 `tierFactor`（REQ-M5-02.3），把翻轉點對稱地拉回真實 $\sigma \approx 173$／$205$ ms，與非絕景相同，由 AC-M5-5.5c 驗證。
+   殘留、非本 SPEC 範圍的事實：$\sigma$ 膨脹（×1.58）本身仍存在，只是後果被 `tierFactor` 補償而非移除——這代表絕景在**主觀手感**上仍比非絕景難（放開誤差確實大 58%），只是**期望值**上不再吃虧到翻負。若日後有玩家回饋顯示「數字上划算但手感上很挫折」，這是補償型設計的已知取捨，不是計算錯誤。
 
-10. **`photographer` 收窄後仍不是「賭注」，只是精度稅。** 其 `failed` 機率在 $\sigma = 55$ 為 0.0%、$\sigma = 110$ 為 0.1%、$\sigma = 220$ 才 9.1%，期望值在任何 $\sigma$ 下皆 $\ge 1.038$ —— **永遠不會輸**。v6 花一條裁決把完美率由 96.7% 降到 85.7%，得到的是紋理（14% 的鏡頭吐「普通」）不是風險。
+10. **`photographer` 收窄後仍不是「賭注」，只是精度稅。** 其 `failed` 機率在 $\sigma = 55$ 為 0.0%、$\sigma = 110$ 為 0.1%、$\sigma = 220$ 才 9.1%，**絕對**期望值在任何 $\sigma$ 下皆 $\ge 1.038$。**但相對上它會被 `tourist` 反超**：翻轉點在 $\sigma \approx 205$ ms（AC-M5-5.5b），$\sigma$ 超過此值選 `photographer` 就劣於留在 `tourist`（v7 修正措辭，覆核 P2 —— 「永遠不會輸」只在絕對值意義上成立，寫成通則會誘使後人誤以為 v6 收窄 $W_p$ 的裁決是白做）。v6 花一條裁決把完美率由 96.7% 降到 85.7%，得到的是紋理（14% 的鏡頭吐「普通」）不是風險。
     誠實的結論：**本作只有 `decisiveMoment` 一檔帶賭注**，另兩檔差在精度要求。
     附帶好消息：**新手選錯檔的經濟代價有上界** —— 第二層被 15% 上界壓著，$\sigma = 300$ 的玩家選 `decisiveMoment` 相對 `tourist` 只少約 13% 的第二層，折進金幣後 $\lesssim 2\%$ 單局收入。斷層在**感受**上，不在收入上。
 
 11. **參考玩家模型不產生 `timedOut`**（截尾於 $[0, L]$），故 AC-M5-5.5 的 $\sigma = 220$ 那列**高估 `tourist` 的安全性**。實機在補救前正是 `tourist` 24/45 逾時。該列的 1.047 讀起來像「生疏玩家在觀光客檔幾乎無損」，與 REQ-M5-01.13 的成因描述互相拉扯 —— 引用時須一併引用本條。
 
-12. **`c = 0.43` 的餘裕只有 0.9%**（223 對上界 225），刻意貼著取。任何提高 hype 上緣的改動都會突破。AC-M5-5.8 遍歷實際注入池，故新城市 DLC 若帶更高 hype 會當場轉紅 —— 這是設計上要的行為，不是脆弱性。
+12. **`c = 0.36` 的餘裕只有 0.9%**（223 對上界 225，reach 上界 619.5），刻意貼著取。任何提高 hype 上緣或再調 `tierFactor`（含規則 3 的絕景專屬表）的改動都會突破。AC-M5-5.8 遍歷實際注入池，故新城市 DLC 若帶更高 hype 會當場轉紅 —— 這是設計上要的行為，不是脆弱性。
 
 ---
 
@@ -942,6 +1053,14 @@ $3\sigma_{robust} = 2.1$ ms，對 120 ms 完美窗小了約 **57 倍**。**$W_p 
 | $W_n$ | **不動**，列為實裝後依真實玩家分佈調校 | §6 待決 6、§7.7 |
 | 開發順序 | 第一輪覆核後**先做原型**，不再把同一份 spec 改到第四版再送覆核 | §8.4 |
 
+### 8.4 流程裁決：覆核之後、第四版之前，先做原型
+
+v5 的兩個規格層級發現（REQ-M5-03.3 的遮擋規則、REQ-M5-01.13 的逾時告知）**經三輪雙軌覆核、六個覆核 agent 皆未抓到；使用者實機四十分鐘撞到兩個**。
+
+它們都不是靠推論能發現的 —— 一個要真的看著畫面不知道要幹嘛，一個要真的按住不放。手感本來就只能實機驗，而「看不懂怎麼玩」這種問題，一個能跑的原型半小時就會撞到。
+
+**故本專案往後的微動作類 SPEC：第一輪覆核之後即做丟棄式原型，拿實機結果寫下一版，再送後續覆核。** 覆核擅長抓的是內部矛盾與數值謬誤（v1~v4 確實抓到 29 條 P0），不擅長抓「規則各自正確、合起來把功能做死」。
+
 ### 8.5 v6 裁決（2026-09-13，第四輪雙軌覆核後）
 
 | 議題 | 裁決 | 落點 |
@@ -953,7 +1072,7 @@ $3\sigma_{robust} = 2.1$ ms，對 120 ms 完美窗小了約 **57 倍**。**$W_p 
 | 中斷 | 一律判 `normal` → **以中斷當刻的持續時間判定**（消滅條件式正 EV，保留真實來電的保護） | REQ-M5-04.2~3 |
 | 逾時時軸 | 動畫全長結束 → **自 $T_0$ 起經過 $L$，量在指標時軸上** | REQ-M5-01.7、AC-M5-1.11 |
 | 指示狀態 | 只要求「改變」→ **視覺時間的純函式落在 domain**，AC 改為區間不變量 | REQ-M5-01.13、AC-M5-11.5/11.7 |
-| 三態文案解析 | 介面另加方法 → **自由函式，介面零成員變更**（Dart `implements` 語意） | REQ-M5-02.11、AC-M5-7.5 |
+| 三態文案解析 | 介面另加方法 → **`TravelMaterial.descriptionFor(tier)`，介面零成員變更**（Dart `implements` 語意） | REQ-M5-02.9、REQ-M5-02.11、AC-M5-7.3、AC-M5-7.5 |
 | 結果文字 | 五種字串 → **態 × 方向正交**（`普通` 也要有方向） | REQ-M5-01.13、AC-M5-11.6 |
 | 文案優先序與範圍 | `failed` 優先、64 段 → **`perfect` 優先、首發 37 段**，其餘 27 段綁定 $W_n$ 裁決 | REQ-M5-12.4~5 |
 | 野外 HUD | 全腰包累計 → **最佳 4 張預估**（避免結算時自我否證） | REQ-M5-11.5 |
@@ -961,10 +1080,25 @@ $3\sigma_{robust} = 2.1$ ms，對 120 ms 完美窗小了約 **57 倍**。**$W_p 
 
 **一處覆核歸類不採納**：中斷正 EV 被歸為「v5 新引入（紅圈使失手可觀察）」。紅圈標的是吻合點不是必敗點，真正讓必敗可觀察的是收縮環幾何，v4 即如此。**影響修法** —— 拿掉紅圈無效，必須改判定規則。
 
-### 8.4 流程裁決：覆核之後、第四版之前，先做原型
 
-v5 的兩個規格層級發現（REQ-M5-03.3 的遮擋規則、REQ-M5-01.13 的逾時告知）**經三輪雙軌覆核、六個覆核 agent 皆未抓到；使用者實機四十分鐘撞到兩個**。
+### 8.6 v7 裁決（2026-09-13，第五輪雙軌覆核後）
 
-它們都不是靠推論能發現的 —— 一個要真的看著畫面不知道要幹嘛，一個要真的按住不放。手感本來就只能實機驗，而「看不懂怎麼玩」這種問題，一個能跑的原型半小時就會撞到。
+| 議題 | 裁決 | 落點 |
+|---|---|---|
+| 16 張池絕景數的事實 | 「只含 2 張」錯誤，重建卡表證實為 **4 張**；$c=0.43$ 的根因單純是「只驗 `normal` 態」 | §4.3、AC-M5-5.8 |
+| 中斷路徑的絕景 | 未涵蓋 → **中斷時絕景視為構圖不通過**，堵住繞過降階的路徑 | REQ-M5-04.2、AC-M5-3.7b |
+| 中斷時戳來源 | 「比照 REQ-M5-01.3」未指定來源 → **終止指標事件（`PointerCancelEvent`）的 timeStamp** | REQ-M5-04.2、AC-M5-3.7 |
+| 文案護欄範圍 | `AC-M5-12.1/12.3` 全域 → **僅比對有撰寫版本者**，解掉與回退的互斥 | AC-M5-12.1~12.3 |
+| 回退刻意性的釘法 | 「回退後相等」→ **白名單集合恰等於非絕景 id 集合** | AC-M5-2.1 |
+| HUD 最佳 4 張 | $\text{hype}\times\text{tierFactor}$ 排序近似 → **對客戶公式窮舉 $\binom{n}{4}$ 取真 argmax** | REQ-M5-11.5、AC-M5-11.4a/b |
+| 逾時界線的計時器優先序 | 未定義 → **計時器只負責結束儀式，遲到的 up 若 $\le L$ 仍以指標時戳為準** | REQ-M5-01.7、AC-M5-1.12 |
+| 判定與視覺的型別 | 皆為裸 `int` → **不同型別包裝＋靜態檢查** | REQ-M5-01.13、AC-M5-1.13 |
+| 三態文案的資料模型 | 「64 筆對照表」模糊 → **`TravelMaterial.perfectDescription`／`failedDescription` 兩個新欄位 ＋ `descriptionFor(tier)`** | REQ-M5-02.9、02.11、10.5 |
+| 第二層資料流 | 「`ItineraryStats` 加聚合欄位」在簽章凍結下不可行 → **`hypeSumByTier`（難度無關）＋ `evaluate` 新增 `difficulty`／`interruptionDiscount`** | REQ-M5-02.5、AC-M5-9.6 |
+| `shotQuality` 因果載體 | 未定 → **新增 `CausalDomain.shotQuality`，tier 文字寄生於 `sourceSignifier`** | REQ-M5-08.1 |
+| 相機讀出點範圍 | 只讀 `mode` → **須涵蓋 `mode`／`_frozenCenter`／`_pendingPan`／`_lastInteraction`** | AC-M5-4.3a |
+| 收縮指示宿主層 | 「game 或 ui 皆可」→ **QTE 期間擇一層，該層內指示元件數量恆為 1** | REQ-M5-10.1/10.8、AC-M5-4.6 |
+| 絕景風險反轉（§7.9） | 中等技術即劣於 `tourist` → **絕景另訂獨立 `tierFactor`**（熟練錨點與非絕景等值、翻轉點對稱拉回 173/205 ms，兩條線性方程式唯一解） | REQ-M5-02.3、AC-M5-5.5c |
+| $c$ 與金幣通道定位（P1-D） | $c$ 隨絕景表連帶下修 0.43→**0.36**；金幣中位數封閉解鎖在低個位數百分比 → **降級為紀錄性風味，不再是報酬通道**，不動引擎、只改敘事與文案 | REQ-M5-02.6、§1.3 |
 
-**故本專案往後的微動作類 SPEC：第一輪覆核之後即做丟棄式原型，拿實機結果寫下一版，再送後續覆核。** 覆核擅長抓的是內部矛盾與數值謬誤（v1~v4 確實抓到 29 條 P0），不擅長抓「規則各自正確、合起來把功能做死」。
+兩條企劃軌 P0（§7.9 絕景把最佳牌組推向風險反轉、P1-D 的 $c$ 金幣通道封閉解）已於使用者確認後定案，即上表最後兩列。

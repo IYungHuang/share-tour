@@ -143,7 +143,7 @@ spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
 | `SPEC_MVP_TIMELINE_UI.md` / `PLAN_MVP_TIMELINE_UI.md` | M2 4 槽位時間線編輯器、雙客戶 Review 彈窗、狀態接線，SPEC v2，已實作 |
 | `SPEC_MVP_POI_GATHERING.md` / `PLAN_MVP_POI_GATHERING.md` | M3 大世界 POI 踩線取材、野外 HUD、體力透支返程，SPEC v2 簽核，已實作 |
 | `SPEC_MVP_META_PROGRESSION.md` / `PLAN_MVP_META_PROGRESSION.md` | M4 行前委託、黑市裝備升級、`PersistenceRepository` 本機存檔。SPEC v2 / PLAN v1，**未提交版控、待覆核** |
-| `SPEC_MVP_MICRO_ACTION.md` | M5 快門微動作與三態取材。**Draft v2，經兩輪雙軌覆核未過，待出 v3**（待辦見 `HANDOFF.md` §3） |
+| `SPEC_MVP_MICRO_ACTION.md` | M5 快門微動作與雙層結算。**Draft v7，待送第六輪雙軌覆核**（v1~v6 累計五輪雙軌覆核、實機原型驗證，詳見文件內 §8 裁決紀錄；分支 `proto/m5-shutter-feel`） |
 | `HANDOFF.md` | 交接紀錄，跨對話的進度快照，會隨每次交接改寫。**接手時先讀這份** |
 | `TASK_D_LOCAL_TIER_PROPOSAL.md` | 任務 D（地方層地圖）提案 |
 | `ARCHITECTURE_DESIGN.md` | 早期設計文件，**參考素材，非權威** |
