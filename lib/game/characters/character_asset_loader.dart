@@ -4,6 +4,7 @@ import 'package:flame/cache.dart';
 import 'package:flame/components.dart';
 
 import '../../domain/character_action/character_animation_manifest.dart';
+import 'guide_action_sheet_registry.dart';
 
 class LoadedCharacterAnimation {
   const LoadedCharacterAnimation({
@@ -66,6 +67,24 @@ class CharacterAssetLoader {
         loop: asset.loop,
       ),
       asset: asset,
+    );
+  }
+
+  Future<Sprite> loadCell(CharacterActionSheetCell cell) async {
+    final path = normalizeAssetPath(cell.assetPath);
+    late final ui.Image image;
+    try {
+      image = await _images.load(path);
+    } catch (error) {
+      throw CharacterAssetLoadException(cell.assetPath, error);
+    }
+    return Sprite(
+      image,
+      srcPosition: Vector2(
+        cell.sourceOrigin.x.toDouble(),
+        cell.sourceOrigin.y.toDouble(),
+      ),
+      srcSize: Vector2(cell.frameWidth.toDouble(), cell.frameHeight.toDouble()),
     );
   }
 }

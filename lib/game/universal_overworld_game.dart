@@ -14,6 +14,7 @@ import '../domain/location/camera/camera_follow.dart';
 import '../domain/location/models/district_attraction.dart';
 import 'components/attraction_layer_component.dart';
 import 'characters/character_asset_loader.dart';
+import 'characters/guide_action_sheet_registry.dart';
 import 'components/character_component.dart';
 import 'components/ocean_waves_component.dart';
 import 'components/player_component.dart';
@@ -61,6 +62,7 @@ class UniversalOverworldGame extends FlameGame
 
   CharacterAction? _pendingAction;
   CharacterDirection? _pendingDirection;
+  String? _pendingActionCellId;
   bool _playerCreated = false;
 
   late final World mapWorld;
@@ -135,11 +137,16 @@ class UniversalOverworldGame extends FlameGame
     await mapWorld.add(playerComponent);
     final pendingAction = _pendingAction;
     final pendingDirection = _pendingDirection;
+    final pendingActionCellId = _pendingActionCellId;
     _pendingAction = null;
     _pendingDirection = null;
+    _pendingActionCellId = null;
     if (pendingAction != null) playerComponent.play(pendingAction);
     if (pendingDirection != null) {
       playerComponent.setDirection(pendingDirection);
+    }
+    if (pendingActionCellId != null) {
+      await playPlayerActionCell(pendingActionCellId);
     }
 
     // 4. 加入行政區熱門旅遊景點圖層 (雙手放大地圖時動態增添揭露)
@@ -253,6 +260,26 @@ class UniversalOverworldGame extends FlameGame
     } else {
       _pendingDirection = direction;
     }
+  }
+
+  Future<bool> playPlayerActionCell(String cellId) async {
+    final cells = characterId == 'guide'
+        ? guideActionSheetRegistry
+        : femaleGuideActionSheetRegistry;
+    CharacterActionSheetCell? cell;
+    for (final candidate in cells) {
+      if (candidate.cellId == cellId) {
+        cell = candidate;
+        break;
+      }
+    }
+    if (cell == null) return false;
+    if (!_playerCreated) {
+      _pendingActionCellId = cellId;
+      return true;
+    }
+    await playerComponent.playCell(cell);
+    return true;
   }
 
   @override

@@ -1,6 +1,8 @@
 import 'package:flame/game.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'game/characters/guide_character_manifest.dart';
+import 'game/characters/guide_action_sheet_registry.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/engine_pause_coordinator.dart';
@@ -325,6 +327,17 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
         currentManifest is KyotoDistrictStreetManifest ||
         currentManifest.mapId == 'kyoto_street_block' ||
         currentManifest.mapId.startsWith('kyoto_street_');
+    final activeOverlays = <String>[
+      'MosaicTransition',
+      'CuratorHUD',
+      'RetroHUD',
+      'DistrictDiscovery',
+      'AttractionDetail',
+      'FloatingFeedback',
+      'DPad',
+      'ModeToggle',
+      if (kDebugMode) 'CharacterActionTest',
+    ];
 
     return Scaffold(
       body: GameWidget<UniversalOverworldGame>.controlled(
@@ -378,6 +391,8 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
                 controller: _gatheringFeedbackController,
               ),
           'DPad': (context, game) => _DPadOverlay(game: game),
+          'CharacterActionTest': (context, game) =>
+              _CharacterActionTestOverlay(game: game),
           'ModeToggle': (context, game) => _ModeToggle(
             game: game,
             onOpenStudio: _openCuratorStudioSafely,
@@ -400,16 +415,7 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
                 ),
           ),
         },
-        initialActiveOverlays: const [
-          'MosaicTransition',
-          'CuratorHUD',
-          'RetroHUD',
-          'DistrictDiscovery',
-          'AttractionDetail',
-          'FloatingFeedback',
-          'DPad',
-          'ModeToggle',
-        ],
+        initialActiveOverlays: activeOverlays,
       ),
     );
   }
@@ -629,6 +635,56 @@ class _DPadOverlay extends ConsumerWidget {
               ),
               arrow(Icons.keyboard_arrow_down, 0, 1),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Debug-only action sheet trigger. Production builds never add this overlay.
+class _CharacterActionTestOverlay extends StatelessWidget {
+  const _CharacterActionTestOverlay({required this.game});
+
+  final UniversalOverworldGame game;
+
+  @override
+  Widget build(BuildContext context) {
+    final cells = guideActionSheetRegistry;
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 18),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.75),
+              border: Border.all(color: const Color(0xFFFFC857), width: 2),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var index = 0; index < cells.length; index++)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: TextButton(
+                        key: Key('character_action_test_$index'),
+                        onPressed: () =>
+                            game.playPlayerActionCell(cells[index].cellId),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.black,
+                          backgroundColor: const Color(0xFFFFC857),
+                          minimumSize: const Size(42, 32),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        child: Text('A${index + 1}'),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

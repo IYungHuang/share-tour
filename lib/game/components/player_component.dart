@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../domain/character_action/character_action.dart';
 import '../../domain/character_action/character_direction.dart';
 import 'character_component.dart';
+import '../characters/guide_action_sheet_registry.dart';
 
 /// 小人。只負責把 domain 算出的顯示點畫出來，不含任何位置計算。
 ///
@@ -34,5 +35,9 @@ class PlayerComponent extends PositionComponent {
 
   void setDirection(CharacterDirection direction) {
     characterComponent?.controller.setDirection(direction);
+  }
+
+  Future<void> playCell(CharacterActionSheetCell cell) async {
+    await characterComponent?.playCell(cell);
   }
 }
