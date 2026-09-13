@@ -11,6 +11,8 @@ import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
 import 'package:share_tour/domain/core_loop/models/persistence_repository.dart';
 import 'package:share_tour/domain/core_loop/models/poi_material_resolver.dart';
 import 'package:share_tour/domain/core_loop/models/review_outcome.dart';
+import 'package:share_tour/domain/core_loop/models/shot_tier.dart';
+import 'package:share_tour/domain/core_loop/models/shutter_difficulty.dart';
 import 'package:share_tour/domain/core_loop/models/timeline_itinerary.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/domain/core_loop/models/travel_philosophy.dart';
@@ -63,10 +65,20 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
   ///
   /// 若提供 manifest 與 playerPixel，會重新計算當下最近且可取材之 POI；
   /// 若無提供（既有測試相容路徑），則直接以 poiId 進行解析與取材。
+  ///
+  /// [expectedPoiId] 為 REQ-M5-07.1 的鎖定防護：QTE 開始時鎖定目標，判定
+  /// 完成後（1.2~2.0 秒後）若最近可取材的 POI 已與鎖定時不符，拋出
+  /// [PoiTargetChangedException] 取消本次取材，不做任何狀態變更。未提供
+  /// 時（既有呼叫端）完全不受影響——這是既有缺陷的獨立修復，不隨 [shotTier]
+  /// 一起生效。
+  ///
+  /// [shotTier] 為快門 QTE 的判定結果（REQ-M5-01.1），預設 `normal`。
   ({DistrictAttraction attraction, TravelMaterial material, int hpSpent}) gatherPoi(
     String poiId, {
     OverworldMapManifest? manifest,
     Vector2? playerPixel,
+    String? expectedPoiId,
+    ShotTier shotTier = ShotTier.normal,
   }) {
     final resolver = _resolver;
     if (resolver == null) {
@@ -91,6 +103,9 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
     }
 
     if (targetAttraction == null || targetMaterial == null) {
+      if (expectedPoiId != null && poiId != expectedPoiId) {
+        throw PoiTargetChangedException(expectedPoiId, poiId);
+      }
       targetMaterial = resolver.resolveMaterialFor(poiId);
       if (targetMaterial == null) {
         throw PoiUnavailableException(poiId);
@@ -109,6 +124,14 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
             reviewCount: 0,
             category: AttractionCategory.sightseeing,
           );
+    }
+
+    if (expectedPoiId != null && targetAttraction.id != expectedPoiId) {
+      throw PoiTargetChangedException(expectedPoiId, targetAttraction.id);
+    }
+
+    if (shotTier != ShotTier.normal) {
+      targetMaterial = targetMaterial.copyWith(shotTier: shotTier);
     }
 
     final hpBefore = state.resources.currentHp;
@@ -202,6 +225,19 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
   /// 行前選定旅行哲學
   void selectPhilosophy(TravelPhilosophy philosophy) {
     state = state.selectPhilosophy(philosophy);
+  }
+
+  /// 行前選定快門難度（REQ-M5-05.2，與旅行哲學同一畫面）。
+  void selectDifficulty(ShutterDifficulty difficulty) {
+    state = state.selectDifficulty(difficulty);
+    _append(CuratorEventType.difficultySelected, {
+      'difficulty': difficulty.name,
+    });
+  }
+
+  /// 記錄一次快門中斷（REQ-M5-04.2）。
+  void recordShutterInterruption() {
+    state = state.recordInterruption();
   }
 
   /// 行前靈感重擲刷新候選卡 (首局零幣免費，其餘扣除 100 幣並寫入存檔)
@@ -318,6 +354,8 @@ class CuratorRunController extends StateNotifier<CuratorRunState> {
       client: clientSpec,
       stats: stats,
       philosophy: state.philosophy,
+      difficulty: state.shutterDifficulty,
+      interruptionDiscount: state.interruptionDiscount,
     );
 
     state = state.copyWith(

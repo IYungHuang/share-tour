@@ -128,6 +128,8 @@ final comparisonReviewReportProvider =
     client: client,
     stats: state.currentStats,
     philosophy: state.philosophy,
+    difficulty: state.shutterDifficulty,
+    interruptionDiscount: state.interruptionDiscount,
   );
 });
 
