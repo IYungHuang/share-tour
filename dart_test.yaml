@@ -1,0 +1,10 @@
+# 宣告 `slow` tag，供全母體效果驗收（AC-M5-9 系列）使用 @Tags(['slow'])
+# 標記。預設 `flutter test`／`dart test` 仍會執行這些測試（它們是真正的
+# 驗收條件，不是分析腳本，不預設排除）；CI 或本地想跳過時可用
+# `flutter test --exclude-tags slow`。
+#
+# 純分析腳本（test/analysis/*）沿用既有的 `skip:` 慣例，不用這個 tag——
+# 兩者的差異：這裡是「會失敗就代表壞了」的驗收條件，那裡是「求參數用的
+# 一次性腳本」。
+tags:
+  slow:
