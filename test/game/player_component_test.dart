@@ -53,6 +53,11 @@ void main() {
     expect(p.placeholder, isNotNull);
   });
 
+  test('角色位於光照層之上，避免環境濾鏡遮住人物', () {
+    final p = PlayerComponent(position: Vector2.zero());
+    expect(p.priority, 20);
+  });
+
   test('action commands forward to one character controller', () {
     final controller = makeCharacterController();
     final character = CharacterComponent(

@@ -19,7 +19,12 @@ class PlayerComponent extends PositionComponent {
               paint: Paint()..color = const Color(0xFFFF4757),
             )
           : null,
-      super(position: position, size: Vector2.all(16), anchor: Anchor.center) {
+      super(
+        position: position,
+        size: Vector2.all(16),
+        anchor: Anchor.center,
+        priority: 20,
+      ) {
     final child = characterComponent ?? placeholder!;
     child.position = Vector2.zero();
     add(child);

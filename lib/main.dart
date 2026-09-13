@@ -653,9 +653,9 @@ class _CharacterActionTestOverlay extends StatelessWidget {
     final cells = guideActionSheetRegistry;
     return SafeArea(
       child: Align(
-        alignment: Alignment.bottomCenter,
+        alignment: Alignment.topCenter,
         child: Padding(
-          padding: const EdgeInsets.only(bottom: 18),
+          padding: const EdgeInsets.only(top: 132),
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: Colors.black.withValues(alpha: 0.75),
