@@ -1,3 +1,4 @@
+import 'shot_tier.dart';
 import 'timeline_slot.dart';
 import 'travel_material.dart';
 import 'travel_philosophy.dart';
@@ -19,6 +20,12 @@ class ItineraryStats {
     required this.themeBaseline,
     required this.themeBeforeFatigue,
     required this.purityActive,
+    this.failedSpotlightHype = 0,
+    this.failedNonSpotlightHype = 0,
+    this.normalSpotlightHype = 0,
+    this.normalNonSpotlightHype = 0,
+    this.perfectSpotlightHype = 0,
+    this.perfectNonSpotlightHype = 0,
     bool? hasSpotlight,
   }) : hasSpotlight = hasSpotlight ?? (spotlightCount > 0);
 
@@ -67,6 +74,18 @@ class ItineraryStats {
   /// 行程中是否含有至少 1 個絕景素材 (衍生自 spotlightCount > 0)
   final bool hasSpotlight;
 
+  /// 第二層資料流（REQ-M5-02.5）：依 (shotTier, isSpotlight) 分組的
+  /// `material.hypeValue` 原始值總和——**不是** [slotEffectiveHypes]
+  /// （那是排列相依量，含槽位倍率與連鎖加成）。難度無關，只看素材本身
+  /// 的三態與是否絕景；`tierFactor` 的套用留給 `ClientReviewEngine`
+  /// （它才知道難度）。
+  final int failedSpotlightHype;
+  final int failedNonSpotlightHype;
+  final int normalSpotlightHype;
+  final int normalNonSpotlightHype;
+  final int perfectSpotlightHype;
+  final int perfectNonSpotlightHype;
+
   /// 純度加成分數 (達成時為 1，失效為 0)
   int get purityBonus => purityActive ? TimelineItinerary.defaultPurityBonus : 0;
 
@@ -85,6 +104,12 @@ class ItineraryStats {
           themeBeforeFatigue == other.themeBeforeFatigue &&
           purityActive == other.purityActive &&
           hasSpotlight == other.hasSpotlight &&
+          failedSpotlightHype == other.failedSpotlightHype &&
+          failedNonSpotlightHype == other.failedNonSpotlightHype &&
+          normalSpotlightHype == other.normalSpotlightHype &&
+          normalNonSpotlightHype == other.normalNonSpotlightHype &&
+          perfectSpotlightHype == other.perfectSpotlightHype &&
+          perfectNonSpotlightHype == other.perfectNonSpotlightHype &&
           _listEquals(slotEffectiveHypes, other.slotEffectiveHypes) &&
           _setEquals(comboActiveSlots, other.comboActiveSlots) &&
           _setEquals(rhythmActivePairs, other.rhythmActivePairs) &&
@@ -92,7 +117,7 @@ class ItineraryStats {
           _mapEquals(slotThemeBonuses, other.slotThemeBonuses);
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
         totalCost,
         totalHype,
         finalTheme,
@@ -103,6 +128,12 @@ class ItineraryStats {
         themeBeforeFatigue,
         purityActive,
         hasSpotlight,
+        failedSpotlightHype,
+        failedNonSpotlightHype,
+        normalSpotlightHype,
+        normalNonSpotlightHype,
+        perfectSpotlightHype,
+        perfectNonSpotlightHype,
         Object.hashAll(slotEffectiveHypes),
         Object.hashAll(comboActiveSlots),
         Object.hashAll(rhythmActivePairs),
@@ -111,7 +142,7 @@ class ItineraryStats {
           (slotThemeBonuses.entries.toList()..sort((a, b) => a.key.compareTo(b.key)))
               .map((e) => Object.hash(e.key, e.value)),
         ),
-      );
+      ]);
 
   @override
   String toString() =>
@@ -215,6 +246,13 @@ class TimelineItinerary {
     final fatiguePairs = <int>{};
     final slotThemeBonuses = <int, int>{};
 
+    var failedSpotlightHype = 0;
+    var failedNonSpotlightHype = 0;
+    var normalSpotlightHype = 0;
+    var normalNonSpotlightHype = 0;
+    var perfectSpotlightHype = 0;
+    var perfectNonSpotlightHype = 0;
+
     // 1. 各槽位獨立素材計算
     for (var i = 0; i < 4; i++) {
       final material = slots[i];
@@ -225,6 +263,23 @@ class TimelineItinerary {
       totalStory += material.storyValue;
       if (material.isSpotlight) {
         spotlightCount++;
+      }
+
+      // 第二層資料流：用 material.hypeValue 原始值，不是下面算的
+      // slotEffectiveHypes（排列相依，含相機倍率與連鎖加成）。
+      switch ((material.shotTier, material.isSpotlight)) {
+        case (ShotTier.failed, true):
+          failedSpotlightHype += material.hypeValue;
+        case (ShotTier.failed, false):
+          failedNonSpotlightHype += material.hypeValue;
+        case (ShotTier.normal, true):
+          normalSpotlightHype += material.hypeValue;
+        case (ShotTier.normal, false):
+          normalNonSpotlightHype += material.hypeValue;
+        case (ShotTier.perfect, true):
+          perfectSpotlightHype += material.hypeValue;
+        case (ShotTier.perfect, false):
+          perfectNonSpotlightHype += material.hypeValue;
       }
 
       // 槽位專屬 Theme 加成
@@ -319,6 +374,12 @@ class TimelineItinerary {
       themeBeforeFatigue: themeBeforeFatigue,
       purityActive: purityActive,
       hasSpotlight: spotlightCount > 0,
+      failedSpotlightHype: failedSpotlightHype,
+      failedNonSpotlightHype: failedNonSpotlightHype,
+      normalSpotlightHype: normalSpotlightHype,
+      normalNonSpotlightHype: normalNonSpotlightHype,
+      perfectSpotlightHype: perfectSpotlightHype,
+      perfectNonSpotlightHype: perfectNonSpotlightHype,
     );
   }
 
