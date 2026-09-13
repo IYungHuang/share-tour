@@ -335,12 +335,15 @@ class _ShutterProtoPageState extends State<ShutterProtoPage>
     final verdictText = switch (v) {
       JitterVerdict.insufficientData =>
         '樣本不足（需 ${JitterStats.minSamplesForVerdict}）',
+      JitterVerdict.unconstrained =>
+        '抖動不構成限制 —— 3×穩健σ 遠低於 ${JitterStats.windowFloorMs.toStringAsFixed(0)} ms 下限',
       JitterVerdict.comfortable => '充裕 —— 窗寬有 25% 以上餘裕',
       JitterVerdict.marginal => '臨界 —— 剛好夠用，沒有餘裕',
       JitterVerdict.lottery => '★ 抽獎 —— 窗寬低於抖動要求',
     };
     final verdictColour = switch (v) {
       JitterVerdict.insufficientData => Colors.white54,
+      JitterVerdict.unconstrained => Colors.greenAccent,
       JitterVerdict.comfortable => Colors.greenAccent,
       JitterVerdict.marginal => Colors.amberAccent,
       JitterVerdict.lottery => Colors.redAccent,

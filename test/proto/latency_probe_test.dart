@@ -128,29 +128,51 @@ void main() {
     });
   });
 
-  group('裁決三段（回歸：曾在 σ=40 放硬懸崖，越線即紅字但建議值只差 1 ms）', () {
+  group('裁決四段（回歸：曾在 σ=40 放硬懸崖，越線即紅字但建議值只差 1 ms）', () {
     JitterStats statsWithMad(double mad) {
       final s = JitterStats();
-      // 對稱雙點分佈：MAD 恰為該值。
-      feed(s, [for (var i = 0; i < 40; i++) i.isEven ? mad : -mad]);
+      // 首筆是基準，會被扣成 0 —— 所以要讓首筆落在分佈中心，否則整組被平移
+      // 半個振幅，實際 MAD 會是傳入值的兩倍。
+      feed(s, [0, for (var i = 0; i < 40; i++) i.isEven ? mad : -mad]);
       return s;
     }
 
+    // 抖動須高到不被下限綁住，否則裁決會（正確地）落在 unconstrained，
+    // 就測不到餘裕分段本身。
     test('窗寬有 25% 以上餘裕 → 充裕', () {
-      final s = statsWithMad(4); // robustSigma 約 5.9 → 建議 120（地板）
+      final s = statsWithMad(40); // 穩健σ 59.3 → 建議 178
       expect(s.verdictFor(240), JitterVerdict.comfortable);
     });
 
-    test('窗寬剛好等於建議值 → 臨界，不是抽獎', () {
-      final s = statsWithMad(4);
-      expect(s.recommendedWindowMs, JitterStats.windowFloorMs);
-      expect(s.verdictFor(120), JitterVerdict.marginal);
+    test('窗寬剛好夠但無餘裕 → 臨界，不是抽獎', () {
+      final s = statsWithMad(40);
+      expect(s.recommendedWindowMs, greaterThan(JitterStats.windowFloorMs));
+      expect(s.verdictFor(180), JitterVerdict.marginal);
     });
 
     test('窗寬低於建議值 → 抽獎', () {
-      final s = statsWithMad(40); // robustSigma 59.3 → 建議 178
+      final s = statsWithMad(40); // 穩健σ 59.3 → 建議 178
       expect(s.recommendedWindowMs, greaterThan(120));
       expect(s.verdictFor(120), JitterVerdict.lottery);
+    });
+
+    test('抖動遠低於下限時，裁決不得卡在「臨界」（實測 穩健σ 0.7 ms）', () {
+      final s = statsWithMad(0.5);
+      expect(s.recommendedWindowMs, JitterStats.windowFloorMs);
+      expect(
+        s.verdictFor(JitterStats.windowFloorMs),
+        JitterVerdict.unconstrained,
+        reason: '建議值被下限綁住時，比 needed × 1.25 必然不成立 —— '
+            '抖動越低越卡在臨界，是判準自己打自己',
+      );
+    });
+
+    test('窗寬低於絕對下限時仍是抽獎，不因抖動低而放行', () {
+      final s = statsWithMad(0.5);
+      expect(
+        s.verdictFor(JitterStats.windowFloorMs - 1),
+        JitterVerdict.lottery,
+      );
     });
 
     test('樣本不足時不裁決', () {

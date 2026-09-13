@@ -149,18 +149,27 @@ class JitterStats {
   /// 第一版在 `σ > 40` 放了二分，而 $3 \times 40 = 120$ 恰為絕對下限 ——
   /// 於是交界點必然是「下限剛好不夠用」，一越過就跳紅字，實際建議值卻只差
   /// 1 ms。那是我的儀器設計錯誤，不是裝置的問題。
+  /// 建議值是否被絕對下限綁住 —— 即抖動本身已不構成限制。
+  bool get _floorBound => 3 * robustSigma <= windowFloorMs;
+
   JitterVerdict verdictFor(double currentWindowMs) {
     if (count < minSamplesForVerdict) return JitterVerdict.insufficientData;
     final needed = recommendedWindowMs;
+    if (currentWindowMs < needed) return JitterVerdict.lottery;
+    // 下限綁住時 `needed × 1.25` 必然構不成，於是抖動越低越卡在「臨界」。
+    // 那是判準的問題不是裝置的問題（實測 穩健σ 0.7 ms 就撞到）。
+    if (_floorBound) return JitterVerdict.unconstrained;
     if (currentWindowMs >= needed * 1.25) return JitterVerdict.comfortable;
-    if (currentWindowMs >= needed) return JitterVerdict.marginal;
-    return JitterVerdict.lottery;
+    return JitterVerdict.marginal;
   }
 }
 
 enum JitterVerdict {
   /// 樣本不足，尚無法裁決。
   insufficientData,
+
+  /// 抖動遠低於絕對下限，硬體不構成限制 —— 窗寬純由設計決定。
+  unconstrained,
 
   /// 窗寬有 25% 以上的餘裕。
   comfortable,
