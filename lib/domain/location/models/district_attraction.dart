@@ -101,6 +101,7 @@ class AdministrativeDistrict {
     required this.centerGeo,
     required this.centerPixel,
     this.minZoomForSpots = 1.2,
+    this.radiusPixels = 120.0,
   });
 
   /// 行政區代碼
@@ -118,8 +119,14 @@ class AdministrativeDistrict {
   /// 放大至何種縮放倍率時開始顯現該區密集景點
   final double minZoomForSpots;
 
-  /// 計算相機中心距此行政區中心的像素距離
+  /// 判定角色踏入此行政區的感應半徑（預設 120 像素）
+  final double radiusPixels;
+
+  /// 計算相機中心或玩家座標距此行政區中心的像素距離
   double distanceToPixel(Vector2 point) => centerPixel.distanceTo(point);
+
+  /// 判定指定座標是否踏入此行政區地理感應圈
+  bool containsPixel(Vector2 point) => distanceToPixel(point) <= radiusPixels;
 }
 
 /// 縮放過濾與行政區景點篩選邏輯
@@ -144,7 +151,31 @@ class AttractionFilter {
         .toList();
   }
 
-  /// 根據相機中心像素尋找當前最聚焦的行政區
+  /// 方案 A：根據玩家角色實際像素座標判定當前踏入的行政區
+  static AdministrativeDistrict? findDistrictAtPosition({
+    required List<AdministrativeDistrict> districts,
+    required Vector2 playerPosition,
+  }) {
+    if (districts.isEmpty) return null;
+
+    AdministrativeDistrict? closest;
+    double minDistance = double.infinity;
+
+    for (final district in districts) {
+      final dist = district.distanceToPixel(playerPosition);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closest = district;
+      }
+    }
+
+    if (closest != null && minDistance <= closest.radiusPixels) {
+      return closest;
+    }
+    return null;
+  }
+
+  /// 根據相機中心像素尋找當前最聚焦的行政區（相機視角相容方法）
   static AdministrativeDistrict? findFocusedDistrict({
     required List<AdministrativeDistrict> districts,
     required Vector2 cameraCenter,

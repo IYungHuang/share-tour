@@ -149,6 +149,7 @@ class UniversalOverworldGame extends FlameGame with ScaleDetector, TapCallbacks 
     attractionLayer.updateVisibility(
       zoom: cameraComponent.viewfinder.zoom,
       cameraCenter: cameraComponent.viewfinder.position,
+      playerPosition: playerComponent.position,
     );
   }
 

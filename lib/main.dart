@@ -341,7 +341,7 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
           'RetroHUD': (context, game) =>
               _RetroHudOverlay(focusedDistrict: _focusedDistrict),
           'DistrictDiscovery': (context, game) =>
-              _DistrictDiscoveryBanner(
+              DistrictDiscoveryBanner(
                 focusedDistrict: _focusedDistrict,
                 isStreetBlock: isStreetBlock,
                 onEnterDistrict: (districtType) => _switchMapHierarchy(
@@ -1235,9 +1235,10 @@ class _ModeToggleState extends ConsumerState<ModeToggle>
   };
 }
 
-/// 雙手放大時，頂部跳出的行政區熱門景點發現提示條
-class _DistrictDiscoveryBanner extends ConsumerWidget {
-  const _DistrictDiscoveryBanner({
+/// 雙手放大或角色走入行政區時，頂部跳出的行政區到達與漫步提示條
+class DistrictDiscoveryBanner extends ConsumerWidget {
+  const DistrictDiscoveryBanner({
+    super.key,
     required this.focusedDistrict,
     this.onEnterStreet,
     this.onEnterDistrict,
@@ -1262,85 +1263,129 @@ class _DistrictDiscoveryBanner extends ConsumerWidget {
       valueListenable: focusedDistrict,
       builder: (context, data, _) {
         final (district, count) = data;
-        if (district == null || count == 0) return const SizedBox.shrink();
-
-        final districtType = KyotoDistrictType.fromCode(district.code);
-        final canEnter = districtType != null || district.code.contains('nakagyo');
+        final districtType =
+            district == null ? null : KyotoDistrictType.fromCode(district.code);
+        final canEnter = district != null &&
+            (districtType != null || district.code.contains('nakagyo'));
 
         return SafeArea(
           child: Align(
             alignment: Alignment.topCenter,
-            child: Container(
-              margin: const EdgeInsets.only(top: 48, left: 12, right: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
-                border: Border.all(color: Colors.amber, width: 2),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black54, offset: Offset(2, 2)),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    districtType?.badgeIcon ?? '📍',
-                    style: const TextStyle(fontSize: 13),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, animation) {
+                return SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.0, -0.8),
+                    end: Offset.zero,
+                  ).animate(CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  )),
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: child,
                   ),
-                  const SizedBox(width: 4),
-                  Flexible(
-                    child: Text(
-                      '${district.name} · 已解鎖 $count 處熱門景點',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 0.3,
+                );
+              },
+              child: district == null
+                  ? const SizedBox.shrink(key: ValueKey('empty_district'))
+                  : Container(
+                      key: ValueKey(district.code),
+                      margin: const EdgeInsets.only(
+                        top: 48,
+                        left: 12,
+                        right: 12,
                       ),
-                    ),
-                  ),
-                  if (canEnter) ...[
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () {
-                        if (districtType != null && onEnterDistrict != null) {
-                          onEnterDistrict!(districtType);
-                        } else {
-                          onEnterStreet?.call();
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFD97706),
-                          border: Border.all(color: Colors.white, width: 1),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              '${districtType?.badgeIcon ?? '🏮'} 進入街區',
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E293B),
+                        border: Border.all(color: Colors.amber, width: 2),
+                        borderRadius: BorderRadius.circular(6),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Colors.black54,
+                            offset: Offset(2, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            districtType?.badgeIcon ?? '📍',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              count > 0
+                                  ? '已抵達 ${district.name} · 可探索 $count 處景點'
+                                  : '已抵達 ${district.name}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                fontSize: 10,
+                                fontSize: 11,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white,
+                                letterSpacing: 0.3,
                               ),
                             ),
-                            const SizedBox(width: 2),
-                            const Icon(Icons.arrow_forward_ios,
-                                size: 9, color: Colors.white),
+                          ),
+                          if (canEnter) ...[
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              key: const Key('enter_district_street_button'),
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {
+                                if (districtType != null &&
+                                    onEnterDistrict != null) {
+                                  onEnterDistrict!(districtType);
+                                } else {
+                                  onEnterStreet?.call();
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFD97706),
+                                  borderRadius: BorderRadius.circular(3),
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '${districtType?.badgeIcon ?? '🏮'} 進入街區',
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 2),
+                                    const Icon(
+                                      Icons.arrow_forward_ios,
+                                      size: 9,
+                                      color: Colors.white,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ],
-                        ),
+                        ],
                       ),
                     ),
-                  ],
-                ],
-              ),
             ),
           ),
         );

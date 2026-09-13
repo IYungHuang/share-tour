@@ -4,8 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:share_tour/core/time/system_clock.dart';
 import 'package:share_tour/domain/location/camera/camera_follow.dart';
+import 'package:share_tour/domain/location/models/district_attraction.dart';
 import 'package:share_tour/domain/location/models/geo_fix.dart';
+import 'package:share_tour/domain/location/projection/map_manifest.dart';
 import 'package:share_tour/domain/location/models/location_status.dart';
+import 'package:share_tour/game/map_module/manifests/kyoto_district_street_manifest.dart';
 import 'package:share_tour/game/map_module/manifests/kyoto_night_map_manifest.dart';
 import 'package:share_tour/game/universal_overworld_game.dart';
 import 'package:share_tour/main.dart';
@@ -246,6 +249,64 @@ void main() {
 
       expect(hierarchySwitched, isTrue);
       expect(find.text('🎡 行動選單 ▾'), findsOneWidget);
+    });
+
+    testWidgets('4. 方案 A 區域發現橫幅：角色踏入行政區時平滑顯示「已抵達」，點擊直接進入該街區散步道', (tester) async {
+      final focusedDistrict =
+          ValueNotifier<(AdministrativeDistrict?, int)>((null, 0));
+      KyotoDistrictType? enteredDistrict;
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            mapManifestProvider.overrideWithValue(const KyotoNightMapManifest()),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: Stack(
+                children: [
+                  DistrictDiscoveryBanner(
+                    focusedDistrict: focusedDistrict,
+                    onEnterDistrict: (district) => enteredDistrict = district,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // 1. 初始無行政區：完全收合
+      expect(find.textContaining('已抵達'), findsNothing);
+
+      // 2. 角色走入東山區
+      focusedDistrict.value = (
+        AdministrativeDistrict(
+          code: 'kyoto_higashiyama',
+          name: '洛東・祇園清水街區',
+          centerGeo: const GeoPoint(35.0, 135.778),
+          centerPixel: Vector2(537, 561),
+        ),
+        9,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('已抵達 洛東・祇園清水街區 · 可探索 9 處景點'),
+        findsOneWidget,
+      );
+      final enterBtn = find.byKey(const Key('enter_district_street_button'));
+      expect(enterBtn, findsOneWidget);
+
+      // 3. 點擊進入街區按鈕
+      await tester.tap(enterBtn);
+      await tester.pumpAndSettle();
+      expect(enteredDistrict, KyotoDistrictType.higashiyama);
+
+      // 4. 角色離開行政區
+      focusedDistrict.value = (null, 0);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('已抵達'), findsNothing);
     });
   });
 }

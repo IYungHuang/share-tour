@@ -193,5 +193,45 @@ void main() {
       );
       expect(focusedB?.code, 'metro_b');
     });
+
+    test('方案 A：依玩家角色實際像素座標 (findDistrictAtPosition) 精確感應踏入行政區邊界', () {
+      final districts = [
+        AdministrativeDistrict(
+          code: 'nakagyo',
+          name: '河原町',
+          centerGeo: const GeoPoint(35.006, 135.768),
+          centerPixel: Vector2(400, 400),
+          radiusPixels: 100.0,
+        ),
+        AdministrativeDistrict(
+          code: 'higashiyama',
+          name: '祇園清水',
+          centerGeo: const GeoPoint(35.000, 135.778),
+          centerPixel: Vector2(600, 600),
+          radiusPixels: 100.0,
+        ),
+      ];
+
+      // 1. 玩家在 nakagyo 中心 50px 處（< 100px），應踏入 nakagyo
+      final inNakagyo = AttractionFilter.findDistrictAtPosition(
+        districts: districts,
+        playerPosition: Vector2(430, 440),
+      );
+      expect(inNakagyo?.code, 'nakagyo');
+
+      // 2. 玩家在兩者之間的盆地無人區 (100, 100)，未在任何感應圈內
+      final inWilderness = AttractionFilter.findDistrictAtPosition(
+        districts: districts,
+        playerPosition: Vector2(100, 100),
+      );
+      expect(inWilderness, isNull);
+
+      // 3. 玩家移至 higashiyama 範圍內 (580, 610)
+      final inHigashiyama = AttractionFilter.findDistrictAtPosition(
+        districts: districts,
+        playerPosition: Vector2(580, 610),
+      );
+      expect(inHigashiyama?.code, 'higashiyama');
+    });
   });
 }

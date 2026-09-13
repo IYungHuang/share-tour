@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vector_math/vector_math.dart' as vm;
+import 'package:share_tour/domain/location/models/district_attraction.dart';
 import 'package:share_tour/game/components/attraction_layer_component.dart';
 import 'package:share_tour/game/map_module/manifests/kyoto_night_map_manifest.dart';
 
@@ -156,6 +157,45 @@ void main() {
 
       final picture = recorder.endRecording();
       picture.dispose();
+    });
+
+    test('10. 方案 A：玩家走動進入行政區邊界時觸發 onDistrictChanged，不受相機縮放限制', () {
+      AdministrativeDistrict? changedDistrict;
+      int changedSpotsCount = -1;
+
+      final component = AttractionLayerComponent(
+        manifest: manifest,
+        onDistrictChanged: (district, spotsCount) {
+          changedDistrict = district;
+          changedSpotsCount = spotsCount;
+        },
+      );
+
+      // 1. 玩家人在 (100, 100) 遠離任何行政區中心，縮放為 1.0
+      component.updateVisibility(
+        zoom: 1.0,
+        cameraCenter: vm.Vector2(512, 512),
+        playerPosition: vm.Vector2(100, 100),
+      );
+      expect(changedDistrict, isNull);
+
+      // 2. 玩家小人推搖桿移動到河原町中心 (397, 434)，即便 zoom 仍為 1.0 也應正確感應踏入
+      component.updateVisibility(
+        zoom: 1.0,
+        cameraCenter: vm.Vector2(512, 512),
+        playerPosition: vm.Vector2(397, 434),
+      );
+      expect(changedDistrict?.code, 'kyoto_nakagyo');
+      expect(changedSpotsCount, greaterThan(0), reason: '應帶入該行政區的熱門景點總數');
+
+      // 3. 玩家走出該行政區感應半徑之外
+      component.updateVisibility(
+        zoom: 1.0,
+        cameraCenter: vm.Vector2(512, 512),
+        playerPosition: vm.Vector2(100, 100),
+      );
+      expect(changedDistrict, isNull);
+      expect(changedSpotsCount, 0);
     });
   });
 }

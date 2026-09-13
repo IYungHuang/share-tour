@@ -86,10 +86,11 @@ class AttractionLayerComponent extends Component {
     );
   }
 
-  /// 根據相機位置與縮放更新可見景點
+  /// 根據相機位置、縮放以及玩家角色位置更新可見景點與所在行政區
   void updateVisibility({
     required double zoom,
     required vm.Vector2 cameraCenter,
+    vm.Vector2? playerPosition,
   }) {
     _lastZoom = zoom;
 
@@ -99,10 +100,11 @@ class AttractionLayerComponent extends Component {
       currentZoom: zoom,
     );
 
-    // 2. 判斷相機目前對焦的行政區
-    final focused = AttractionFilter.findFocusedDistrict(
+    // 2. 方案 A：以玩家角色實際位置判定所在行政區（未傳入時 fallback 至 cameraCenter）
+    final checkPosition = playerPosition ?? cameraCenter;
+    final focused = AttractionFilter.findDistrictAtPosition(
       districts: allDistricts,
-      cameraCenter: cameraCenter,
+      playerPosition: checkPosition,
     );
 
     _visibleAttractions = filtered;
@@ -130,7 +132,7 @@ class AttractionLayerComponent extends Component {
       final districtSpotsCount = focused == null
           ? 0
           : AttractionFilter.byDistrict(
-              attractions: filtered,
+              attractions: allAttractions,
               districtCode: focused.code,
             ).length;
       onDistrictChanged?.call(focused, districtSpotsCount);
