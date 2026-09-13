@@ -98,6 +98,6 @@ void main() {
     component.update(0.01);
     await Future<void>.delayed(const Duration(milliseconds: 100));
 
-    expect(component.spriteChild!.sprite!.src.top, 724);
+    expect(component.spriteChild!.sprite!.src.top, 631);
   });
 }

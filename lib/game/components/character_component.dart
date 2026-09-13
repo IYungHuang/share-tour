@@ -61,9 +61,15 @@ class CharacterComponent extends PositionComponent {
     if (_loadingAnimationKey == key) return;
     _loadingAnimationKey = key;
     try {
-      final loaded = await loader.load(asset);
+      final sheet = actionSheetAnimationFor(
+        controller.characterId,
+        controller.action,
+      );
+      final loadedAnimation = sheet == null
+          ? (await loader.load(asset)).animation
+          : await loader.loadSheetAnimation(sheet);
       if (controller.resolvedAnimation?.asset.animationKey != key) return;
-      _animation = loaded.animation;
+      _animation = loadedAnimation;
       _loadedAnimationKey = key;
       final child = _spriteChild;
       if (child == null && createChild) {

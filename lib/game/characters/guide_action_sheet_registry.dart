@@ -1,3 +1,4 @@
+import '../../domain/character_action/character_action.dart';
 import '../../domain/character_action/character_animation_manifest.dart';
 
 class CharacterActionSheetCell {
@@ -26,6 +27,22 @@ class CharacterActionSheetCell {
   final double renderHeight;
   final List<String> observationalTags;
   final List<String> semanticCandidates;
+  final double fps;
+  final bool loop;
+}
+
+class CharacterActionSheetAnimation {
+  const CharacterActionSheetAnimation({
+    required this.characterId,
+    required this.animationId,
+    required this.cells,
+    required this.fps,
+    this.loop = true,
+  });
+
+  final String characterId;
+  final String animationId;
+  final List<CharacterActionSheetCell> cells;
   final double fps;
   final bool loop;
 }
@@ -134,3 +151,65 @@ const femaleGuideActionSheetRegistry = <CharacterActionSheetCell>[
     semanticCandidates: ['victory_gesture', 'celebration_gesture'],
   ),
 ];
+
+final guideActionSheetAnimations = <CharacterActionSheetAnimation>[
+  _makeAnimation('guide', _malePath, 'walk', 315, 'walk_cycle'),
+  _makeAnimation('guide', _malePath, 'run', 631, 'run_cycle'),
+];
+
+final femaleGuideActionSheetAnimations = <CharacterActionSheetAnimation>[
+  _makeAnimation('guide_female', _femalePath, 'walk', 315, 'walk_cycle'),
+  _makeAnimation('guide_female', _femalePath, 'run', 631, 'run_cycle'),
+];
+
+CharacterActionSheetAnimation _makeAnimation(
+  String characterId,
+  String assetPath,
+  String animationId,
+  int y,
+  String semanticCandidate,
+) {
+  const origins = [0, 311, 623, 934];
+  const widths = [311, 312, 311, 312];
+  return CharacterActionSheetAnimation(
+    characterId: characterId,
+    animationId: animationId,
+    cells: [
+      for (var index = 0; index < origins.length; index++)
+        CharacterActionSheetCell(
+          characterId: characterId,
+          cellId: '${characterId}_action_r${y == 315 ? 2 : 3}_c${index + 1}',
+          assetPath: assetPath,
+          sourceOrigin: PixelPoint(origins[index], y),
+          frameWidth: widths[index],
+          frameHeight: characterId == 'guide' && y == 315 ? 315 : 316,
+          renderWidth: 24,
+          renderHeight: 24,
+          observationalTags: [semanticCandidate],
+          semanticCandidates: [semanticCandidate],
+        ),
+    ],
+    fps: 8,
+  );
+}
+
+CharacterActionSheetAnimation? actionSheetAnimationFor(
+  String characterId,
+  CharacterAction action,
+) {
+  final animations = characterId == 'guide'
+      ? guideActionSheetAnimations
+      : femaleGuideActionSheetAnimations;
+  final animationId = switch (action.locomotion) {
+    CharacterLocomotion.walk => 'walk',
+    CharacterLocomotion.run => 'run',
+    CharacterLocomotion.idle ||
+    CharacterLocomotion.dash ||
+    CharacterLocomotion.jump => null,
+  };
+  if (animationId == null) return null;
+  for (final animation in animations) {
+    if (animation.animationId == animationId) return animation;
+  }
+  return null;
+}

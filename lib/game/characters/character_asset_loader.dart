@@ -87,4 +87,15 @@ class CharacterAssetLoader {
       srcSize: Vector2(cell.frameWidth.toDouble(), cell.frameHeight.toDouble()),
     );
   }
+
+  Future<SpriteAnimation> loadSheetAnimation(
+    CharacterActionSheetAnimation animation,
+  ) async {
+    final sprites = [for (final cell in animation.cells) await loadCell(cell)];
+    return SpriteAnimation.spriteList(
+      sprites,
+      stepTime: 1 / animation.fps,
+      loop: animation.loop,
+    );
+  }
 }
