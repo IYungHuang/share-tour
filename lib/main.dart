@@ -1,7 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flame/game.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'game/characters/guide_character_manifest.dart';
+import 'game/characters/guide_action_sheet_registry.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/engine_pause_coordinator.dart';
@@ -11,6 +14,7 @@ import 'data/core_loop/local_persistence_repository.dart';
 import 'domain/core_loop/models/curator_save_data.dart';
 import 'domain/core_loop/models/persistence_repository.dart';
 import 'domain/core_loop/models/tour_time_of_day.dart';
+import 'domain/character_action/character_direction.dart';
 import 'domain/core_loop/run/curator_run_phase.dart';
 import 'domain/location/camera/camera_follow.dart';
 import 'domain/location/models/district_attraction.dart';
@@ -51,8 +55,9 @@ ProviderScope buildProductionApp({
     // 圖資與城市 DLC 在此注入。通用引擎與狀態層都不知道自己跑的是哪座城市。
     overrides: [
       activeMapManifestStateProvider.overrideWith((ref) => activeManifest),
-      mapManifestProvider
-          .overrideWith((ref) => ref.watch(activeMapManifestStateProvider)),
+      mapManifestProvider.overrideWith(
+        (ref) => ref.watch(activeMapManifestStateProvider),
+      ),
       curatorMaterialPoolProvider.overrideWithValue(kyotoNightMaterials),
       poiMaterialResolverProvider.overrideWithValue(
         const KyotoPoiMaterialResolver(),
@@ -116,10 +121,9 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
       onMidpoint: () async {
         ref.read(activeMapManifestStateProvider.notifier).state =
             targetManifest;
-        ref.read(locationControllerProvider.notifier).switchManifest(
-              targetManifest,
-              newSpawnPixel: spawnPixel,
-            );
+        ref
+            .read(locationControllerProvider.notifier)
+            .switchManifest(targetManifest, newSpawnPixel: spawnPixel);
         await _game.switchMap(targetManifest, newSpawnPixel: spawnPixel);
         _selectedAttraction.value = null;
       },
@@ -186,9 +190,8 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
     }
     try {
       await _showModalSafely(
-        (ctx) => CuratorBriefingModal(
-          onOpenGearShop: () => _openGearShopSafely(),
-        ),
+        (ctx) =>
+            CuratorBriefingModal(onOpenGearShop: () => _openGearShopSafely()),
       );
     } finally {
       _isBriefingModalOpen = false;
@@ -277,6 +280,8 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
         clock: ref.read(clockProvider),
         returnDelay: null, // 自由漫遊探索模式：取消 3 秒強制回彈，由方向鍵中央 🎯 按鈕手動歸位
       ),
+      characterManifest: guideCharacterManifest,
+      characterId: 'guide',
       onAttractionSelected: (a) => _selectedAttraction.value = a,
       onDistrictRevealed: (d, count) => _focusedDistrict.value = (d, count),
       timeSnapshotGetter: () => ref.read(gameTimeProvider),
@@ -285,7 +290,8 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
         return TourTimeOfDay.fromHpAndPhase(
           currentHp: runState.resources.hp,
           maxHp: runState.resources.maxHp,
-          isNightEditing: runState.phase == CuratorRunPhase.nightEditing ||
+          isNightEditing:
+              runState.phase == CuratorRunPhase.nightEditing ||
               runState.phase == CuratorRunPhase.clientReview ||
               runState.phase == CuratorRunPhase.settled,
         );
@@ -322,9 +328,20 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
     });
 
     final currentManifest = ref.watch(mapManifestProvider);
-    final isStreetBlock = currentManifest is KyotoDistrictStreetManifest ||
+    final isStreetBlock =
+        currentManifest is KyotoDistrictStreetManifest ||
         currentManifest.mapId == 'kyoto_street_block' ||
         currentManifest.mapId.startsWith('kyoto_street_');
+    final activeOverlays = <String>[
+      'MosaicTransition',
+      'CuratorHUD',
+      'DistrictDiscovery',
+      'AttractionDetail',
+      'FloatingFeedback',
+      'DPad',
+      'ModeToggle',
+      if (kDebugMode) 'CharacterActionTest',
+    ];
 
     return Scaffold(
       body: GameWidget<UniversalOverworldGame>.controlled(
@@ -340,21 +357,20 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
           ),
           'RetroHUD': (context, game) =>
               _RetroHudOverlay(focusedDistrict: _focusedDistrict),
-          'DistrictDiscovery': (context, game) =>
-              DistrictDiscoveryBanner(
-                focusedDistrict: _focusedDistrict,
-                isStreetBlock: isStreetBlock,
-                onEnterDistrict: (districtType) => _switchMapHierarchy(
-                  targetManifest: KyotoDistrictStreetManifest(districtType),
-                  targetTitle: '${districtType.name}散步道',
-                  spawnPixel: districtType.defaultSpawnPixel,
-                ),
-                onEnterStreet: () => _switchMapHierarchy(
-                  targetManifest: const KyotoStreetBlockManifest(),
-                  targetTitle: '洛中・河原町街區散步道（町家街區）',
-                  spawnPixel: Vector2(512.0, 512.0),
-                ),
-              ),
+          'DistrictDiscovery': (context, game) => DistrictDiscoveryBanner(
+            focusedDistrict: _focusedDistrict,
+            isStreetBlock: isStreetBlock,
+            onEnterDistrict: (districtType) => _switchMapHierarchy(
+              targetManifest: KyotoDistrictStreetManifest(districtType),
+              targetTitle: '${districtType.name}散步道',
+              spawnPixel: districtType.defaultSpawnPixel,
+            ),
+            onEnterStreet: () => _switchMapHierarchy(
+              targetManifest: const KyotoStreetBlockManifest(),
+              targetTitle: '洛中・河原町街區散步道（町家街區）',
+              spawnPixel: Vector2(512.0, 512.0),
+            ),
+          ),
           'AttractionDetail': (context, game) => AttractionDetailCard(
             selectedAttraction: _selectedAttraction,
             onFocusCamera: () {
@@ -381,6 +397,8 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
                 controller: _gatheringFeedbackController,
               ),
           'DPad': (context, game) => DPadOverlay(game: game),
+          'CharacterActionTest': (context, game) =>
+              _CharacterActionTestOverlay(game: game),
           'ModeToggle': (context, game) => ModeToggle(
             game: game,
             onOpenStudio: _openCuratorStudioSafely,
@@ -391,26 +409,19 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
               targetTitle: '京都盆地全覽（宏觀大地圖）',
               spawnPixel: _getSpawnPixelForBasinReturn(currentManifest),
             ),
-            onSwitchHierarchy: ({
-              required OverworldMapManifest targetManifest,
-              required String targetTitle,
-              Vector2? spawnPixel,
-            }) => _switchMapHierarchy(
-              targetManifest: targetManifest,
-              targetTitle: targetTitle,
-              spawnPixel: spawnPixel,
-            ),
+            onSwitchHierarchy:
+                ({
+                  required OverworldMapManifest targetManifest,
+                  required String targetTitle,
+                  Vector2? spawnPixel,
+                }) => _switchMapHierarchy(
+                  targetManifest: targetManifest,
+                  targetTitle: targetTitle,
+                  spawnPixel: spawnPixel,
+                ),
           ),
         },
-        initialActiveOverlays: const [
-          'MosaicTransition',
-          'CuratorHUD',
-          'DistrictDiscovery',
-          'DPad',
-          'ModeToggle',
-          'AttractionDetail',
-          'FloatingFeedback',
-        ],
+        initialActiveOverlays: activeOverlays,
       ),
     );
   }
@@ -589,14 +600,15 @@ class _DPadOverlayState extends ConsumerState<DPadOverlay>
   @override
   void initState() {
     super.initState();
-    _springController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 140),
-    )..addListener(() {
-        setState(() {
-          _knobOffset = _springAnimation.value;
+    _springController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 140),
+        )..addListener(() {
+          setState(() {
+            _knobOffset = _springAnimation.value;
+          });
         });
-      });
   }
 
   @override
@@ -625,6 +637,7 @@ class _DPadOverlayState extends ConsumerState<DPadOverlay>
 
     if (distance < _deadZone) {
       notifier.stopMoving();
+      widget.game.setPlayerMoving(false);
       setState(() {
         _isDragging = true;
         _knobOffset = delta;
@@ -642,20 +655,19 @@ class _DPadOverlayState extends ConsumerState<DPadOverlay>
     });
 
     notifier.setDirection(unitVector.dx, unitVector.dy);
+    widget.game.setPlayerDirection(_directionFor(unitVector.dx, unitVector.dy));
+    widget.game.setPlayerMoving(true);
   }
 
-  void _handlePanEnd(bool canExplore) {
-    if (!canExplore) return;
+  void _handlePanEnd() {
     final notifier = ref.read(locationControllerProvider.notifier);
     notifier.stopMoving();
+    widget.game.setPlayerMoving(false);
 
-    _springAnimation = Tween<Offset>(
-      begin: _knobOffset,
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _springController,
-      curve: Curves.easeOutQuad,
-    ));
+    _springAnimation = Tween<Offset>(begin: _knobOffset, end: Offset.zero)
+        .animate(
+          CurvedAnimation(parent: _springController, curve: Curves.easeOutQuad),
+        );
     _springController.forward(from: 0);
 
     setState(() {
@@ -690,8 +702,8 @@ class _DPadOverlayState extends ConsumerState<DPadOverlay>
                       behavior: HitTestBehavior.opaque,
                       onPanStart: (d) => _handlePanStart(d, canExplore),
                       onPanUpdate: (d) => _handlePanUpdate(d, canExplore),
-                      onPanEnd: (_) => _handlePanEnd(canExplore),
-                      onPanCancel: () => _handlePanEnd(canExplore),
+                      onPanEnd: (_) => _handlePanEnd(),
+                      onPanCancel: _handlePanEnd,
                       child: Container(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
@@ -792,8 +804,9 @@ class _DPadOverlayState extends ConsumerState<DPadOverlay>
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       border: Border.all(
-                                        color: Colors.amberAccent
-                                            .withValues(alpha: 0.8),
+                                        color: Colors.amberAccent.withValues(
+                                          alpha: 0.8,
+                                        ),
                                         width: 1.5,
                                       ),
                                     ),
@@ -846,6 +859,64 @@ class _DPadOverlayState extends ConsumerState<DPadOverlay>
       ),
     );
   }
+
+  CharacterDirection _directionFor(double dx, double dy) {
+    if (dx.abs() > dy.abs()) {
+      return dx < 0 ? CharacterDirection.left : CharacterDirection.right;
+    }
+    if (dy < 0) return CharacterDirection.back;
+    return CharacterDirection.front;
+  }
+}
+
+/// Debug-only action sheet trigger. Production builds never add this overlay.
+class _CharacterActionTestOverlay extends StatelessWidget {
+  const _CharacterActionTestOverlay({required this.game});
+
+  final UniversalOverworldGame game;
+
+  @override
+  Widget build(BuildContext context) {
+    final cells = guideActionSheetRegistry;
+    return SafeArea(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 132),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.75),
+              border: Border.all(color: const Color(0xFFFFC857), width: 2),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (var index = 0; index < cells.length; index++)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: TextButton(
+                        key: Key('character_action_test_$index'),
+                        onPressed: () =>
+                            game.playPlayerActionCell(cells[index].cellId),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.black,
+                          backgroundColor: const Color(0xFFFFC857),
+                          minimumSize: const Size(42, 32),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                        ),
+                        child: Text('A${index + 1}'),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// 模式切換與右下角操作選單。
@@ -871,7 +942,8 @@ class ModeToggle extends ConsumerStatefulWidget {
     required OverworldMapManifest targetManifest,
     required String targetTitle,
     Vector2? spawnPixel,
-  })? onSwitchHierarchy;
+  })?
+  onSwitchHierarchy;
   final VoidCallback? onOpenDistrictSelector;
   final VoidCallback? onReturnToBasin;
 
@@ -980,7 +1052,8 @@ class _ModeToggleState extends ConsumerState<ModeToggle>
     final mode = ref.watch(locationControllerProvider).status.mode;
     final permission = ref.watch(locationControllerProvider).status.permission;
     final manifest = ref.watch(mapManifestProvider);
-    final isStreet = manifest is KyotoDistrictStreetManifest ||
+    final isStreet =
+        manifest is KyotoDistrictStreetManifest ||
         manifest.mapId == 'kyoto_street_block' ||
         manifest.mapId.startsWith('kyoto_street_');
     final notifier = ref.read(locationControllerProvider.notifier);
@@ -1127,8 +1200,7 @@ class _ModeToggleState extends ConsumerState<ModeToggle>
                                       widget.onSwitchHierarchy?.call(
                                         targetManifest:
                                             const KyotoStreetBlockManifest(),
-                                        targetTitle:
-                                            '洛中・河原町街區散步道（中觀町家）',
+                                        targetTitle: '洛中・河原町街區散步道（中觀町家）',
                                         spawnPixel: Vector2(512.0, 512.0),
                                       );
                                     }
@@ -1142,8 +1214,11 @@ class _ModeToggleState extends ConsumerState<ModeToggle>
                                 key: const Key('gear_shop_launcher_button'),
                                 backgroundColor: const Color(0xFF1E293B),
                                 borderColor: Colors.amber,
-                                icon: const Icon(Icons.storefront,
-                                    size: 15, color: Colors.amber),
+                                icon: const Icon(
+                                  Icons.storefront,
+                                  size: 15,
+                                  color: Colors.amber,
+                                ),
                                 label: '🛒 黑市裝備',
                                 textColor: Colors.amber,
                                 onTap: widget.onOpenGearShop!,
@@ -1154,8 +1229,11 @@ class _ModeToggleState extends ConsumerState<ModeToggle>
                               key: const Key('curator_studio_launcher_button'),
                               backgroundColor: const Color(0xFFF59E0B),
                               borderColor: Colors.black,
-                              icon: const Icon(Icons.assignment,
-                                  size: 15, color: Colors.black),
+                              icon: const Icon(
+                                Icons.assignment,
+                                size: 15,
+                                color: Colors.black,
+                              ),
                               label: '📑 策展工作台',
                               textColor: Colors.black,
                               onTap: widget.onOpenStudio,
@@ -1255,7 +1333,8 @@ class DistrictDiscoveryBanner extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final manifest = ref.watch(mapManifestProvider);
-    final inStreet = isStreetBlock ||
+    final inStreet =
+        isStreetBlock ||
         manifest is KyotoDistrictStreetManifest ||
         manifest.mapId == 'kyoto_street_block' ||
         manifest.mapId.startsWith('kyoto_street_');
@@ -1265,9 +1344,11 @@ class DistrictDiscoveryBanner extends ConsumerWidget {
       valueListenable: focusedDistrict,
       builder: (context, data, _) {
         final (district, count) = data;
-        final districtType =
-            district == null ? null : KyotoDistrictType.fromCode(district.code);
-        final canEnter = district != null &&
+        final districtType = district == null
+            ? null
+            : KyotoDistrictType.fromCode(district.code);
+        final canEnter =
+            district != null &&
             (districtType != null || district.code.contains('nakagyo'));
 
         return SafeArea(
@@ -1277,17 +1358,17 @@ class DistrictDiscoveryBanner extends ConsumerWidget {
               duration: const Duration(milliseconds: 300),
               transitionBuilder: (child, animation) {
                 return SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0.0, -0.8),
-                    end: Offset.zero,
-                  ).animate(CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
-                  )),
-                  child: FadeTransition(
-                    opacity: animation,
-                    child: child,
-                  ),
+                  position:
+                      Tween<Offset>(
+                        begin: const Offset(0.0, -0.8),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      ),
+                  child: FadeTransition(opacity: animation, child: child),
                 );
               },
               child: district == null

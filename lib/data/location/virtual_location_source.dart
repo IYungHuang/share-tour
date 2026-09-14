@@ -24,11 +24,11 @@ class VirtualLocationSource implements LocationSource {
     required OverworldMapManifest manifest,
     required Clock clock,
     required this.hertz,
-  })  : _manifest = manifest,
-        _clock = clock,
-        _pixel = manifest.defaultSpawnPixel.clone();
+  }) : _manifest = manifest,
+       _clock = clock,
+       _pixel = manifest.defaultSpawnPixel.clone();
 
-  final OverworldMapManifest _manifest;
+  OverworldMapManifest _manifest;
   final Clock _clock;
   final int hertz;
 
@@ -72,6 +72,12 @@ class VirtualLocationSource implements LocationSource {
   void tapNavigateTo(Vector2 pixel) {
     _pixel.setFrom(pixel);
     _direction = Vector2.zero();
+    _pendingEmit = true;
+  }
+
+  void switchManifest(OverworldMapManifest next, {Vector2? newSpawnPixel}) {
+    _manifest = next;
+    _pixel.setFrom(newSpawnPixel ?? next.defaultSpawnPixel);
     _pendingEmit = true;
   }
 

@@ -35,8 +35,37 @@ void main() {
         }
       }
     }
-    expect(violations, isEmpty,
-        reason: 'domain 層出現框架相依：\n${violations.join('\n')}');
+    expect(
+      violations,
+      isEmpty,
+      reason: 'domain 層出現框架相依：\n${violations.join('\n')}',
+    );
+  });
+
+  test('character action core remains framework-free', () {
+    final violations = <String>[];
+    final dir = Directory('lib/domain/character_action');
+    if (dir.existsSync()) {
+      for (final file
+          in dir
+              .listSync(recursive: true)
+              .whereType<File>()
+              .where((file) => file.path.endsWith('.dart'))) {
+        final source = file.readAsStringSync();
+        for (final banned in forbiddenInDomain) {
+          if (source.contains("import '$banned") ||
+              source.contains('import "$banned')) {
+            violations.add('${file.path} → $banned');
+          }
+        }
+      }
+    }
+    expect(
+      violations,
+      isEmpty,
+      reason:
+          'character action core 出現 framework 相依：\n${violations.join('\n')}',
+    );
   });
 
   test('通用引擎不得引用具名城市模組', () {
@@ -56,8 +85,11 @@ void main() {
         violations.add(file.path);
       }
     }
-    expect(violations, isEmpty,
-        reason: '通用引擎硬編碼了特定城市（如 Taiwan / Kyoto）：\n${violations.join('\n')}');
+    expect(
+      violations,
+      isEmpty,
+      reason: '通用引擎硬編碼了特定城市（如 Taiwan / Kyoto）：\n${violations.join('\n')}',
+    );
   });
 
   test('domain 與 state 層不得引用遊戲數值模組', () {
@@ -72,8 +104,11 @@ void main() {
         violations.add(file.path);
       }
     }
-    expect(violations, isEmpty,
-        reason: '任務 C 直接碰觸遊戲數值，違反單一寫入點：\n${violations.join('\n')}');
+    expect(
+      violations,
+      isEmpty,
+      reason: '任務 C 直接碰觸遊戲數值，違反單一寫入點：\n${violations.join('\n')}',
+    );
   });
 
   test('domain 層不得反向相依外層或平台套件', () {
@@ -106,8 +141,11 @@ void main() {
       }
     }
 
-    expect(violations, isEmpty,
-        reason: 'domain 層出現倒向相依：\n${violations.join('\n')}');
+    expect(
+      violations,
+      isEmpty,
+      reason: 'domain 層出現倒向相依：\n${violations.join('\n')}',
+    );
   });
 
   test('AC-CC-5.1 domain 的序列化結果不得夾帶原始座標鍵', () {
@@ -132,7 +170,10 @@ void main() {
       }
     }
 
-    expect(violations, isEmpty,
-        reason: 'domain 的序列化夾帶原始座標，違反 CC-5：\n${violations.join('\n')}');
+    expect(
+      violations,
+      isEmpty,
+      reason: 'domain 的序列化夾帶原始座標，違反 CC-5：\n${violations.join('\n')}',
+    );
   });
 }
