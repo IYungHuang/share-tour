@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:share_tour/domain/core_loop/models/meta_equipment.dart';
+import 'package:share_tour/domain/core_loop/models/shutter_difficulty.dart';
 import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 import 'package:share_tour/state/core_loop/curator_run_controller.dart';
@@ -181,6 +182,39 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('委託客戶：安娜（IG 網紅）'), findsOneWidget);
+    });
+
+    testWidgets('難度選擇：預設觀光客，點擊攝影師寫入 selectDifficulty（REQ-M5-05.2）', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final key = UniqueKey();
+      await tester.pumpWidget(createSubject(key: key));
+      await tester.pumpAndSettle();
+
+      for (final difficulty in ShutterDifficulty.values) {
+        expect(find.byKey(Key('difficulty_pill_${difficulty.name}')), findsOneWidget);
+      }
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byKey(const Key('briefing_depart_button'))),
+      );
+      expect(
+        container.read(curatorRunControllerProvider).shutterDifficulty,
+        ShutterDifficulty.tourist,
+        reason: '未選擇時預設觀光客',
+      );
+
+      await tester.ensureVisible(find.byKey(const Key('difficulty_pill_photographer')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('difficulty_pill_photographer')));
+      await tester.pumpAndSettle();
+
+      expect(
+        container.read(curatorRunControllerProvider).shutterDifficulty,
+        ShutterDifficulty.photographer,
+      );
     });
   });
 }

@@ -40,6 +40,13 @@ class ReviewReport {
   /// 視覺動畫所需之子步驟分數 (View-Ready Subscores)
   final Map<String, num> subscores;
 
+  /// 第二層分數本身（`reach` 或 `valueIndex`，REQ-M5-02.4）——
+  /// 這是玩家看到的核心回饋，`l2Coins` 只是把它折成的一點點尾款。
+  int get l2Score => (subscores['l2Score'] ?? 0).toInt();
+
+  /// 第二層折算的金幣（REQ-M5-02.6），已計入 [earnedCoins]。
+  int get l2Coins => (subscores['l2Coins'] ?? 0).toInt();
+
   int get purityBonus => (subscores['purityBonus'] ?? 0).toInt();
   int get themeFatigue => (subscores['themeFatigue'] ?? 0).toInt();
   int get adventureCombo => (subscores['adventureCombo'] ?? 0).toInt();

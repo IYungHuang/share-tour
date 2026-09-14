@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_tour/domain/core_loop/models/core_loop_exceptions.dart';
+import 'package:share_tour/domain/core_loop/models/shot_tier.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 import 'package:share_tour/domain/core_loop/time/diurnal_resonance_rule.dart';
@@ -8,6 +10,7 @@ import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 import 'package:share_tour/state/core_loop/game_time_controller.dart';
 import 'package:share_tour/state/location/location_providers.dart';
 
+import '../field/shutter_qte_overlay.dart';
 import 'gathering_replace_bottom_sheet.dart';
 
 /// 點選景點時在畫面底部彈出的 JRPG 像素風格詳細資訊與取材卡 (REQ-M3-02, REQ-M3-03, G4)
@@ -20,11 +23,19 @@ class AttractionDetailCard extends ConsumerWidget {
     required this.selectedAttraction,
     this.onFocusCamera,
     this.onGathered,
+    this.onSuspendCameraForQte,
+    this.onResumeCameraFromQte,
   });
 
   final ValueNotifier<DistrictAttraction?> selectedAttraction;
   final VoidCallback? onFocusCamera;
   final void Function(TravelMaterial material, int deltaHp)? onGathered;
+
+  /// QTE 開始/結束時呼叫，暫停/恢復相機回歸計時（REQ-M5-10.7）。薄轉接
+  /// ——不在此處直接依賴 `game/` 型別，維持 ui/ 與 game/ 之間僅靠
+  /// `main.dart` 接線，不新增跨層 import。
+  final VoidCallback? onSuspendCameraForQte;
+  final VoidCallback? onResumeCameraFromQte;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -42,8 +53,11 @@ class AttractionDetailCard extends ConsumerWidget {
         final currentPhilosophy = ref.watch(
           curatorRunControllerProvider.select((s) => s.philosophy),
         );
-        final bool isPhilosophyMatch = material != null &&
-            material.tags.any((t) => currentPhilosophy.preferredTags.contains(t));
+        final bool isPhilosophyMatch =
+            material != null &&
+            material.tags.any(
+              (t) => currentPhilosophy.preferredTags.contains(t),
+            );
 
         final timeSnapshot = ref.watch(gameTimeProvider);
         final baseHp = material != null ? gatheringHpCost(material) : 0;
@@ -82,7 +96,10 @@ class AttractionDetailCard extends ConsumerWidget {
                         child: Row(
                           children: [
                             Text(
-                              _iconForAttraction(attraction.title, attraction.category),
+                              _iconForAttraction(
+                                attraction.title,
+                                attraction.category,
+                              ),
                               style: const TextStyle(fontSize: 16),
                             ),
                             const SizedBox(width: 6),
@@ -142,7 +159,11 @@ class AttractionDetailCard extends ConsumerWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.star, size: 14, color: Color(0xFFF59E0B)),
+                          const Icon(
+                            Icons.star,
+                            size: 14,
+                            color: Color(0xFFF59E0B),
+                          ),
                           Text(
                             '${attraction.rating.toStringAsFixed(1)} ',
                             style: const TextStyle(
@@ -152,13 +173,19 @@ class AttractionDetailCard extends ConsumerWidget {
                           ),
                           Text(
                             '(${attraction.reviewCount}+ 評價)',
-                            style: TextStyle(fontSize: 10, color: Colors.grey.shade700),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.grey.shade700,
+                            ),
                           ),
                         ],
                       ),
                       if (isPhilosophyMatch)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
                           color: const Color(0xFFFAF5FF),
                           child: const Text(
                             '🎯 契合哲學',
@@ -171,7 +198,10 @@ class AttractionDetailCard extends ConsumerWidget {
                         ),
                       if (material != null && material.hasFatigueRisk)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 1,
+                          ),
                           color: const Color(0xFFFFF5F5),
                           child: const Text(
                             '[💀 拉車隱患]',
@@ -198,7 +228,10 @@ class AttractionDetailCard extends ConsumerWidget {
                   // 4. 代價與收穫預覽 (REQ-M3-02.3 資訊透明化)
                   if (material != null)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFF7FAFC),
                         border: Border.all(color: Colors.grey.shade300),
@@ -227,7 +260,10 @@ class AttractionDetailCard extends ConsumerWidget {
                               ),
                               Text(
                                 '⭐ 風險: ${material.riskLevel}★',
-                                style: const TextStyle(fontSize: 10, color: Colors.black54),
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.black54,
+                                ),
                               ),
                             ],
                           ),
@@ -262,14 +298,23 @@ class AttractionDetailCard extends ConsumerWidget {
                               onTap: onFocusCamera,
                               child: Container(
                                 margin: const EdgeInsets.only(right: 6),
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.grey.shade200,
-                                  border: Border.all(color: Colors.black, width: 1.5),
+                                  border: Border.all(
+                                    color: Colors.black,
+                                    width: 1.5,
+                                  ),
                                 ),
                                 child: const Text(
                                   '聚焦',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                               ),
                             ),
@@ -279,6 +324,8 @@ class AttractionDetailCard extends ConsumerWidget {
                             attraction: attraction,
                             material: material,
                             onGathered: onGathered,
+                            onSuspendCameraForQte: onSuspendCameraForQte,
+                            onResumeCameraFromQte: onResumeCameraFromQte,
                           ),
                         ],
                       ),
@@ -319,7 +366,7 @@ class _AttractionDistanceBadge extends ConsumerWidget {
     final inRange = attraction.triggerRadiusPixels != null
         ? distPx <= attraction.triggerRadiusPixels!
         : (distPx * manifest.metersPerPixelAt(playerPixel)) <=
-            attraction.triggerRadiusMeters;
+              attraction.triggerRadiusMeters;
 
     return Row(
       children: [
@@ -361,14 +408,41 @@ class _AttractionDistanceBadge extends ConsumerWidget {
 }
 
 String _iconForAttraction(String title, AttractionCategory category) {
-  if (title.contains('車') || title.contains('鐵') || title.contains('電車')) return '🚂';
-  if (title.contains('竹林') || title.contains('螢火') || title.contains('高野川')) return '🎋';
-  if (title.contains('鳥居') || title.contains('寺') || title.contains('宮') || title.contains('門') || title.contains('塔') || title.contains('堂')) return '⛩️';
+  if (title.contains('車') || title.contains('鐵') || title.contains('電車')) {
+    return '🚂';
+  }
+  if (title.contains('竹林') || title.contains('螢火') || title.contains('高野川')) {
+    return '🎋';
+  }
+  if (title.contains('鳥居') ||
+      title.contains('寺') ||
+      title.contains('宮') ||
+      title.contains('門') ||
+      title.contains('塔') ||
+      title.contains('堂')) {
+    return '⛩️';
+  }
   if (title.contains('山')) return '⛰️';
   if (title.contains('貓')) return '🐱';
-  if (title.contains('拉麵') || title.contains('麵') || title.contains('市場') || title.contains('食堂')) return '🍜';
-  if (title.contains('酒') || title.contains('立飲') || title.contains('立吞') || title.contains('割烹')) return '🏮';
-  if (title.contains('咖啡') || title.contains('黑膠') || title.contains('手沖') || title.contains('星巴克') || title.contains('喫茶')) return '☕';
+  if (title.contains('拉麵') ||
+      title.contains('麵') ||
+      title.contains('市場') ||
+      title.contains('食堂')) {
+    return '🍜';
+  }
+  if (title.contains('酒') ||
+      title.contains('立飲') ||
+      title.contains('立吞') ||
+      title.contains('割烹')) {
+    return '🏮';
+  }
+  if (title.contains('咖啡') ||
+      title.contains('黑膠') ||
+      title.contains('手沖') ||
+      title.contains('星巴克') ||
+      title.contains('喫茶')) {
+    return '☕';
+  }
   if (title.contains('自販機')) return '🥤';
 
   return switch (category) {
@@ -387,11 +461,43 @@ class _AttractionGatherActionButton extends ConsumerWidget {
     required this.attraction,
     required this.material,
     this.onGathered,
+    this.onSuspendCameraForQte,
+    this.onResumeCameraFromQte,
   });
 
   final DistrictAttraction attraction;
   final TravelMaterial? material;
   final void Function(TravelMaterial material, int deltaHp)? onGathered;
+  final VoidCallback? onSuspendCameraForQte;
+  final VoidCallback? onResumeCameraFromQte;
+
+  /// 開啟 QTE 覆蓋層，等判定就緒後回傳結果（REQ-M5-01、G12 產物）。
+  /// 中斷（`onInterrupted`）額外呼叫 `controller.recordShutterInterruption()`
+  /// 疊加本局 ×0.9（REQ-M5-04.2），但仍照 `onResolved` 給出的三態走正常
+  /// 取材流程——中斷不是跳過，是照算後打折扣。
+  Future<ShotTier?> _runQte({
+    required BuildContext context,
+    required WidgetRef ref,
+    required bool isSpotlight,
+  }) {
+    final difficulty = ref.read(
+      curatorRunControllerProvider.select((s) => s.shutterDifficulty),
+    );
+    final controller = ref.read(curatorRunControllerProvider.notifier);
+    onSuspendCameraForQte?.call();
+
+    return showGeneralDialog<ShotTier>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black54,
+      pageBuilder: (dialogContext, _, _) => ShutterQteOverlay(
+        difficulty: difficulty,
+        isSpotlight: isSpotlight,
+        onResolved: (result) => Navigator.of(dialogContext).pop(result),
+        onInterrupted: controller.recordShutterInterruption,
+      ),
+    ).whenComplete(() => onResumeCameraFromQte?.call());
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -404,11 +510,31 @@ class _AttractionGatherActionButton extends ConsumerWidget {
 
     final (label, bgColor, isClickable) = switch (eligibility) {
       GatheringEligibility.ready => ('📸 踩線取材', const Color(0xFF48BB78), true),
-      GatheringEligibility.inventoryFull => ('👝 踩線換牌', const Color(0xFFED8936), true),
-      GatheringEligibility.alreadyGathered => ('✅ 本日已踩線', Colors.grey.shade400, false),
-      GatheringEligibility.outOfRange => (outOfRangeLabel, Colors.grey.shade300, false),
-      GatheringEligibility.exhausted => ('💤 體力透支', Colors.grey.shade400, false),
-      GatheringEligibility.unavailable => ('無可用素材', Colors.grey.shade300, false),
+      GatheringEligibility.inventoryFull => (
+        '👝 踩線換牌',
+        const Color(0xFFED8936),
+        true,
+      ),
+      GatheringEligibility.alreadyGathered => (
+        '✅ 本日已踩線',
+        Colors.grey.shade400,
+        false,
+      ),
+      GatheringEligibility.outOfRange => (
+        outOfRangeLabel,
+        Colors.grey.shade300,
+        false,
+      ),
+      GatheringEligibility.exhausted => (
+        '💤 體力透支',
+        Colors.grey.shade400,
+        false,
+      ),
+      GatheringEligibility.unavailable => (
+        '無可用素材',
+        Colors.grey.shade300,
+        false,
+      ),
     };
 
     return GestureDetector(
@@ -436,32 +562,66 @@ class _AttractionGatherActionButton extends ConsumerWidget {
 
               if (eligibility == GatheringEligibility.ready) {
                 if (effectiveMaterial != null) {
-                  final result = controller.gatherPoi(
-                    effectiveAttraction.id,
-                    manifest: manifest,
-                    playerPixel: playerPixel,
-                    period: currentPeriod,
+                  // 鎖定當下目標（REQ-M5-07.1）：QTE 判定期間玩家可能移動，
+                  // 判定完成後以此 ID 為準，變了就整次取消，不做任何狀態變更。
+                  final lockedPoiId = effectiveAttraction.id;
+                  final shotTier = await _runQte(
+                    context: context,
+                    ref: ref,
+                    isSpotlight: effectiveMaterial.isSpotlight,
                   );
-                  onGathered?.call(result.material, result.hpSpent);
+                  if (shotTier == null || !context.mounted) return;
+                  final freshPlayerPixel = ref.read(
+                    locationControllerProvider.select((s) => s.renderedPixel),
+                  );
+                  try {
+                    final result = controller.gatherPoi(
+                      lockedPoiId,
+                      manifest: manifest,
+                      playerPixel: freshPlayerPixel,
+                      expectedPoiId: lockedPoiId,
+                      period: currentPeriod,
+                      shotTier: shotTier,
+                    );
+                    onGathered?.call(result.material, result.hpSpent);
+                  } on PoiTargetChangedException {
+                    // 目標已變更，靜默取消——QTE 判定前未扣過任何資源，
+                    // 沒有狀態需要復原（REQ-M5-07.1）。
+                  }
                 }
               } else if (eligibility == GatheringEligibility.inventoryFull) {
                 if (effectiveMaterial != null) {
                   final currentMaterials = ref.read(
-                    curatorRunControllerProvider.select((s) => s.inventory.materials),
+                    curatorRunControllerProvider.select(
+                      (s) => s.inventory.materials,
+                    ),
                   );
                   final dropIndex = await GatheringReplaceBottomSheet.show(
                     context: context,
                     newMaterial: effectiveMaterial,
                     currentMaterials: currentMaterials,
                   );
+                  // 先抽屜、通過後才進 QTE（REQ-M5-07.2）——選「放棄」
+                  // (dropIndex == null) 就不進 QTE，不扣資源。
                   if (dropIndex != null && context.mounted) {
+                    final lockedPoiId = effectiveAttraction.id;
+                    final shotTier = await _runQte(
+                      context: context,
+                      ref: ref,
+                      isSpotlight: effectiveMaterial.isSpotlight,
+                    );
+                    if (shotTier == null || !context.mounted) return;
+                    final freshPlayerPixel = ref.read(
+                      locationControllerProvider.select((s) => s.renderedPixel),
+                    );
                     final result = controller.replaceGatheredPoi(
-                      poiId: effectiveAttraction.id,
+                      poiId: lockedPoiId,
                       dropIndex: dropIndex,
                       manifest: manifest,
-                      playerPixel: playerPixel,
-                      expectedPoiId: effectiveAttraction.id,
+                      playerPixel: freshPlayerPixel,
+                      expectedPoiId: lockedPoiId,
                       period: currentPeriod,
+                      shotTier: shotTier,
                     );
                     if (result != null) {
                       onGathered?.call(result.material, result.hpSpent);

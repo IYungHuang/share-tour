@@ -1,4 +1,5 @@
 import '../models/curator_save_data.dart';
+import '../models/shutter_difficulty.dart';
 import 'curator_event.dart';
 
 /// 由事件日誌重播出局外存檔狀態 (CC-3)。
@@ -24,6 +25,7 @@ CuratorSaveData replayCuratorEvents(Iterable<CuratorEvent> events) {
   var cameraLevel = 1;
   var waistBagLevel = 1;
   var completedRuns = 0;
+  var lastDifficulty = ShutterDifficulty.tourist;
 
   for (final event in ordered) {
     final type = event.type;
@@ -44,13 +46,15 @@ CuratorSaveData replayCuratorEvents(Iterable<CuratorEvent> events) {
           case 'waistBag':
             waistBagLevel += 1;
           default:
-            throw FormatException(
-              '未知的裝備種類: ${event.payload['equipment']}',
-            );
+            throw FormatException('未知的裝備種類: ${event.payload['equipment']}');
         }
       case CuratorEventType.runSettled:
         coins += (event.payload['earnedCoins'] as int?) ?? 0;
         completedRuns += 1;
+      case CuratorEventType.difficultySelected:
+        lastDifficulty = ShutterDifficulty.values.byName(
+          event.payload['difficulty'] as String,
+        );
     }
   }
 
@@ -66,6 +70,7 @@ CuratorSaveData replayCuratorEvents(Iterable<CuratorEvent> events) {
     cameraLevel: cameraLevel,
     waistBagLevel: waistBagLevel,
     completedRuns: completedRuns,
+    lastDifficulty: lastDifficulty,
     // 時戳取自最後一個事件，而非重播當下，否則重播不再決定性。
     updatedAtUtc: ordered.last.occurredAtUtc,
   );

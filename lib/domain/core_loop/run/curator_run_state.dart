@@ -7,6 +7,7 @@ import '../models/guide_resources.dart';
 import '../models/material_inventory.dart';
 import '../models/meta_equipment.dart';
 import '../models/review_outcome.dart';
+import '../models/shutter_difficulty.dart';
 import '../models/timeline_itinerary.dart';
 import '../models/travel_material.dart';
 import '../models/travel_philosophy.dart';
@@ -36,6 +37,8 @@ class CuratorRunState {
     this.gatheredPoiIds = const {},
     this.latestReport,
     this.focusedCulpritSlot,
+    this.shutterDifficulty = ShutterDifficulty.tourist,
+    this.interruptionCount = 0,
   }) : equipmentSnapshot = equipmentSnapshot ?? equipment;
 
   /// 建立全新單局初始狀態 (預設 philosophizing 階段，UUID 遵循 CC-1)
@@ -193,6 +196,23 @@ class CuratorRunState {
 
   /// 微調導向之焦點槽位 (0..3，null 表示無焦點，SPEC §2.4)
   final int? focusedCulpritSlot;
+
+  /// 快門難度（REQ-M5-05.1），行前選定、出發時鎖定，單局內不可變更。
+  final ShutterDifficulty shutterDifficulty;
+
+  /// 單局內快門中斷次數（REQ-M5-04.3）。
+  final int interruptionCount;
+
+  /// 中斷折扣（REQ-M5-04.3）：$0.9^n$，$n$ 為 [interruptionCount]。
+  double get interruptionDiscount => pow(0.9, interruptionCount).toDouble();
+
+  /// 行前選定快門難度（與 [selectPhilosophy] 同一畫面，REQ-M5-05.2）。
+  CuratorRunState selectDifficulty(ShutterDifficulty difficulty) =>
+      copyWith(shutterDifficulty: difficulty);
+
+  /// 記錄一次快門中斷（REQ-M5-04.2）。
+  CuratorRunState recordInterruption() =>
+      copyWith(interruptionCount: interruptionCount + 1);
 
   /// 是否具備出發踩線資格 (已選定哲學)
   bool get canDepart => selectedPhilosophy != null;
@@ -444,6 +464,8 @@ class CuratorRunState {
     ReviewReport? latestReport,
     int? focusedCulpritSlot,
     bool clearFocusedCulpritSlot = false,
+    ShutterDifficulty? shutterDifficulty,
+    int? interruptionCount,
   }) => CuratorRunState(
     runId: runId ?? this.runId,
     phase: phase ?? this.phase,
@@ -464,6 +486,8 @@ class CuratorRunState {
     focusedCulpritSlot: clearFocusedCulpritSlot
         ? null
         : (focusedCulpritSlot ?? this.focusedCulpritSlot),
+    shutterDifficulty: shutterDifficulty ?? this.shutterDifficulty,
+    interruptionCount: interruptionCount ?? this.interruptionCount,
   );
 
   static List<TravelPhilosophy> _pickDistinctPhilosophies(
@@ -492,6 +516,8 @@ class CuratorRunState {
           equipment == other.equipment &&
           equipmentSnapshot == other.equipmentSnapshot &&
           focusedCulpritSlot == other.focusedCulpritSlot &&
+          shutterDifficulty == other.shutterDifficulty &&
+          interruptionCount == other.interruptionCount &&
           _setsEqual(gatheredPoiIds, other.gatheredPoiIds);
 
   @override
@@ -508,6 +534,7 @@ class CuratorRunState {
     equipment,
     equipmentSnapshot,
     focusedCulpritSlot,
+    Object.hash(shutterDifficulty, interruptionCount),
     Object.hashAll(gatheredPoiIds),
   );
 

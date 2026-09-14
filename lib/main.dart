@@ -373,6 +373,8 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
                 hpSpent: hpSpent,
               );
             },
+            onSuspendCameraForQte: game.suspendCameraForQte,
+            onResumeCameraFromQte: game.resumeCameraFromQte,
           ),
           'FloatingFeedback': (context, game) =>
               GatheringFloatingFeedbackOverlay(

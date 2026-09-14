@@ -1,3 +1,5 @@
+import 'shot_tier.dart';
+
 /// 旅行素材不可變實體
 class TravelMaterial {
   const TravelMaterial({
@@ -11,6 +13,9 @@ class TravelMaterial {
     this.cost = 0,
     this.riskLevel = 1,
     this.description = '',
+    this.shotTier = ShotTier.normal,
+    this.perfectDescription,
+    this.failedDescription,
   }) : assert(themeValue >= 0, 'themeValue 必須大於等於 0'),
        assert(hypeValue >= 0, 'hypeValue 必須大於等於 0'),
        assert(storyValue >= 1 && storyValue <= 5, 'storyValue 必須介於 1 與 5 之間'),
@@ -44,8 +49,25 @@ class TravelMaterial {
   /// 風險等級 (1~5 星)
   final int riskLevel;
 
-  /// 描述文案
+  /// 描述文案（`normal` 版）
   final String description;
+
+  /// 快門三態（REQ-M5-01.1），預設 `normal`——既有卡表與測試零改動。
+  final ShotTier shotTier;
+
+  /// `perfect` 版描述文案，`null` 時 [descriptionFor] 回退至 [description]。
+  final String? perfectDescription;
+
+  /// `failed` 版描述文案（僅絕景素材撰寫，REQ-M5-12.5），
+  /// `null` 時 [descriptionFor] 回退至 [description]。
+  final String? failedDescription;
+
+  /// 依三態取得對應描述文案（REQ-M5-02.9）。
+  String descriptionFor(ShotTier tier) => switch (tier) {
+    ShotTier.normal => description,
+    ShotTier.perfect => perfectDescription ?? description,
+    ShotTier.failed => failedDescription ?? description,
+  };
 
   /// 是否包含特定標籤
   bool hasTag(String tag) => tags.contains(tag);
@@ -68,6 +90,9 @@ class TravelMaterial {
     int? cost,
     int? riskLevel,
     String? description,
+    ShotTier? shotTier,
+    String? perfectDescription,
+    String? failedDescription,
   }) => TravelMaterial(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -79,6 +104,9 @@ class TravelMaterial {
     cost: cost ?? this.cost,
     riskLevel: riskLevel ?? this.riskLevel,
     description: description ?? this.description,
+    shotTier: shotTier ?? this.shotTier,
+    perfectDescription: perfectDescription ?? this.perfectDescription,
+    failedDescription: failedDescription ?? this.failedDescription,
   );
 
   @override

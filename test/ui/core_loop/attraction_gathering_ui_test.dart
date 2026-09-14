@@ -13,6 +13,7 @@ import 'package:share_tour/domain/location/models/location_status.dart';
 import 'package:share_tour/state/location/location_providers.dart';
 import 'package:share_tour/ui/core_loop/field/attraction_detail_card.dart';
 import 'package:share_tour/ui/core_loop/field/gathering_replace_bottom_sheet.dart';
+import 'package:share_tour/ui/core_loop/field/shutter_qte_overlay.dart';
 import 'package:vector_math/vector_math.dart';
 
 import '../../fakes/fake_wakelock_control.dart';
@@ -126,6 +127,13 @@ void main() {
 
     late FakePoiResolver fakeResolver;
 
+    Future<void> resolveQte(WidgetTester tester) async {
+      await tester.pump();
+      expect(find.byType(ShutterQteOverlay), findsOneWidget);
+      await tester.tap(find.byType(ShutterQteOverlay));
+      await tester.pumpAndSettle();
+    }
+
     setUp(() {
       fakeResolver = FakePoiResolver({
         'poi_101': sampleMaterial,
@@ -142,7 +150,9 @@ void main() {
         key: UniqueKey(),
         overrides: [
           mapManifestProvider.overrideWithValue(FakeSimpleManifest()),
-          locationControllerProvider.overrideWith(() => FakeLocationNotifier(Vector2(100, 100))),
+          locationControllerProvider.overrideWith(
+            () => FakeLocationNotifier(Vector2(100, 100)),
+          ),
           curatorMaterialPoolProvider.overrideWithValue([sampleMaterial]),
           poiMaterialResolverProvider.overrideWithValue(fakeResolver),
           wakelockControlProvider.overrideWithValue(FakeWakelockControl()),
@@ -166,11 +176,18 @@ void main() {
       );
     }
 
-    testWidgets('AC-M3-2.1: 範圍內景點顯示「📸 踩線取材」並預覽代價 -12 HP 與 ¥600', (tester) async {
+    testWidgets('AC-M3-2.1: 範圍內景點顯示「📸 踩線取材」並預覽代價 -12 HP 與 ¥600', (
+      tester,
+    ) async {
       final selected = ValueNotifier<DistrictAttraction?>(attractionReady);
-      final state = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);
+      final state = CuratorRunState.initial(
+        initialBudget: 2000,
+        initialHp: 100,
+      );
 
-      await tester.pumpWidget(buildTestWidget(selected: selected, state: state));
+      await tester.pumpWidget(
+        buildTestWidget(selected: selected, state: state),
+      );
 
       expect(find.text('台北101觀景台'), findsOneWidget);
       expect(find.textContaining('-12 HP'), findsOneWidget);
@@ -182,28 +199,35 @@ void main() {
       final selected = ValueNotifier<DistrictAttraction?>(attractionFar);
       final state = CuratorRunState.initial();
 
-      await tester.pumpWidget(buildTestWidget(selected: selected, state: state));
+      await tester.pumpWidget(
+        buildTestWidget(selected: selected, state: state),
+      );
 
       expect(find.text('太遠 (需<50m)'), findsOneWidget);
     });
 
     testWidgets('AC-M3-3.1: 點擊「📸 踩線取材」觸發取材回調 (足額 12 HP)', (tester) async {
       final selected = ValueNotifier<DistrictAttraction?>(attractionReady);
-      final state = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);
+      final state = CuratorRunState.initial(
+        initialBudget: 2000,
+        initialHp: 100,
+      );
       TravelMaterial? gatheredItem;
       int? hpCost;
 
-      await tester.pumpWidget(buildTestWidget(
-        selected: selected,
-        state: state,
-        onGathered: (m, hp) {
-          gatheredItem = m;
-          hpCost = hp;
-        },
-      ));
+      await tester.pumpWidget(
+        buildTestWidget(
+          selected: selected,
+          state: state,
+          onGathered: (m, hp) {
+            gatheredItem = m;
+            hpCost = hp;
+          },
+        ),
+      );
 
       await tester.tap(find.text('📸 踩線取材'));
-      await tester.pumpAndSettle();
+      await resolveQte(tester);
 
       expect(gatheredItem, isNotNull);
       expect(gatheredItem!.id, 'mat_101');
@@ -213,33 +237,39 @@ void main() {
       expect(find.text('✅ 本日已踩線'), findsOneWidget);
     });
 
-    testWidgets('AC-A1-5.5: 最後一搏時實扣回調精確為剩餘 5 HP，不得回傳名目成本 12 HP', (tester) async {
+    testWidgets('AC-A1-5.5: 最後一搏時實扣回調精確為剩餘 5 HP，不得回傳名目成本 12 HP', (
+      tester,
+    ) async {
       final selected = ValueNotifier<DistrictAttraction?>(attractionReady);
       // 人為設定 HP = 5
       final state = CuratorRunState.initial(initialBudget: 2000, initialHp: 5);
       TravelMaterial? gatheredItem;
       int? hpCost;
 
-      await tester.pumpWidget(buildTestWidget(
-        selected: selected,
-        state: state,
-        onGathered: (m, hp) {
-          gatheredItem = m;
-          hpCost = hp;
-        },
-      ));
+      await tester.pumpWidget(
+        buildTestWidget(
+          selected: selected,
+          state: state,
+          onGathered: (m, hp) {
+            gatheredItem = m;
+            hpCost = hp;
+          },
+        ),
+      );
 
       // 預覽仍顯示名目成本 -12 HP
       expect(find.textContaining('-12 HP'), findsOneWidget);
 
       await tester.tap(find.text('📸 踩線取材'));
-      await tester.pumpAndSettle();
+      await resolveQte(tester);
 
       expect(gatheredItem, isNotNull);
       expect(hpCost, 5, reason: '最後一搏實扣量必須為 5 HP 而非名目 12 HP');
     });
 
-    testWidgets('Task 4: 晨曦時段契合素材顯示綠色折讓文案 (時段共鳴 -3 HP) 且實扣 9 HP', (tester) async {
+    testWidgets('Task 4: 晨曦時段契合素材顯示綠色折讓文案 (時段共鳴 -3 HP) 且實扣 9 HP', (
+      tester,
+    ) async {
       const resonanceMaterial = TravelMaterial(
         id: 'mat_resonance',
         name: '清水寺晨間散步',
@@ -264,25 +294,30 @@ void main() {
 
       fakeResolver.map['poi_resonance'] = resonanceMaterial;
       final selected = ValueNotifier<DistrictAttraction?>(attractionResonance);
-      final state = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);
+      final state = CuratorRunState.initial(
+        initialBudget: 2000,
+        initialHp: 100,
+      );
       TravelMaterial? gatheredItem;
       int? hpCost;
 
-      await tester.pumpWidget(buildTestWidget(
-        selected: selected,
-        state: state,
-        onGathered: (m, hp) {
-          gatheredItem = m;
-          hpCost = hp;
-        },
-      ));
+      await tester.pumpWidget(
+        buildTestWidget(
+          selected: selected,
+          state: state,
+          onGathered: (m, hp) {
+            gatheredItem = m;
+            hpCost = hp;
+          },
+        ),
+      );
 
       // 檢查折讓文案與實際扣額預覽
       expect(find.textContaining('-9 HP'), findsOneWidget);
       expect(find.textContaining('時段共鳴 -3 HP'), findsOneWidget);
 
       await tester.tap(find.text('📸 踩線取材'));
-      await tester.pumpAndSettle();
+      await resolveQte(tester);
 
       expect(gatheredItem, isNotNull);
       expect(hpCost, 9, reason: '共鳴折讓 3 HP 後實扣 9 HP');
@@ -303,14 +338,16 @@ void main() {
       TravelMaterial? gatheredItem;
       int? hpCost;
 
-      await tester.pumpWidget(buildTestWidget(
-        selected: selected,
-        state: state,
-        onGathered: (m, hp) {
-          gatheredItem = m;
-          hpCost = hp;
-        },
-      ));
+      await tester.pumpWidget(
+        buildTestWidget(
+          selected: selected,
+          state: state,
+          onGathered: (m, hp) {
+            gatheredItem = m;
+            hpCost = hp;
+          },
+        ),
+      );
 
       expect(find.text('👝 踩線換牌'), findsOneWidget);
 
@@ -324,7 +361,7 @@ void main() {
 
       // 點擊第一張舊卡的捨棄
       await tester.tap(find.text('捨棄此卡').first);
-      await tester.pumpAndSettle();
+      await resolveQte(tester);
 
       // 換牌完成，抽屜關閉，景點標記為已踩線，回調實扣 12 HP
       expect(find.text('✅ 本日已踩線'), findsOneWidget);
@@ -344,13 +381,15 @@ void main() {
       }
 
       var onGatheredCalled = false;
-      await tester.pumpWidget(buildTestWidget(
-        selected: selected,
-        state: state,
-        onGathered: (m, hp) {
-          onGatheredCalled = true;
-        },
-      ));
+      await tester.pumpWidget(
+        buildTestWidget(
+          selected: selected,
+          state: state,
+          onGathered: (m, hp) {
+            onGatheredCalled = true;
+          },
+        ),
+      );
 
       await tester.tap(find.text('👝 踩線換牌'));
       await tester.pumpAndSettle();
@@ -409,88 +448,98 @@ void main() {
       expect(find.text('太遠 (需<35px)'), findsOneWidget);
     });
 
-    testWidgets('AC-CF-2.4: material.hasFatigueRisk 為真時取材卡面與替換清單皆渲染 [💀 拉車隱患]，為假時不渲染', (tester) async {
-      // 1. 卡面測試：hasFatigueRisk == false (riskLevel: 2)
-      final lowRiskPoi = DistrictAttraction(
-        id: 'poi_low_risk',
-        title: '低風險景點',
-        districtCode: 'taipei',
-        districtName: '台北',
-        geo: const GeoPoint(25.0, 121.5),
-        pixel: Vector2(100, 110),
-        rating: 4.5,
-        reviewCount: 100,
-        category: AttractionCategory.landmark,
-        triggerRadiusMeters: 50.0,
-      );
-      fakeResolver.map['poi_low_risk'] = sampleMaterial.copyWith(
-        id: 'mat_low_risk',
-        riskLevel: 2,
-      );
-
-      final selected = ValueNotifier<DistrictAttraction?>(lowRiskPoi);
-      final normalState = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);
-      await tester.pumpWidget(buildTestWidget(selected: selected, state: normalState));
-      await tester.pumpAndSettle();
-
-      expect(find.text('[💀 拉車隱患]'), findsNothing);
-
-      // 2. 卡面測試：hasFatigueRisk == true (riskLevel: 3)
-      final highRiskPoi = DistrictAttraction(
-        id: 'poi_high_risk',
-        title: '高風險景點',
-        districtCode: 'taipei',
-        districtName: '台北',
-        geo: const GeoPoint(25.0, 121.5),
-        pixel: Vector2(100, 110),
-        rating: 4.5,
-        reviewCount: 100,
-        category: AttractionCategory.landmark,
-        triggerRadiusMeters: 50.0,
-      );
-      final highRiskMaterial = sampleMaterial.copyWith(
-        id: 'mat_high_risk',
-        riskLevel: 3,
-      );
-      fakeResolver.map['poi_high_risk'] = highRiskMaterial;
-
-      selected.value = highRiskPoi;
-      await tester.pumpAndSettle();
-
-      expect(find.text('[💀 拉車隱患]'), findsOneWidget);
-
-      // 3. 換牌抽屜測試：當腰包滿且新素材有疲勞隱患時，抽屜呈現 [💀 拉車隱患]
-      var fullState = CuratorRunState.initial(initialBudget: 2000, initialHp: 100);
-      for (int i = 0; i < 6; i++) {
-        fullState = fullState.copyWith(
-          inventory: fullState.inventory.add(
-            sampleMaterial.copyWith(
-              id: 'mat_old_$i',
-              name: '舊卡 $i',
-              riskLevel: i == 0 ? 3 : 1,
-            ),
-          ),
+    testWidgets(
+      'AC-CF-2.4: material.hasFatigueRisk 為真時取材卡面與替換清單皆渲染 [💀 拉車隱患]，為假時不渲染',
+      (tester) async {
+        // 1. 卡面測試：hasFatigueRisk == false (riskLevel: 2)
+        final lowRiskPoi = DistrictAttraction(
+          id: 'poi_low_risk',
+          title: '低風險景點',
+          districtCode: 'taipei',
+          districtName: '台北',
+          geo: const GeoPoint(25.0, 121.5),
+          pixel: Vector2(100, 110),
+          rating: 4.5,
+          reviewCount: 100,
+          category: AttractionCategory.landmark,
+          triggerRadiusMeters: 50.0,
         );
-      }
+        fakeResolver.map['poi_low_risk'] = sampleMaterial.copyWith(
+          id: 'mat_low_risk',
+          riskLevel: 2,
+        );
 
-      await tester.pumpWidget(buildTestWidget(
-        selected: selected,
-        state: fullState,
-      ));
-      await tester.pumpAndSettle();
+        final selected = ValueNotifier<DistrictAttraction?>(lowRiskPoi);
+        final normalState = CuratorRunState.initial(
+          initialBudget: 2000,
+          initialHp: 100,
+        );
+        await tester.pumpWidget(
+          buildTestWidget(selected: selected, state: normalState),
+        );
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.text('👝 踩線換牌'));
-      await tester.pumpAndSettle();
+        expect(find.text('[💀 拉車隱患]'), findsNothing);
 
-      // 新素材（highRiskMaterial）有疲勞隱患，舊卡 0 也有疲勞隱患，抽屜內共 2 個，全畫面含底層卡面共 3 個
-      expect(find.text('[💀 拉車隱患]'), findsNWidgets(3));
-      expect(
-        find.descendant(
-          of: find.byType(GatheringReplaceBottomSheet),
-          matching: find.text('[💀 拉車隱患]'),
-        ),
-        findsNWidgets(2),
-      );
-    });
+        // 2. 卡面測試：hasFatigueRisk == true (riskLevel: 3)
+        final highRiskPoi = DistrictAttraction(
+          id: 'poi_high_risk',
+          title: '高風險景點',
+          districtCode: 'taipei',
+          districtName: '台北',
+          geo: const GeoPoint(25.0, 121.5),
+          pixel: Vector2(100, 110),
+          rating: 4.5,
+          reviewCount: 100,
+          category: AttractionCategory.landmark,
+          triggerRadiusMeters: 50.0,
+        );
+        final highRiskMaterial = sampleMaterial.copyWith(
+          id: 'mat_high_risk',
+          riskLevel: 3,
+        );
+        fakeResolver.map['poi_high_risk'] = highRiskMaterial;
+
+        selected.value = highRiskPoi;
+        await tester.pumpAndSettle();
+
+        expect(find.text('[💀 拉車隱患]'), findsOneWidget);
+
+        // 3. 換牌抽屜測試：當腰包滿且新素材有疲勞隱患時，抽屜呈現 [💀 拉車隱患]
+        var fullState = CuratorRunState.initial(
+          initialBudget: 2000,
+          initialHp: 100,
+        );
+        for (int i = 0; i < 6; i++) {
+          fullState = fullState.copyWith(
+            inventory: fullState.inventory.add(
+              sampleMaterial.copyWith(
+                id: 'mat_old_$i',
+                name: '舊卡 $i',
+                riskLevel: i == 0 ? 3 : 1,
+              ),
+            ),
+          );
+        }
+
+        await tester.pumpWidget(
+          buildTestWidget(selected: selected, state: fullState),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('👝 踩線換牌'));
+        await tester.pumpAndSettle();
+
+        // 新素材（highRiskMaterial）有疲勞隱患，舊卡 0 也有疲勞隱患，抽屜內共 2 個，全畫面含底層卡面共 3 個
+        expect(find.text('[💀 拉車隱患]'), findsNWidgets(3));
+        expect(
+          find.descendant(
+            of: find.byType(GatheringReplaceBottomSheet),
+            matching: find.text('[💀 拉車隱患]'),
+          ),
+          findsNWidgets(2),
+        );
+      },
+    );
   });
 }

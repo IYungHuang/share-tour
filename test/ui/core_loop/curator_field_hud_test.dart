@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
+import 'package:share_tour/domain/core_loop/review/best_four_estimate.dart';
 import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/domain/core_loop/run/curator_run_state.dart';
 import 'package:share_tour/state/core_loop/curator_run_controller.dart';
@@ -125,6 +126,33 @@ void main() {
 
       await tester.pumpWidget(buildTestWidget(state: state));
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('REQ-M5-11.5 野外即時預估與 bestFourSecondLayerEstimate 公式輸出一致', (tester) async {
+      final base = CuratorRunState.initial(
+        client: ClientSpec.budgetWorker,
+        initialBudget: 2000,
+        initialHp: 100,
+      );
+      const material = TravelMaterial(
+        id: 'mat_1',
+        name: '測試卡',
+        tags: ['#美食'],
+        themeValue: 10,
+        hypeValue: 40,
+        cost: 300,
+      );
+      final state = base.copyWith(inventory: base.inventory.add(material));
+
+      await tester.pumpWidget(buildTestWidget(state: state));
+
+      final expected = bestFourSecondLayerEstimate(
+        [material],
+        clientType: state.client.type,
+        difficulty: state.shutterDifficulty,
+      ).round();
+
+      expect(find.text('💹$expected'), findsOneWidget);
     });
   });
 }

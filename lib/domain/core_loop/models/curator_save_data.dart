@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 import 'meta_equipment.dart';
+import 'shutter_difficulty.dart';
 
 /// 阿導永久存檔資料模型 (CC-1, CC-2, CC-3)
 class CuratorSaveData {
@@ -12,6 +13,7 @@ class CuratorSaveData {
     required this.cameraLevel,
     required this.waistBagLevel,
     this.completedRuns = 0,
+    this.lastDifficulty = ShutterDifficulty.tourist,
     required this.updatedAtUtc,
   }) : assert(updatedAtUtc.isUtc, 'updatedAtUtc must be in UTC');
 
@@ -42,14 +44,14 @@ class CuratorSaveData {
   /// 已完成通關局數
   final int completedRuns;
 
+  /// 最後一次選定的快門難度（REQ-M5-05.4）。
+  final ShutterDifficulty lastDifficulty;
+
   /// 最後更新時間戳 (UTC, CC-2)
   final DateTime updatedAtUtc;
 
   /// 建立初始存檔 (0 金幣、全裝備 Lv.1、UUID v4)
-  factory CuratorSaveData.initial({
-    String? profileId,
-    DateTime? nowUtc,
-  }) {
+  factory CuratorSaveData.initial({String? profileId, DateTime? nowUtc}) {
     final effectiveNow = nowUtc ?? DateTime.now().toUtc();
     return CuratorSaveData(
       profileId: profileId ?? _uuid.v4(),
@@ -72,10 +74,7 @@ class CuratorSaveData {
         type: EquipmentType.sneakers,
         level: sneakersLevel,
       ),
-      camera: EquipmentItem(
-        type: EquipmentType.camera,
-        level: cameraLevel,
-      ),
+      camera: EquipmentItem(type: EquipmentType.camera, level: cameraLevel),
       waistBag: EquipmentItem(
         type: EquipmentType.waistBag,
         level: waistBagLevel,
@@ -95,6 +94,7 @@ class CuratorSaveData {
     int? cameraLevel,
     int? waistBagLevel,
     int? completedRuns,
+    ShutterDifficulty? lastDifficulty,
     DateTime? updatedAtUtc,
   }) {
     return CuratorSaveData(
@@ -106,6 +106,7 @@ class CuratorSaveData {
       cameraLevel: cameraLevel ?? this.cameraLevel,
       waistBagLevel: waistBagLevel ?? this.waistBagLevel,
       completedRuns: completedRuns ?? this.completedRuns,
+      lastDifficulty: lastDifficulty ?? this.lastDifficulty,
       updatedAtUtc: (updatedAtUtc != null)
           ? (updatedAtUtc.isUtc ? updatedAtUtc : updatedAtUtc.toUtc())
           : this.updatedAtUtc,
@@ -125,6 +126,7 @@ class CuratorSaveData {
           cameraLevel == other.cameraLevel &&
           waistBagLevel == other.waistBagLevel &&
           completedRuns == other.completedRuns &&
+          lastDifficulty == other.lastDifficulty &&
           updatedAtUtc.isAtSameMomentAs(other.updatedAtUtc);
 
   @override
@@ -137,10 +139,11 @@ class CuratorSaveData {
     cameraLevel,
     waistBagLevel,
     completedRuns,
+    lastDifficulty,
     updatedAtUtc.millisecondsSinceEpoch,
   );
 
   @override
   String toString() =>
-      'CuratorSaveData(profileId: $profileId, coins: $coins, levels: ($sneakersLevel, $cameraLevel, $waistBagLevel), runs: $completedRuns)';
+      'CuratorSaveData(profileId: $profileId, coins: $coins, levels: ($sneakersLevel, $cameraLevel, $waistBagLevel), runs: $completedRuns, difficulty: ${lastDifficulty.name})';
 }

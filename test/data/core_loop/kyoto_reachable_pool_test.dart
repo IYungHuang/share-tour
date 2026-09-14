@@ -194,7 +194,9 @@ void main() {
       expect(perfectRatio, closeTo(0.0632, 0.005));
     });
 
-    test('AC-A1-5.4 社畜 Pass 收入中位數對應三件套升至滿級總價需 6..10 局 (命中 8 局)', () {
+    test('AC-A1-5.4 社畜 Pass 收入中位數對應三件套升至滿級總價需 6..10 局 (命中 7 局，'
+        '含 M5 第二層金幣重跑後的值——REQ-M5-02.6 定案 c=0.36，'
+        '中位數由 1070 升至 1100，AC-M5-5.9 已確認仍落在 6~10 局範圍內)', () {
       final passCoinsHist = List<int>.filled(10000, 0);
       var passCount = 0;
       final n = reachablePool.length;
@@ -263,7 +265,12 @@ void main() {
         }
       }
 
-      expect(passMedian, 1070.0);
+      expect(
+        passMedian,
+        1100.0,
+        reason: 'AC-M5-5.9 重跑：evaluate() 預設難度 tourist、無中斷，'
+            '第二層金幣（c=0.36）已計入 earnedCoins，中位數由 1070 升至 1100',
+      );
 
       // 三件裝備自 Lv.1 升至 Lv.3 的總價
       final item = EquipmentItem(type: EquipmentType.sneakers, level: 1);
@@ -273,7 +280,7 @@ void main() {
 
       final runsToMax = (totalUpgradeCost / passMedian).ceil();
       expect(runsToMax, inInclusiveRange(6, 10));
-      expect(runsToMax, equals(8));
+      expect(runsToMax, equals(7));
     });
 
     test('AC-A1-6.4 兩位客戶 Rejected 最高收入 <= Near Miss 最低收入 x 30%，且集合非空', () {

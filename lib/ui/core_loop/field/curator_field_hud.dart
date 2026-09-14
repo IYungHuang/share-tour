@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_tour/domain/core_loop/time/tour_period.dart';
+import 'package:share_tour/domain/core_loop/review/best_four_estimate.dart';
+import 'package:share_tour/domain/core_loop/review/client_spec.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 import 'package:share_tour/state/core_loop/game_time_controller.dart';
 
@@ -17,6 +19,14 @@ class CuratorFieldHud extends ConsumerWidget {
     final resources = runState.resources;
     final inventory = runState.inventory;
 
+    final client = runState.client;
+    final bestEstimate = bestFourSecondLayerEstimate(
+      inventory.materials,
+      clientType: client.type,
+      difficulty: runState.shutterDifficulty,
+    );
+    final isHypeClient = client.type == ClientType.hypeInfluencer;
+
     final hp = resources.hp;
     final maxHp = resources.maxHp;
     final hpRatio = maxHp > 0 ? (hp / maxHp).clamp(0.0, 1.0) : 0.0;
@@ -24,8 +34,8 @@ class CuratorFieldHud extends ConsumerWidget {
     final Color hpColor = hpRatio > 0.5
         ? const Color(0xFF48BB78)
         : hpRatio > 0.2
-            ? const Color(0xFFF6AD55)
-            : const Color(0xFFE53E3E);
+        ? const Color(0xFFF6AD55)
+        : const Color(0xFFE53E3E);
 
     final isDeficit = resources.isDeficit;
     final isBagFull = inventory.isFull;
@@ -50,11 +60,7 @@ class CuratorFieldHud extends ConsumerWidget {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.favorite,
-                size: 13,
-                color: hpColor,
-              ),
+              Icon(Icons.favorite, size: 13, color: hpColor),
               const SizedBox(width: 3),
               Text(
                 '$hp/$maxHp',
@@ -68,7 +74,7 @@ class CuratorFieldHud extends ConsumerWidget {
             ],
           ),
 
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
 
           // 2. 預算餘額
           Row(
@@ -96,7 +102,7 @@ class CuratorFieldHud extends ConsumerWidget {
             ],
           ),
 
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
 
           // 3. 腰包容量
           Row(
@@ -114,8 +120,8 @@ class CuratorFieldHud extends ConsumerWidget {
                 '${inventory.count}/${inventory.capacity}',
                 style: TextStyle(
                   color: isBagFull
-                    ? const Color(0xFFED8936)
-                    : const Color(0xFF63B3ED),
+                      ? const Color(0xFFED8936)
+                      : const Color(0xFF63B3ED),
                   fontSize: 10,
                   fontWeight: FontWeight.bold,
                   fontFeatures: const [FontFeature.tabularFigures()],
@@ -124,9 +130,26 @@ class CuratorFieldHud extends ConsumerWidget {
             ],
           ),
 
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
 
-          // 4. 當前四幕時段與光照標記 (晨曦 06:00 / 午後 11:00 / 黃昏 16:00 📷 / 深夜 19:00+)
+          // 4. 野外即時預估：對現有素材窮舉 C(n,4) 取該客戶第二層公式真
+          // argmax（REQ-M5-11.5），不含 c 折算——顯示的是 reach／CP 本身。
+          Text(
+            key: const Key('field_hud_best_four_estimate'),
+            isHypeClient
+                ? '🎯${bestEstimate.round()}'
+                : '💹${bestEstimate.round()}',
+            style: const TextStyle(
+              color: Color(0xFF9AE6B4),
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+
+          const SizedBox(width: 4),
+
+          // 5. 當前四幕時段與光照標記 (晨曦 06:00 / 午後 11:00 / 黃昏 16:00 📷 / 深夜 19:00+)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
             decoration: BoxDecoration(
@@ -144,15 +167,12 @@ class CuratorFieldHud extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  switch (period) {
-                    TourPeriod.dawn => '🌅',
-                    TourPeriod.midday => '☀️',
-                    TourPeriod.dusk => '🌇',
-                    TourPeriod.night => '🌙',
-                  },
-                  style: const TextStyle(fontSize: 9),
-                ),
+                Text(switch (period) {
+                  TourPeriod.dawn => '🌅',
+                  TourPeriod.midday => '☀️',
+                  TourPeriod.dusk => '🌇',
+                  TourPeriod.night => '🌙',
+                }, style: const TextStyle(fontSize: 9)),
                 const SizedBox(width: 2),
                 Text(
                   period.hasCameraBonus

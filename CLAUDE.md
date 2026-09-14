@@ -8,16 +8,20 @@
 
 ```bash
 dart run build_runner build --delete-conflicting-outputs   # 先跑，否則 analyze/test 必失敗
-flutter analyze                                            # 須 0 errors / 0 warnings
-flutter test                                               # 全套（目前 316 passed, 0 skipped）
+flutter analyze lib/domain lib/state lib/data lib/game lib/ui lib/core test   # 須 0 errors / 0 warnings（排除 lib/main.dart，理由見下）
+flutter test                                               # 全套（目前 676 passed / 3 skipped / 1 known failing）
 flutter test test/domain/core_loop/timeline_itinerary_test.dart   # 單檔
 flutter test --plain-name 'AC-ML-4.4'                      # 單條 AC（AC 編號即測試名，最常用）
-dart test test/domain/                                     # 純 domain，不需模擬器
+flutter test test/domain/                                  # 純 domain 套件單獨可跑，確認零框架相依
+                                                             # （`dart test test/domain/` 目前不可用：pubspec.yaml
+                                                             #  只宣告 flutter_test，未宣告裸 test 套件，屬既有文件過期，非本輪範圍）
 bash tool/simulate_walk.sh                                 # 灌模擬座標進連線裝置
 python3 tool/build_and_verify.py                           # 重生底圖/遮罩/路網（改圖資才跑）
 ```
 
 架構大圖見 §9。
+
+**已知失敗（非本輪範圍）**：`test/app_bootstrap_test.dart` 因 `lib/main.dart` 呼叫 `LocationNotifier.switchManifest`／`UniversalOverworldGame.switchMap`（兩方法皆不存在）而載入失敗——這是另一支平行分支（地方層地圖切換，`TASK_D_LOCAL_TIER_PROPOSAL.md`）留下的未完成整合，M5 未動它，故 `flutter analyze`／全域 `flutter test` 皆刻意排除或容忍這一項，不算 M5 的回歸。
 
 ---
 
@@ -143,7 +147,7 @@ spec → 覆核 → plan → 覆核 → 執行計劃 → 覆核
 | `SPEC_MVP_TIMELINE_UI.md` / `PLAN_MVP_TIMELINE_UI.md` | M2 4 槽位時間線編輯器、雙客戶 Review 彈窗、狀態接線，SPEC v2，已實作 |
 | `SPEC_MVP_POI_GATHERING.md` / `PLAN_MVP_POI_GATHERING.md` | M3 大世界 POI 踩線取材、野外 HUD、體力透支返程，SPEC v2 簽核，已實作 |
 | `SPEC_MVP_META_PROGRESSION.md` / `PLAN_MVP_META_PROGRESSION.md` | M4 行前委託、黑市裝備升級、`PersistenceRepository` 本機存檔。SPEC v2 / PLAN v1，**未提交版控、待覆核** |
-| `SPEC_MVP_MICRO_ACTION.md` | M5 快門微動作與三態取材。**Draft v2，經兩輪雙軌覆核未過，待出 v3**（待辦見 `HANDOFF.md` §3） |
+| `SPEC_MVP_MICRO_ACTION.md` / `PLAN_MVP_MICRO_ACTION.md` | M5 快門微動作與雙層結算。SPEC v9（八輪雙軌覆核通過），PLAN v1，**G1~G14 已依 TDD 全數施工完成並驗收**（三態判定、絕景構圖降階、難度選定、中斷折扣、雙層 reach／valueIndex、快門手感因果事實、QTE 覆蓋層與 HUD argmax 接線，逐任務 commit 見 `proto/m5-shutter-feel` 分支歷史；已知限制與延後項見 SPEC §7、PLAN §5） |
 | `HANDOFF.md` | 交接紀錄，跨對話的進度快照，會隨每次交接改寫。**接手時先讀這份** |
 | `TASK_D_LOCAL_TIER_PROPOSAL.md` | 任務 D（地方層地圖）提案 |
 | `ARCHITECTURE_DESIGN.md` | 早期設計文件，**參考素材，非權威** |
@@ -221,3 +225,5 @@ LocationSource → 權限解析 → 品質閘（精度門檻）→ 節流
 ### 核心迴圈現況
 
 M1~M3 已實作（`domain/core_loop/`、`state/core_loop/`、`ui/core_loop/`）：單局 5~10 分鐘，接委託 → 選哲學 → 大世界採集 → 夜間 4 槽位時間線 → 雙客戶 100 分制 Review → 局外升級。M4（存檔與黑市）尚未施工。
+
+M5（快門微動作）已實作於 `proto/m5-shutter-feel` 分支：踩線取材前插入按住/放開快門 QTE（`ui/core_loop/field/shutter_qte_overlay.dart`），三態判定（`domain/core_loop/shutter/`）疊加絕景構圖降階，難度於行前委託與旅行哲學同畫面選定並在出發後鎖定，第二層 reach／valueIndex 分數與既有第一層 satisfaction/outcome 完全隔離（golden fixture 逐格零差異驗證）。

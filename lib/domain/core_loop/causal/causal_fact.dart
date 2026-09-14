@@ -10,6 +10,7 @@ enum CausalDomain {
   spotlight, // 絕景階梯
   boredom, // 反無聊門檻
   ambient, // 環境：同標籤共鳴、槽位時段契合
+  shotQuality, // 快門三態對第二層分數的影響（REQ-M5-08.2），與 satisfaction 無關
 }
 
 /// 供 UI 轉譯為表情的客戶即時心態

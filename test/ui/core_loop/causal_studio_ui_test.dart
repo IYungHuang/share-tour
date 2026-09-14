@@ -242,10 +242,10 @@ void main() {
       );
     });
 
-    testWidgets('AC-CF-3.3 字典覆蓋：全部 14 條 reasonCode 均具備有效 CodexEntry 且可正常顯示', (
+    testWidgets('AC-CF-3.3 字典覆蓋：全部 15 條 reasonCode 均具備有效 CodexEntry 且可正常顯示', (
       tester,
     ) async {
-      expect(CuratorCodex.entries.length, 14);
+      expect(CuratorCodex.entries.length, 15);
 
       for (final entry in CuratorCodex.entries.entries) {
         expect(entry.value.title.isNotEmpty, isTrue);

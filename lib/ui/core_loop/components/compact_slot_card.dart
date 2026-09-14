@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_tour/domain/core_loop/causal/causal_fact.dart';
+import 'package:share_tour/domain/core_loop/models/shot_tier.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 
 import 'causal_badge.dart';
+import 'shutter_result_badge.dart';
 
 /// 四幕劇緊湊槽位卡片組件 (76~95dp 自適應寬度，防溢出設計)
 class CompactSlotCard extends ConsumerWidget {
@@ -207,12 +209,30 @@ class CompactSlotCard extends ConsumerWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              '🔥${material.hypeValue}',
-              style: const TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFFDC2626),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '🔥${material.hypeValue}',
+                      style: const TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFDC2626),
+                      ),
+                    ),
+                    // 卡面極窄（69~95dp）：只在非 normal 時多顯示徽章，
+                    // 避免壓縮到常態卡面的既有資訊（AC-M5-11.3 只要求
+                    // 三處「存在且一致」，不要求 normal 態也醒目標示）。
+                    if (material.shotTier != ShotTier.normal) ...[
+                      const SizedBox(width: 3),
+                      ShutterResultBadge(tier: material.shotTier, compact: true),
+                    ],
+                  ],
+                ),
               ),
             ),
             if (slotFacts.isNotEmpty)

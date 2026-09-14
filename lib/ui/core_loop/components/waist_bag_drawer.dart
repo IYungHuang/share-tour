@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_tour/domain/core_loop/models/travel_material.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 
+import 'shutter_result_badge.dart';
+
 /// 阿導腰包素材抽屜組件 (WaistBagDrawer)
 class WaistBagDrawer extends ConsumerWidget {
   const WaistBagDrawer({super.key, this.onSelectMaterial});
@@ -176,13 +178,20 @@ class _WaistBagCardItem extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Text(
-                      '¥${material.cost}',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ShutterResultBadge(tier: material.shotTier, compact: true),
+                        const SizedBox(width: 4),
+                        Text(
+                          '¥${material.cost}',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

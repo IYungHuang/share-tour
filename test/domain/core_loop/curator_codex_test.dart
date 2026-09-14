@@ -18,10 +18,11 @@ void main() {
       'boredom_risk',
       'tag_synergy',
       'ambient_slot_affinity',
+      'shot_quality',
     ];
 
-    test('全數 14 個 reasonCode 皆有非空詞條且欄位完整', () {
-      expect(CuratorCodex.entries.length, equals(14));
+    test('全數 15 個 reasonCode 皆有非空詞條且欄位完整', () {
+      expect(CuratorCodex.entries.length, equals(15));
 
       for (final code in expectedReasonCodes) {
         final entry = CuratorCodex.lookup(code);
