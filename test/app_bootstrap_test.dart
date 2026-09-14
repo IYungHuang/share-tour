@@ -1,3 +1,4 @@
+import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -5,20 +6,42 @@ import 'package:share_tour/data/core_loop/kyoto_night_catalog.dart';
 import 'package:share_tour/data/core_loop/local_persistence_repository.dart';
 import 'package:share_tour/domain/core_loop/models/curator_save_data.dart';
 import 'package:share_tour/game/map_module/manifests/kyoto_night_map_manifest.dart';
+import 'package:share_tour/game/universal_overworld_game.dart';
 import 'package:share_tour/main.dart';
 import 'package:share_tour/state/core_loop/curator_run_providers.dart';
 import 'package:share_tour/state/location/location_providers.dart';
 
 void main() {
-  testWidgets('正式 App 啟動注入測試：驗證 buildProductionApp 預設注入京都圖資、京都卡表與嚴格解析器 (T10)', (tester) async {
+  testWidgets('正式 App 預設不顯示角色動作測試面板', (tester) async {
+    final app = buildProductionApp(
+      repository: LocalPersistenceRepository(),
+      initialSave: CuratorSaveData.initial(),
+    );
+
+    await tester.pumpWidget(app);
+    final gameState = tester.state<GameWidgetState<UniversalOverworldGame>>(
+      find.byType(GameWidget<UniversalOverworldGame>),
+    );
+
+    expect(
+      gameState.currentGame.overlays.isActive('CharacterActionTest'),
+      isFalse,
+    );
+
+    final element = tester.element(find.byType(MaterialApp));
+    final container = ProviderScope.containerOf(element);
+    await container.read(virtualSourceProvider).stop();
+    await tester.pump(const Duration(milliseconds: 100));
+  });
+
+  testWidgets('正式 App 啟動注入測試：驗證 buildProductionApp 預設注入京都圖資、京都卡表與嚴格解析器 (T10)', (
+    tester,
+  ) async {
     final repo = LocalPersistenceRepository();
     final initialSave = CuratorSaveData.initial();
 
     // 直接 pump 正式生產環境入口，不得手抄 overrides (測試契約規定)
-    final app = buildProductionApp(
-      repository: repo,
-      initialSave: initialSave,
-    );
+    final app = buildProductionApp(repository: repo, initialSave: initialSave);
 
     await tester.pumpWidget(app);
 
@@ -42,8 +65,11 @@ void main() {
     expect(manifest.districtAttractions, isNotEmpty);
     for (final attraction in manifest.districtAttractions) {
       final material = resolver.resolveMaterialFor(attraction.id);
-      expect(material, isNotNull,
-          reason: '景點 ${attraction.id} 必須能被 production resolver 精確解析');
+      expect(
+        material,
+        isNotNull,
+        reason: '景點 ${attraction.id} 必須能被 production resolver 精確解析',
+      );
       expect(material!.id, attraction.id);
     }
 

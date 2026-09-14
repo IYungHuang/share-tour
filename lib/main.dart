@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flame/game.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'game/characters/guide_character_manifest.dart';
 import 'game/characters/guide_action_sheet_registry.dart';
@@ -340,7 +339,6 @@ class _OverworldScaffoldState extends ConsumerState<OverworldScaffold>
       'FloatingFeedback',
       'DPad',
       'ModeToggle',
-      if (kDebugMode) 'CharacterActionTest',
     ];
 
     return Scaffold(
