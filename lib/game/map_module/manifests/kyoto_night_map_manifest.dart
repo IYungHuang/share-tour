@@ -68,9 +68,13 @@ class KyotoNightMapManifest implements OverworldMapManifest {
           centerGeo: const GeoPoint(35.0000, 135.7780),
           centerPixel: Vector2(580.0, 560.0),
           additionalCenters: [
-            Vector2(600.0, 440.0), // 知恩院三門巨大石階聚類
-            Vector2(460.0, 540.0), // 祇園割烹・六波羅蜜寺聚類
-            Vector2(442.0, 500.0), // 四條大橋東詰街頭藝人聚類
+            Vector2(670.0, 525.0), // 知恩院三門巨大石階聚類
+            Vector2(615.0, 435.0), // 祇園白川辰巳大明神聚類
+            Vector2(625.0, 485.0), // 祇園末吉町割烹聚類
+            Vector2(610.0, 615.0), // 六波羅蜜寺聚類
+            Vector2(580.0, 416.0), // 四條大橋街頭藝人聚類
+            Vector2(640.0, 560.0), // 二年坂・法觀寺・清水舞台坡道聚類
+            Vector2(785.0, 575.0), // 八坂之塔東山五重塔聚類
           ],
           minZoomForSpots: 0.5,
           radiusPixels: 140.0,
@@ -81,11 +85,12 @@ class KyotoNightMapManifest implements OverworldMapManifest {
           centerGeo: const GeoPoint(35.0300, 135.7850),
           centerPixel: Vector2(560.0, 220.0),
           additionalCenters: [
-            Vector2(700.0, 160.0), // 一乘寺拉麵激戰區
-            Vector2(860.0, 270.0), // 大文字山火床夜爬
-            Vector2(690.0, 350.0), // 無鄰菴青苔庭園
-            Vector2(435.0, 240.0), // 出町柳鴨川三角洲
-            Vector2(435.0, 340.0), // 鴨川跳石千鳥水系
+            Vector2(660.0, 175.0), // 一乘寺拉麵激戰區
+            Vector2(788.0, 205.0), // 大文字山「大」字火床夜爬
+            Vector2(692.0, 302.0), // 無鄰菴青苔庭園
+            Vector2(436.6, 240.0), // 出町柳鴨川三角洲
+            Vector2(437.1, 339.2), // 鴨川跳石千鳥水系
+            Vector2(620.0, 215.0), // 高野川夜行賞螢
           ],
           minZoomForSpots: 0.5,
           radiusPixels: 140.0,
@@ -96,7 +101,7 @@ class KyotoNightMapManifest implements OverworldMapManifest {
           centerGeo: const GeoPoint(35.0200, 135.6800),
           centerPixel: Vector2(100.0, 310.0),
           additionalCenters: [
-            Vector2(240.0, 232.0), // 北野天滿宮・千本閻魔堂洛西古道
+            Vector2(250.0, 225.0), // 北野天滿宮・千本閻魔堂洛西古道
           ],
           minZoomForSpots: 0.5,
           radiusPixels: 140.0,
@@ -107,6 +112,8 @@ class KyotoNightMapManifest implements OverworldMapManifest {
           centerGeo: const GeoPoint(34.9400, 135.7700),
           centerPixel: Vector2(416.0, 780.0),
           additionalCenters: [
+            Vector2(670.0, 900.0), // 伏見稻荷千本鳥居步道聚類
+            Vector2(420.0, 850.0), // 伏見清酒老窖酒造聚類
             Vector2(899.2, 954.4), // 宇治川浮島鵜飼聚類中心
             Vector2(593.1, 55.0),   // 鞍馬深山夜行列車衛星中心
           ],

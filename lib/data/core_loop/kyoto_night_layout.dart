@@ -384,8 +384,45 @@ double kyotoUnprojectPixelYToLat(double y) {
   return kyotoLatAnchors.last;
 }
 
-/// 依真實地理經緯度投影至 1024x1024 地圖像素座標（分段美術雙軸配準）
+/// 依手繪像素地圖 (assets/images/kyoto_basin_overworld.png) 特徵專屬微調之像素座標
+/// 將景點精確配準至町家街道、名勝庭園、石疊參道、木造橋樑與河川水系，避免落入樹冠或荒地
+final Map<String, Vector2> kyotoVisualSpotOverrides = {
+  // 洛中・河原町街區
+  'kyoto_kiyamachi_ramen': Vector2(425.0, 480.0),      // 木屋町通深夜醉漢背脂拉麵（鋪裝町家街，避開二條城邊界）
+
+  // 洛東・祇園清水街區
+  'kyoto_shijo_bridge_busker': Vector2(580.0, 416.0), // 四條大橋石疊橋身（鴨川水系橋上彈唱，脫離洛中城郭屋頂）
+  'kyoto_gion_tatsumi': Vector2(615.0, 435.0),         // 祇園白川辰巳大明神（鴨川東側祇園町家櫻花林蔭）
+  'kyoto_gion_kappo': Vector2(625.0, 485.0),           // 祇園末吉町米其林割烹（鴨川東側祇園花街割烹街區）
+  'kyoto_chionin_stairs': Vector2(670.0, 525.0),       // 知恩院三門前巨大石階冥想（東山寺院北殿石階山門）
+  'kyoto_yasaka_pagoda': Vector2(785.0, 575.0),       // 八坂之塔清晨藍調時刻（配準畫師手繪之東山五重塔圖像）
+  'kyoto_ninenzaka_tatami': Vector2(640.0, 560.0),    // 二年坂町家石疊坡道（脫離西側橋端）
+  'kyoto_hokanji_slope': Vector2(655.0, 575.0),       // 法觀寺石疊無人參道（通往五重塔之坡道參道）
+  'kyoto_kiyomizu_stage': Vector2(675.0, 595.0),      // 清水寺赤紅舞台與本堂前庭（配準東山寺院核心）
+  'kyoto_rokuharamitsuji': Vector2(610.0, 615.0),      // 六波羅蜜寺平家落人傳說小徑（東山南端歷史古道）
+
+  // 洛東北・左京大文字街區
+  'kyoto_daimonji_night_hike': Vector2(788.0, 205.0), // 大文字山火床夜爬（配準畫師手繪之金色「大」字火床下方）
+  'kyoto_ichijoji_ramen_street': Vector2(660.0, 175.0), // 一乘寺拉麵街鋪鋪裝道路（脫離東北深山樹冠）
+  'kyoto_murin_an_night_moss': Vector2(692.0, 302.0),   // 無鄰菴名勝庭園茶室青苔迴廊（脫離南方菜田）
+  'kyoto_takano_river_firefly': Vector2(620.0, 215.0),  // 高野川潺潺流水與卵石河岸（脫離荒原草地）
+
+  // 洛西・嵐山嵯峨街區
+  'kyoto_kitano_tenmangu_market': Vector2(250.0, 225.0), // 北野天滿宮天神市手作跳蚤（脫離桂川河道邊緣）
+  'kyoto_senbon_enmado': Vector2(275.0, 230.0),          // 千本閻魔堂紫式部供養塔幽冥之境（東移避開河道）
+
+  // 洛南・伏見宇治街區
+  'kyoto_fushimi_torii': Vector2(670.0, 900.0),       // 伏見稻荷千本鳥居深夜陰影（配準畫師手繪之朱紅千本鳥居步道起點）
+  'kyoto_shinsei_sake': Vector2(420.0, 850.0),         // 伏見清酒老窖（伏見酒造町家聚落街區）
+};
+
+/// 依真實地理經緯度投影至 1024x1024 地圖像素座標（分段美術雙軸配準，支援視覺專屬配準）
 Vector2 kyotoPixelForSpotId(String id) {
+  final overridePixel = kyotoVisualSpotOverrides[id];
+  if (overridePixel != null) {
+    return overridePixel.clone();
+  }
+
   final info = kyotoPoiGeoMap[id];
   if (info == null) {
     throw ArgumentError('未知的京都 POI ID: $id');

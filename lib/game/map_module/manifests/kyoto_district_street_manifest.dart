@@ -208,7 +208,7 @@ class KyotoDistrictStreetManifest implements OverworldMapManifest {
 
     // 4. 洛東北・左京大文字街區 (Sakyo, 6)
     'kyoto_daimonji_night_hike': Vector2(640.0, 150.0),
-    'kyoto_kamo_kamome': Vector2(280.0, 480.0),
+    'kyoto_kamo_kamome': Vector2(175.0, 555.0), // 鴨川西岸散步道長椅與復古路燈旁（脫離深藍河水中央）
     'kyoto_kamogawa_delta': Vector2(490.0, 490.0),
     'kyoto_ichijoji_ramen_street': Vector2(480.0, 650.0),
     'kyoto_takano_river_firefly': Vector2(780.0, 720.0),
